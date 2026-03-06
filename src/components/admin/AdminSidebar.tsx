@@ -59,7 +59,7 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen z-40 flex flex-col transition-all duration-300',
+        'fixed left-0 top-0 h-screen z-40 hidden md:flex flex-col transition-all duration-300',
         'border-r border-sidebar-border',
         'bg-[hsl(var(--sidebar-background))] backdrop-blur-xl',
         collapsed ? 'w-16' : 'w-60'

@@ -377,7 +377,7 @@ export default function AdminControl() {
   const anyFrozen = matchFlags?.predictions_frozen || matchFlags?.scanning_frozen || matchFlags?.windows_locked;
 
   return (
-    <div className="p-4 space-y-4 max-w-4xl">
+    <div className="px-4 py-4 space-y-4 w-full max-w-4xl mx-auto md:mx-0">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-gradient-primary flex items-center justify-center">
