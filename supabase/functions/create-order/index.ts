@@ -23,6 +23,19 @@ async function generateSignedQR(matchId: string, mobile: string, seatIndex: numb
   return `${payload}-SIG:${sigHex}`;
 }
 
+async function checkRateLimit(supabase: any, key: string, limitCount: number, windowMs: number): Promise<boolean> {
+  const windowStart = new Date(Date.now() - windowMs).toISOString();
+  await supabase.from("rate_limit_events").delete().eq("key", key).lt("created_at", new Date(Date.now() - 600_000).toISOString());
+  const { count } = await supabase
+    .from("rate_limit_events")
+    .select("*", { count: "exact", head: true })
+    .eq("key", key)
+    .gte("created_at", windowStart);
+  if ((count ?? 0) >= limitCount) return false;
+  await supabase.from("rate_limit_events").insert({ key });
+  return true;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -32,6 +45,19 @@ serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const hmacSecret = Deno.env.get("LOVABLE_API_KEY") || "fallback-secret";
+
+    // ── Rate limiting: max 5 orders per mobile per 10 minutes ──
+    // Skip rate limiting for admin-created orders
+    if (!admin_id && purchaser_mobile) {
+      const limitKey = `order:${purchaser_mobile}`;
+      const allowed = await checkRateLimit(supabase, limitKey, 5, 600_000);
+      if (!allowed) {
+        return new Response(
+          JSON.stringify({ error: "Too many orders. Please wait before trying again.", code: "RATE_LIMITED", retryable: true }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // Get match + event
     const { data: match } = await supabase.from("matches").select("*, events(id)").eq("id", match_id).single();
@@ -75,6 +101,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: e.message, code: "INTERNAL_ERROR", retryable: false }), {
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

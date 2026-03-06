@@ -17,6 +17,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { Plus, Pencil, Trash2, Users, CheckCircle2, Upload, AlertCircle } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 function TeamsTab() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [playerCounts, setPlayerCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -113,6 +115,7 @@ function TeamsTab() {
     setSaving(false);
     if (error) { toast({ title: 'Error saving team', description: error.message, variant: 'destructive' }); return; }
     toast({ title: editing ? 'Team updated' : 'Team created' });
+    supabase.from('admin_activity').insert({ admin_id: user?.id, action: editing ? 'team_edit' : 'team_create', entity_type: 'team', meta: { name: form.name } as any });
     setDialogOpen(false);
     fetchTeams();
   };
@@ -122,6 +125,7 @@ function TeamsTab() {
     const { error } = await supabase.from('teams').delete().eq('id', team.id);
     if (error) { toast({ title: 'Error deleting team', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'Team deleted' });
+    supabase.from('admin_activity').insert({ admin_id: user?.id, action: 'team_delete', entity_type: 'team', entity_id: team.id, meta: { name: team.name } as any });
     fetchTeams();
   };
 
