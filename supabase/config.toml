@@ -7,13 +7,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.set-match-active]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-checkin]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-gate-collect]
-verify_jwt = true
+verify_jwt = false
 
 [functions.verify-payment-proof]
 verify_jwt = false
