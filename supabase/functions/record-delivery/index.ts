@@ -22,8 +22,8 @@ serve(async (req) => {
     });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getUser(token);
+    if (claimsError || !claimsData?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
@@ -34,11 +34,26 @@ serve(async (req) => {
       runs_off_bat, extras_type, extras_runs,
       is_wicket, wicket_type, out_player_id, fielder_id,
       free_hit, notes,
+      auto_rotate = true,
     } = body;
 
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Get current delivery count for this over
+    // ── Guard: validate over is active ───────────────────────────────────────
+    const { data: over, error: overErr } = await supabase
+      .from("over_control")
+      .select("id, status, over_no, innings_no")
+      .eq("id", over_id)
+      .single();
+
+    if (overErr || !over) {
+      return new Response(JSON.stringify({ error: "Over not found" }), { status: 404, headers: corsHeaders });
+    }
+    if (over.status !== "active") {
+      return new Response(JSON.stringify({ error: "Over is not active. Activate a new over first." }), { status: 409, headers: corsHeaders });
+    }
+
+    // ── Get existing deliveries for this over ────────────────────────────────
     const { data: existingDeliveries } = await supabase
       .from("deliveries")
       .select("ball_no, delivery_no, extras_type")
@@ -49,20 +64,23 @@ serve(async (req) => {
       ? existingDeliveries[0].delivery_no
       : 0;
 
-    // Illegal delivery = wide or no_ball → ball_no doesn't increment
+    // Legal balls already bowled in this over (wide/no_ball don't count)
     const isIllegal = extras_type === "wide" || extras_type === "no_ball";
     const legalBallCount = existingDeliveries
       ? existingDeliveries.filter(d => d.extras_type !== "wide" && d.extras_type !== "no_ball").length
       : 0;
 
-    const ballNo = isIllegal ? legalBallCount + 1 : legalBallCount + 1;
+    // ball_no: position of this delivery in the over (illegal deliveries share the next legal slot)
+    const ballNo = legalBallCount + 1;
     const deliveryNo = lastDeliveryNo + 1;
 
-    // Insert delivery
+    // ── Insert delivery ───────────────────────────────────────────────────────
     const { data: delivery, error: deliveryError } = await supabase
       .from("deliveries")
       .insert({
-        match_id, over_id, innings_no: innings_no || 1, over_no,
+        match_id, over_id,
+        innings_no: innings_no || 1,
+        over_no,
         ball_no: ballNo,
         delivery_no: deliveryNo,
         bowler_id: bowler_id || null,
@@ -83,12 +101,14 @@ serve(async (req) => {
 
     if (deliveryError) throw deliveryError;
 
-    // Update live state
+    // ── Update live state ─────────────────────────────────────────────────────
     const { data: liveState } = await supabase
       .from("match_live_state")
       .select("*")
       .eq("match_id", match_id)
       .single();
+
+    let needs_new_batsman = false;
 
     if (liveState) {
       const inningsKey = (innings_no || 1) === 1 ? "innings1" : "innings2";
@@ -96,32 +116,36 @@ serve(async (req) => {
       const newScore = (liveState[`${inningsKey}_score`] || 0) + totalRuns;
       const newWickets = (liveState[`${inningsKey}_wickets`] || 0) + (is_wicket ? 1 : 0);
 
-      // Calculate overs: legal balls in current over
+      // New legal ball count after this delivery
       const newLegalBalls = isIllegal ? legalBallCount : legalBallCount + 1;
-      const completedOvers = Math.floor(newLegalBalls / 6);
-      const remainingBalls = newLegalBalls % 6;
 
-      // Get total overs across all previous overs
-      const { data: allOvers } = await supabase
+      // Count COMPLETED overs (excluding the current over) for overs display
+      const { data: completedOvers } = await supabase
         .from("over_control")
         .select("id")
         .eq("match_id", match_id)
         .eq("innings_no", innings_no || 1)
         .eq("status", "complete");
 
-      const completedOversCount = (allOvers?.length || 0);
-      const oversDisplay = completedOversCount + (remainingBalls > 0 ? remainingBalls / 10 : 0);
+      const completedOversCount = completedOvers?.length || 0;
 
-      // Summary string
-      let summaryParts = [];
+      // Overs display: completed full overs + partial balls in current over
+      // e.g. 2 completed overs + 3 balls = 2.3
+      const partialBalls = newLegalBalls % 6;
+      const oversDisplay = completedOversCount + (partialBalls > 0 ? partialBalls / 10 : 0);
+
+      // ── Summary string ──────────────────────────────────────────────────────
+      let summaryParts: string[] = [];
       if (extras_type === "wide") summaryParts.push("WD");
       else if (extras_type === "no_ball") summaryParts.push("NB");
       else if (extras_type === "bye") summaryParts.push(`${extras_runs}b`);
       else if (extras_type === "leg_bye") summaryParts.push(`${extras_runs}lb`);
-      if (runs_off_bat > 0) summaryParts.push(`${runs_off_bat} runs`);
+      if (runs_off_bat > 0) summaryParts.push(`${runs_off_bat}`);
       if (is_wicket) summaryParts.push("WICKET! 🏏");
-      const summary = summaryParts.length > 0 ? summaryParts.join(" + ") : "Dot ball";
+      const ballLabel = `${completedOversCount}.${newLegalBalls % 6}`;
+      const summary = `[${ballLabel}] ` + (summaryParts.length > 0 ? summaryParts.join("+") : "•");
 
+      // ── Build update payload ────────────────────────────────────────────────
       const updateData: any = {
         [`${inningsKey}_score`]: newScore,
         [`${inningsKey}_wickets`]: newWickets,
@@ -130,12 +154,35 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       };
 
-      // Update current batsmen if wicket
+      // ── Wicket: clear the out batsman ───────────────────────────────────────
       if (is_wicket && out_player_id) {
         if (liveState.current_striker_id === out_player_id) {
           updateData.current_striker_id = null;
+          needs_new_batsman = true;
         } else if (liveState.current_non_striker_id === out_player_id) {
           updateData.current_non_striker_id = null;
+          needs_new_batsman = true;
+        }
+      }
+
+      // ── Strike rotation (skip on wicket) ───────────────────────────────────
+      if (auto_rotate && !is_wicket && liveState.current_striker_id && liveState.current_non_striker_id) {
+        const isEndOfOver = !isIllegal && newLegalBalls % 6 === 0;
+        const runsTotal = (runs_off_bat || 0) + (extras_runs || 0);
+        const isOddRuns = runsTotal % 2 === 1;
+
+        // Swap on odd runs XOR end of over (if both, they cancel out)
+        const shouldSwap = isOddRuns !== isEndOfOver;
+
+        if (shouldSwap) {
+          const strikerId = updateData.current_striker_id !== undefined
+            ? updateData.current_striker_id
+            : liveState.current_striker_id;
+          const nonStrikerId = updateData.current_non_striker_id !== undefined
+            ? updateData.current_non_striker_id
+            : liveState.current_non_striker_id;
+          updateData.current_striker_id = nonStrikerId;
+          updateData.current_non_striker_id = strikerId;
         }
       }
 
@@ -143,18 +190,17 @@ serve(async (req) => {
         .from("match_live_state")
         .update(updateData)
         .eq("match_id", match_id);
+
+      // ── Auto-complete over after 6 legal balls (only on legal delivery) ─────
+      if (!isIllegal && newLegalBalls >= 6) {
+        await supabase
+          .from("over_control")
+          .update({ status: "complete" })
+          .eq("id", over_id);
+      }
     }
 
-    // If over is now complete (6 legal balls), mark it complete
-    const newLegalBallsTotal = isIllegal ? legalBallCount : legalBallCount + 1;
-    if (newLegalBallsTotal >= 6) {
-      await supabase
-        .from("over_control")
-        .update({ status: "complete" })
-        .eq("id", over_id);
-    }
-
-    return new Response(JSON.stringify({ success: true, delivery }), {
+    return new Response(JSON.stringify({ success: true, delivery, needs_new_batsman }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
