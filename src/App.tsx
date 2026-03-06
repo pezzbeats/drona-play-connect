@@ -30,6 +30,7 @@ import AdminActivity from "./pages/admin/AdminActivity";
 import AdminHealth from "./pages/admin/AdminHealth";
 import AdminRoles from "./pages/admin/AdminRoles";
 import AdminSiteConfig from "./pages/admin/AdminSiteConfig";
+import AdminPayments from "./pages/admin/AdminPayments";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import RefundPolicyPage from "./pages/RefundPolicy";
 import EventParticipationTermsPage from "./pages/EventParticipationTerms";
@@ -91,6 +92,7 @@ const App = () => (
               <Route path="analytics" element={<ProtectedRoute requiredRole="operator"><AdminAnalytics /></ProtectedRoute>} />
               <Route path="health" element={<ProtectedRoute requiredRole="operator"><AdminHealth /></ProtectedRoute>} />
               <Route path="site-config" element={<ProtectedRoute requiredRole="operator"><AdminSiteConfig /></ProtectedRoute>} />
+              <Route path="payments" element={<ProtectedRoute requiredRole="operator"><AdminPayments /></ProtectedRoute>} />
               {/* super_admin only */}
               <Route path="leaderboard" element={<ProtectedRoute requiredRole="super_admin"><AdminLeaderboard /></ProtectedRoute>} />
               <Route path="activity" element={<ProtectedRoute requiredRole="super_admin"><AdminActivity /></ProtectedRoute>} />
