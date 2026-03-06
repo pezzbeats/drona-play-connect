@@ -6,7 +6,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, ToggleLeft, ToggleRight, Loader2, Edit, Zap } from 'lucide-react';
+import { Plus, ToggleLeft, ToggleRight, Loader2, Edit, Zap, Trophy } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -220,6 +220,3 @@ export default function AdminMatches() {
   );
 }
 
-function Trophy({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9H4.5a2.5 2.5 0 010-5H6m12 0h1.5a2.5 2.5 0 010 5H18M6 9v5a6 6 0 0012 0V9M6 9h12M12 19v3M8 22h8" /></svg>;
-}
