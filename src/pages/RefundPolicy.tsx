@@ -92,18 +92,30 @@ export default function RefundPolicyPage() {
           </ul>
         </Section>
 
-        <Section title="6. Refund Process">
+        <Section title="6. Razorpay Gateway — Payments & Failed Transactions">
+          <p>
+            When paying via the Razorpay payment gateway:
+          </p>
+          <ul className="list-disc list-inside space-y-1 mt-1">
+            <li><strong className="text-foreground/80">Failed payment:</strong> If a transaction fails, no amount is charged. If an amount was deducted but passes were not issued, contact us within 24 hours with the Razorpay payment reference.</li>
+            <li><strong className="text-foreground/80">Duplicate payment:</strong> If the same order is charged more than once due to a gateway error, the duplicate payment will be fully refunded within 5 business days.</li>
+            <li><strong className="text-foreground/80">Gateway fees:</strong> SR LEISURE INN absorbs any payment gateway processing fees. These are not deducted from refunds.</li>
+            <li><strong className="text-foreground/80">Refund method:</strong> Razorpay payments will be refunded back to the original payment instrument (card, UPI, wallet) used for the transaction.</li>
+          </ul>
+        </Section>
+
+        <Section title="7. Refund Process">
           <p>To request a refund (where applicable), contact us at:</p>
           <ul className="list-disc list-inside space-y-1 mt-1">
             <li>Email: <a href="mailto:dronapalace@gmail.com" className="text-primary underline">dronapalace@gmail.com</a></li>
             <li>Phone: <a href="tel:7217016170" className="text-primary underline">+91 72170 16170</a></li>
           </ul>
           <p className="mt-2">
-            Please provide your booking reference number and registered mobile number when contacting us.
+            Please provide your booking reference number, registered mobile number, and (for Razorpay payments) your Razorpay payment ID when contacting us.
           </p>
         </Section>
 
-        <Section title="7. Contact">
+        <Section title="8. Contact">
           <p>SR LEISURE INN</p>
           <p>Jaitpur Turn, Bazpur Road, Kashipur, Uttarakhand</p>
           <p>GSTIN: ABOFS1823N1ZS</p>

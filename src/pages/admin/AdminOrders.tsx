@@ -112,6 +112,21 @@ export default function AdminOrders() {
     return matchSearch && matchStatus;
   });
 
+  const paymentMethodBadge = (method: string) => {
+    switch (method) {
+      case 'razorpay':
+        return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/30">Razorpay</span>;
+      case 'upi_qr':
+        return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">UPI QR</span>;
+      case 'pay_at_hotel':
+        return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning border border-warning/30">Pay at Hotel</span>;
+      case 'cash':
+        return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-secondary/15 text-secondary border border-secondary/30">Cash</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">{method?.replace(/_/g, ' ')}</span>;
+    }
+  };
+
   const confidenceClass = (c: string) =>
     c === 'high'   ? 'bg-success/20 text-success' :
     c === 'medium' ? 'bg-warning/20 text-warning' :
@@ -178,6 +193,7 @@ export default function AdminOrders() {
                     <p className="text-sm text-muted-foreground">{order.purchaser_mobile}</p>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <StatusBadge status={order.payment_status} />
+                      {paymentMethodBadge(order.payment_method)}
                       <span className="text-xs text-muted-foreground truncate max-w-[120px]">{order.match?.name}</span>
                     </div>
                   </div>
@@ -206,6 +222,18 @@ export default function AdminOrders() {
                         <p className="text-foreground capitalize truncate">{value}</p>
                       </div>
                     ))}
+                    {order.razorpay_payment_id && (
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground">Razorpay Payment ID</p>
+                        <p className="text-foreground font-mono text-xs truncate">{order.razorpay_payment_id}</p>
+                      </div>
+                    )}
+                    {order.razorpay_order_id && (
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground">Razorpay Order ID</p>
+                        <p className="text-foreground font-mono text-xs truncate">{order.razorpay_order_id}</p>
+                      </div>
+                    )}
                   </div>
 
                   {order.proofs?.length > 0 && (

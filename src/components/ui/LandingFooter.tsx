@@ -85,6 +85,9 @@ export const LandingFooter: React.FC = () => {
                 { to: '/privacy', label: 'Privacy Policy' },
                 { to: '/terms', label: 'Terms & Conditions' },
                 { to: '/refund-policy', label: 'Refund & Cancellation' },
+                { to: '/shipping', label: 'Shipping / Delivery Policy' },
+                { to: '/pricing', label: 'Pricing Policy' },
+                { to: '/contact', label: 'Contact Us' },
                 { to: '/event-terms', label: 'Event Participation Terms' },
                 { to: '/disclaimer', label: 'Disclaimer & Fair Use' },
               ].map(({ to, label }) => (

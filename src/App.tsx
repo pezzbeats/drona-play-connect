@@ -34,6 +34,9 @@ import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import RefundPolicyPage from "./pages/RefundPolicy";
 import EventParticipationTermsPage from "./pages/EventParticipationTerms";
 import DisclaimerPolicyPage from "./pages/DisclaimerPolicy";
+import ContactUsPage from "./pages/ContactUs";
+import PricingPolicyPage from "./pages/PricingPolicy";
+import ShippingPolicyPage from "./pages/ShippingPolicy";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +59,9 @@ const App = () => (
             <Route path="/refund-policy" element={<RefundPolicyPage />} />
             <Route path="/event-terms" element={<EventParticipationTermsPage />} />
             <Route path="/disclaimer" element={<DisclaimerPolicyPage />} />
+            <Route path="/contact" element={<ContactUsPage />} />
+            <Route path="/pricing" element={<PricingPolicyPage />} />
+            <Route path="/shipping" element={<ShippingPolicyPage />} />
 
             {/* Admin Auth */}
             <Route path="/admin/login" element={<AdminLoginPage />} />

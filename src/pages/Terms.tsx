@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { ArrowLeft, Shield, CreditCard, Camera, Gamepad2 } from 'lucide-react';
+import { ArrowLeft, Shield, CreditCard, Camera, Gamepad2, Zap } from 'lucide-react';
 
 interface TermsSection {
   icon: React.ReactNode;
@@ -33,10 +33,24 @@ const sections: TermsSection[] = [
       'All ticket prices are final and inclusive of applicable charges.',
       '"Pay at Hotel" bookings must be settled at the venue before entry. Unpaid bookings will be denied entry.',
       'UPI payments are verified automatically via AI. Manual verification may take up to 30 minutes.',
+      'Razorpay gateway payments are confirmed instantly. Passes are generated automatically upon successful payment.',
       'Refunds are available only if the event is cancelled by the organiser.',
       'Partial refunds are not available for seat downgrades or unused seats.',
       'Payment disputes must be raised within 48 hours of the event date.',
+      'For Razorpay payments: if payment is deducted but passes are not generated, contact us immediately with your payment reference. We will reconcile and issue passes within 2 business hours.',
       'All fees collected are for event hospitality services (venue, food & beverage, entertainment access) only.',
+    ],
+  },
+  {
+    icon: <Zap className="h-5 w-5" />,
+    title: 'Razorpay Gateway Payments',
+    items: [
+      'When paying via Razorpay, you will be redirected to a secure Razorpay checkout — you may pay by card, UPI, net banking, or wallet.',
+      'SR LEISURE INN does not store your card, CVV, or banking credentials. All payment data is handled by Razorpay directly.',
+      'On successful Razorpay payment, passes are generated and available immediately — no screenshot upload is required.',
+      'If a Razorpay payment fails or is cancelled, the booking remains unpaid. No charges are levied for failed transactions.',
+      'In the rare event of a duplicate charge (same order charged twice), contact us at dronapalace@gmail.com with the Razorpay payment IDs. We will initiate a full refund of the duplicate amount within 5 business days.',
+      'Razorpay gateway fees (if any) are absorbed by SR LEISURE INN and are not added to the displayed ticket price.',
     ],
   },
   {
@@ -85,7 +99,7 @@ export default function TermsPage() {
           <div className="text-center">
             <div className="text-4xl mb-2">📋</div>
             <h1 className="font-display text-3xl font-bold gradient-text">Terms & Conditions</h1>
-            <p className="text-muted-foreground text-sm mt-2">T20 Fan Night · Hotel Drona Palace</p>
+            <p className="text-muted-foreground text-sm mt-2">T20 Fan Night · SR LEISURE INN · Hotel Drona Palace</p>
             <p className="text-xs text-muted-foreground mt-1">Last updated: {new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}</p>
           </div>
         </div>
@@ -93,7 +107,7 @@ export default function TermsPage() {
         {/* Intro */}
         <GlassCard className="p-4 mb-6 border border-primary/20">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            By registering for T20 Fan Night and purchasing a ticket, you agree to the following terms. Please read them carefully before proceeding.
+            By registering for T20 Fan Night and purchasing a hospitality package, you agree to the following terms. Please read them carefully before proceeding.
             These terms govern your participation in the event, payment obligations, and the Fun Guess Game.
           </p>
         </GlassCard>
@@ -128,7 +142,10 @@ export default function TermsPage() {
             🎯 The Fun Guess Game is <strong>not gambling</strong>. It is a free entertainment feature for fun participation only. No money is at stake.
           </div>
           <p className="text-xs text-muted-foreground">
-            For questions, contact the Hotel Drona Palace event desk.
+            For questions, contact SR LEISURE INN at{' '}
+            <a href="mailto:dronapalace@gmail.com" className="text-primary underline">dronapalace@gmail.com</a>
+            {' or '}
+            <a href="tel:7217016170" className="text-primary underline">+91 72170 16170</a>
           </p>
           <Link to="/register">
             <GlassButton variant="primary" size="md" className="mt-2">
