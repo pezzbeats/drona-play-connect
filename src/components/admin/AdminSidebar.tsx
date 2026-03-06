@@ -4,7 +4,7 @@ import { useAuth, AdminRole } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, Trophy, Users, ScanLine, ShoppingBag,
   BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio, Star,
-  BarChart2, Activity, HeartPulse,
+  BarChart2, Activity, HeartPulse, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
   { icon: HeartPulse,      label: 'Health',         to: '/admin/health',        minRole: 'operator' },
   { icon: Star,            label: 'Leaderboard',    to: '/admin/leaderboard',   minRole: 'super_admin' },
   { icon: Activity,        label: 'Activity Log',   to: '/admin/activity',      minRole: 'super_admin' },
+  { icon: ShieldCheck,     label: 'Role Management',to: '/admin/roles',         minRole: 'super_admin' },
 ];
 
 interface AdminSidebarProps {

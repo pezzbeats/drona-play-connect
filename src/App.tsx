@@ -27,6 +27,7 @@ import AdminLeaderboard from "./pages/admin/AdminLeaderboard";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminActivity from "./pages/admin/AdminActivity";
 import AdminHealth from "./pages/admin/AdminHealth";
+import AdminRoles from "./pages/admin/AdminRoles";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,7 @@ const App = () => (
               {/* super_admin only */}
               <Route path="leaderboard" element={<ProtectedRoute requiredRole="super_admin"><AdminLeaderboard /></ProtectedRoute>} />
               <Route path="activity" element={<ProtectedRoute requiredRole="super_admin"><AdminActivity /></ProtectedRoute>} />
+              <Route path="roles" element={<ProtectedRoute requiredRole="super_admin"><AdminRoles /></ProtectedRoute>} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
