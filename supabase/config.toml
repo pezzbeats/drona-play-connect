@@ -20,3 +20,18 @@ verify_jwt = false
 
 [functions.verify-game-pin]
 verify_jwt = false
+
+[functions.match-control]
+verify_jwt = false
+
+[functions.over-control]
+verify_jwt = false
+
+[functions.record-delivery]
+verify_jwt = false
+
+[functions.submit-prediction]
+verify_jwt = false
+
+[functions.resolve-prediction-window]
+verify_jwt = false

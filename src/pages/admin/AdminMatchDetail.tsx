@@ -30,18 +30,20 @@ export default function AdminMatchDetail() {
   const [assets, setAssets] = useState<any[]>([]);
   const [uploadingAsset, setUploadingAsset] = useState<string | null>(null);
   const [pricing, setPricing] = useState<any[]>([]);
+  const [allMatches, setAllMatches] = useState<any[]>([]);
   const [form, setForm] = useState({ name: '', opponent: '', match_type: 'group', venue: '', status: 'draft', start_time: '' });
-  const [pricingForm, setPricingForm] = useState({ base_price_new: '', base_price_returning: '', rule_type: 'standard' });
+  const [pricingForm, setPricingForm] = useState({ base_price_new: '', base_price_returning: '', rule_type: 'standard', loyalty_from_match_id: '' });
   const [savingPrice, setSavingPrice] = useState(false);
 
   useEffect(() => { if (id) fetchMatch(); }, [id]);
 
   const fetchMatch = async () => {
     setLoading(true);
-    const [matchRes, assetsRes, pricingRes] = await Promise.all([
+    const [matchRes, assetsRes, pricingRes, allMatchesRes] = await Promise.all([
       supabase.from('matches').select('*').eq('id', id).single(),
       supabase.from('match_assets').select('*').eq('match_id', id),
       supabase.from('match_pricing_rules').select('*').eq('match_id', id),
+      supabase.from('matches').select('id, name').neq('id', id).order('created_at', { ascending: false }),
     ]);
     if (matchRes.data) {
       setMatch(matchRes.data);
@@ -49,8 +51,14 @@ export default function AdminMatchDetail() {
       setForm({ name: m.name, opponent: m.opponent || '', match_type: m.match_type, venue: m.venue, status: m.status, start_time: m.start_time ? m.start_time.slice(0, 16) : '' });
     }
     setAssets(assetsRes.data || []);
+    setAllMatches(allMatchesRes.data || []);
     const pr = pricingRes.data?.[0];
-    if (pr) setPricingForm({ base_price_new: pr.base_price_new?.toString(), base_price_returning: pr.base_price_returning?.toString() || '', rule_type: pr.rule_type });
+    if (pr) setPricingForm({
+      base_price_new: pr.base_price_new?.toString(),
+      base_price_returning: pr.base_price_returning?.toString() || '',
+      rule_type: pr.rule_type,
+      loyalty_from_match_id: pr.loyalty_from_match_id || '',
+    });
     setLoading(false);
   };
 
@@ -72,7 +80,6 @@ export default function AdminMatchDetail() {
       const path = `${id}/${assetType}.${ext}`;
       const { error: uploadError } = await supabase.storage.from('match-assets').upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
-      // Upsert asset record
       await supabase.from('match_assets').upsert({ match_id: id!, asset_type: assetType as any, file_path: path, uploaded_by_admin_id: user?.id }, { onConflict: 'match_id,asset_type' } as any);
       toast({ title: `✅ ${assetType.replace('_', ' ')} uploaded` });
       fetchMatch();
@@ -84,7 +91,13 @@ export default function AdminMatchDetail() {
     setSavingPrice(true);
     try {
       const { data: existing } = await supabase.from('match_pricing_rules').select('id').eq('match_id', id!).single();
-      const priceData = { match_id: id!, rule_type: pricingForm.rule_type as any, base_price_new: parseInt(pricingForm.base_price_new), base_price_returning: pricingForm.base_price_returning ? parseInt(pricingForm.base_price_returning) : null };
+      const priceData = {
+        match_id: id!,
+        rule_type: pricingForm.rule_type as any,
+        base_price_new: parseInt(pricingForm.base_price_new),
+        base_price_returning: pricingForm.base_price_returning ? parseInt(pricingForm.base_price_returning) : null,
+        loyalty_from_match_id: pricingForm.loyalty_from_match_id || null,
+      };
       if (existing) {
         await supabase.from('match_pricing_rules').update(priceData).eq('id', existing.id);
       } else {
@@ -161,7 +174,7 @@ export default function AdminMatchDetail() {
       {/* Pricing Rules */}
       <GlassCard className="p-5">
         <h2 className="font-display text-lg font-bold text-foreground mb-4">Pricing Rules</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label className="text-foreground mb-1.5 block">Rule Type</Label>
             <Select value={pricingForm.rule_type} onValueChange={v => setPricingForm(f => ({ ...f, rule_type: v }))}>
@@ -174,11 +187,29 @@ export default function AdminMatchDetail() {
           </div>
           <div>
             <Label className="text-foreground mb-1.5 block">New Customer Price (₹)</Label>
-            <Input className="glass-input" type="number" placeholder="e.g. 500" value={pricingForm.base_price_new} onChange={e => setPricingForm(f => ({ ...f, base_price_new: e.target.value }))} />
+            <Input className="glass-input" type="number" placeholder="e.g. 999" value={pricingForm.base_price_new} onChange={e => setPricingForm(f => ({ ...f, base_price_new: e.target.value }))} />
           </div>
           <div>
             <Label className="text-foreground mb-1.5 block">Returning Customer Price (₹)</Label>
-            <Input className="glass-input" type="number" placeholder="e.g. 400" value={pricingForm.base_price_returning} onChange={e => setPricingForm(f => ({ ...f, base_price_returning: e.target.value }))} />
+            <Input className="glass-input" type="number" placeholder="e.g. 949" value={pricingForm.base_price_returning} onChange={e => setPricingForm(f => ({ ...f, base_price_returning: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-foreground mb-1.5 block">Loyalty From Match (optional)</Label>
+            <Select
+              value={pricingForm.loyalty_from_match_id || 'none'}
+              onValueChange={v => setPricingForm(f => ({ ...f, loyalty_from_match_id: v === 'none' ? '' : v }))}
+            >
+              <SelectTrigger className="glass-input"><SelectValue placeholder="Select previous match" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (standard returning)</SelectItem>
+                {allMatches.map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              If set, loyalty pricing applies only to seats from this past match. Extra seats are at full price.
+            </p>
           </div>
         </div>
         <GlassButton variant="primary" size="md" className="mt-4" loading={savingPrice} onClick={handleSavePricing}>Save Pricing</GlassButton>

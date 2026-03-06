@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound";
 import RegisterPage from "./pages/Register";
 import TicketPage from "./pages/Ticket";
 import PlayPage from "./pages/Play";
+import LivePage from "./pages/Live";
 import AdminLoginPage from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminMatches from "./pages/admin/AdminMatches";
@@ -19,6 +20,7 @@ import AdminMatchDetail from "./pages/admin/AdminMatchDetail";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminValidate from "./pages/admin/AdminValidate";
 import AdminManualBooking from "./pages/admin/AdminManualBooking";
+import AdminControl from "./pages/admin/AdminControl";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,7 @@ const App = () => (
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/ticket" element={<TicketPage />} />
             <Route path="/play" element={<PlayPage />} />
+            <Route path="/live" element={<LivePage />} />
 
             {/* Admin Auth */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -48,6 +51,7 @@ const App = () => (
               <Route path="orders" element={<AdminOrders />} />
               <Route path="validate" element={<AdminValidate />} />
               <Route path="manual-booking" element={<AdminManualBooking />} />
+              <Route path="control" element={<AdminControl />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

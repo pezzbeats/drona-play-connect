@@ -31,6 +31,8 @@ export default function PlayPage() {
       if (error || !data?.valid) {
         toast({ variant: 'destructive', title: 'Invalid credentials', description: 'Check your mobile and PIN' });
       } else {
+        // Store session in localStorage for /live page
+        localStorage.setItem('game_session', JSON.stringify({ mobile, pin, match_id: data.match_id || null }));
         toast({ title: '🎮 Welcome to the game!' });
         navigate('/live');
       }
@@ -45,7 +47,7 @@ export default function PlayPage() {
       <BackgroundOrbs />
 
       <div className="disclaimer-bar fixed top-0 left-0 right-0 text-center text-xs py-2 px-4 z-10">
-        ⚽ This is a fun guess game for entertainment only. No betting, no wagering, no gambling.
+        🎯 This is a fun guess game for entertainment only. No betting, no wagering, no gambling.
       </div>
 
       <div className="relative z-10 w-full max-w-sm mt-8">
