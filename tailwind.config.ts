@@ -70,7 +70,7 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        display: ['Rajdhani', 'sans-serif'],
+        display: ['Bebas Neue', 'Rajdhani', 'sans-serif'],
         body: ['Inter', 'sans-serif'],
       },
       keyframes: {

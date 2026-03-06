@@ -175,11 +175,12 @@ export default function IndexPage() {
             <div className="h-px flex-1 max-w-[80px] bg-gradient-to-l from-transparent to-secondary/50" />
           </div>
 
-          <h1 className="font-display text-6xl md:text-7xl font-bold gradient-text mb-3 leading-none tracking-wide">
+          <h1 className="font-display gradient-text mb-2 leading-none tracking-widest uppercase"
+            style={{ fontSize: 'clamp(3.5rem, 14vw, 6rem)', letterSpacing: '0.08em', textShadow: '0 0 40px hsl(355 80% 55% / 0.4), 0 0 80px hsl(38 75% 52% / 0.2)' }}>
             {get('hero_title', 'T20 Fan Night')}
           </h1>
 
-          <p className="text-foreground/80 font-display text-xl font-semibold tracking-wide mb-4">
+          <p className="text-foreground/75 font-body text-sm md:text-base font-medium tracking-[0.2em] uppercase mb-5">
             {get('hero_subtitle', 'An Exclusive Cricket Celebration Experience')}
           </p>
 
