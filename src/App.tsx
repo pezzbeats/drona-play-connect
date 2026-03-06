@@ -56,7 +56,6 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <VoiceAgent />
       <BrowserRouter>
         <AuthProvider>
           <VoiceAgentGuard />
