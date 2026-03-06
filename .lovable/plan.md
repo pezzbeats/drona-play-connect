@@ -1,134 +1,158 @@
 
-## Full Content Customization from Admin Panel
+## Plan: Razorpay Integration + Legal Pages Upgrade
 
-### What's Currently Hardcoded (Customer-Visible)
-
-**Landing page (`Index.tsx`):**
-- Hero title: "T20 Fan Night"
-- Subheading: "An Exclusive Cricket Celebration Experience"
-- Venue badge: "Hosted at Hotel Drona Palace, Kashipur"
-- 4 Feature cards (labels + descriptions)
-- 4 Trust strip items
-- Top disclaimer bar text
-- Legal disclaimer body text
-
-**Registration page (`Register.tsx`):**
-- Header title: "T20 Fan Night" + "Hotel Drona Palace"
-- `PAYEE_VPA` = `paytmqr5oka4x@ptys`
-- `PAYEE_NAME` = `Hotel Drona Palace`
-- Top disclaimer bar text
-
-**Footer (`LandingFooter.tsx`):**
-- About blurb, company name "SR LEISURE INN", GSTIN, address, phone, email, copyright line
+### Overview
+This is a large feature addition touching the payment flow, 3 new edge functions, a DB migration, 4 new/upgraded legal pages, a new Contact Us page, a Pricing page, and footer updates.
 
 ---
 
-### Solution: `site_config` Database Table
+### Part 1 — Database Migration
 
-A single `site_config` table with `key` (text, unique) + `value` (text) rows. This is the lightest approach — no new schemas, just key-value pairs read once on load.
+Add these columns to `orders` table:
+- `razorpay_order_id text`
+- `razorpay_payment_id text`
+- `razorpay_signature text`
+- `gateway_response jsonb` (snapshot of Razorpay response)
 
-**Rows to seed:**
-| Key | Default Value |
-|---|---|
-| `hero_title` | T20 Fan Night |
-| `hero_subtitle` | An Exclusive Cricket Celebration Experience |
-| `hero_venue_badge` | Hosted at Hotel Drona Palace, Kashipur |
-| `disclaimer_bar_text` | 🎯 Fun Guess Game only — for entertainment... |
-| `legal_disclaimer_title` | 🎯 Fun Guess Game — Legal Disclaimer |
-| `legal_disclaimer_body` | This event includes a recreational... |
-| `feature_1_label` | Live Stadium Screening |
-| `feature_1_desc` | Experience the electrifying atmosphere... |
-| `feature_2_label` | Fun Guess Game |
-| `feature_2_desc` | Make predictions for entertainment... |
-| `feature_3_label` | Premium Food & Beverages |
-| `feature_3_desc` | Unlimited hospitality services... |
-| `feature_4_label` | Live Leaderboard |
-| `feature_4_desc` | Compete with fellow guests... |
-| `trust_1_label` | Safe & professionally managed |
-| `trust_2_label` | Organised hospitality experience |
-| `trust_3_label` | Secure entry & digital passes |
-| `trust_4_label` | Premium venue & arrangements |
-| `footer_about_text` | Hotel Drona Palace is a premium... |
-| `footer_company_name` | SR LEISURE INN |
-| `footer_gstin` | ABOFS1823N1ZS |
-| `footer_address` | Jaitpur Turn, Bazpur Road, Kashipur, Uttarakhand |
-| `footer_phone` | 7217016170 |
-| `footer_email` | dronapalace@gmail.com |
-| `footer_copyright` | © 2026 SR LEISURE INN. All Rights Reserved. |
-| `register_header_title` | T20 Fan Night |
-| `register_header_venue` | Hotel Drona Palace |
-| `payment_vpa` | paytmqr5oka4x@ptys |
-| `payment_payee_name` | Hotel Drona Palace |
+The `payment_method` enum already has values; we need to add `razorpay` to the `payment_method` enum used by the orders table. Check current enum — it has `pay_at_hotel`, `cash`, `card`, `upi_qr`. We need to add `razorpay`.
 
----
-
-### Database Changes
-
-1. **Migration** — Create `site_config` table:
+Migration SQL:
 ```sql
-CREATE TABLE public.site_config (
-  key text PRIMARY KEY,
-  value text NOT NULL DEFAULT '',
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.site_config ENABLE ROW LEVEL SECURITY;
--- Public can read
-CREATE POLICY "Config readable by all" ON public.site_config FOR SELECT USING (true);
--- Only authenticated (admins) can write
-CREATE POLICY "Config writable by authenticated" ON public.site_config FOR ALL TO authenticated USING (true) WITH CHECK (true);
--- Seed default rows (INSERT ... ON CONFLICT DO NOTHING)
+ALTER TYPE payment_method_enum ADD VALUE IF NOT EXISTS 'razorpay';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_order_id text;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_payment_id text;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_signature text;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS gateway_response jsonb;
 ```
 
 ---
 
-### Frontend Changes
+### Part 2 — Razorpay Secrets
 
-**New hook** `src/hooks/useSiteConfig.ts`:
-- Fetches all rows from `site_config` once
-- Returns a `get(key: string, fallback?: string)` helper
-- Used by `Index.tsx`, `Register.tsx`, `LandingFooter.tsx`
-
-**Update `Index.tsx`** — replace all hardcoded strings with `config.get('key', 'fallback')`
-
-**Update `Register.tsx`** — replace `PAYEE_VPA`, `PAYEE_NAME`, header title, venue, disclaimer bar text
-
-**Update `LandingFooter.tsx`** — replace all hardcoded strings with config values
+Need `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` stored as Supabase secrets. Will use `add_secret` tool to request them from the user before the edge functions can work.
 
 ---
 
-### New Admin Page: `src/pages/admin/AdminSiteConfig.tsx`
+### Part 3 — New Edge Functions
 
-A new admin page at `/admin/site-config` (operator+ role) with a clean form:
+**`supabase/functions/razorpay-create-order/index.ts`**
+- Accepts: `{ order_id, amount_paise, currency, receipt }` 
+- Creates a Razorpay order via Razorpay API (`https://api.razorpay.com/v1/orders`)
+- Returns: `{ razorpay_order_id, amount, currency, key_id }`
+- Stores `razorpay_order_id` on the `orders` row
 
-**Sections (grouped):**
-1. **Landing Page** — hero title, subtitle, venue badge
-2. **Event Features** — 4 feature cards (label + desc each)
-3. **Trust Items** — 4 trust strip labels
-4. **Disclaimers** — top bar text, legal disclaimer title + body
-5. **Registration** — header title, venue line, UPI VPA, payee name
-6. **Footer** — about text, company name, GSTIN, address, phone, email, copyright
+**`supabase/functions/razorpay-verify-payment/index.ts`**
+- Accepts: `{ order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature }`
+- Verifies HMAC-SHA256 signature: `razorpay_order_id + "|" + razorpay_payment_id` signed with `RAZORPAY_KEY_SECRET`
+- On success: updates order to `payment_status = 'paid_verified'`, stores payment IDs, generates tickets (using same HMAC QR logic as `create-order`)
+- Returns: `{ verified: true, tickets }`
 
-Each field is a simple `<Input>` or `<Textarea>` with a Save button per section (or one global Save All). Uses a `useToast` on save success.
-
----
-
-### Router + Navigation Changes
-
-- Add `/admin/site-config` route in `App.tsx` (operator+ protected)
-- Add "Site Content" nav item with a `FileText` icon to `AdminSidebar.tsx` and `AdminBottomNav.tsx` (minRole: 'operator')
+Add both to `supabase/config.toml` with `verify_jwt = false`.
 
 ---
 
-### Files Changed
+### Part 4 — Register.tsx Updates
+
+**Payment method state**: Change type to `'pay_at_hotel' | 'upi_qr' | 'razorpay'`
+
+**New Razorpay option button** (between UPI QR and Pay at Hotel):
+- Blue/indigo color scheme  
+- Label: "Pay via Razorpay — Cards, UPI, Wallets"
+- Badge: "Secure Gateway"
+
+**Razorpay flow** (`handleRazorpayPayment`):
+1. Call `handleCreateOrder()` to create the internal order (passes `payment_method: 'razorpay'`, no tickets generated)
+2. Call `razorpay-create-order` edge function → get `razorpay_order_id`
+3. Load Razorpay checkout script dynamically (`https://checkout.razorpay.com/v1/checkout.js`)
+4. Open `new Razorpay({ key, amount, order_id, ... })` with `handler` callback
+5. On handler success → call `razorpay-verify-payment` edge function
+6. On verification success → `setTickets(data.tickets)` + `setStep(3)`
+7. On failure/modal dismiss → show retry option, order stays `unpaid`
+
+**Ticket step banner**: Show "✅ PAID via Razorpay — Entry Confirmed" for Razorpay payments
+
+---
+
+### Part 5 — Admin UI Updates
+
+**`AdminOrders.tsx`**:
+- Add `payment_method` badge display in the order list row (alongside status badge)
+- Color-coded payment method chips:
+  - Razorpay → blue/indigo
+  - UPI QR → green
+  - Pay at Hotel → orange/warning
+- In expanded order detail grid, show `razorpay_payment_id` and `razorpay_order_id` if present
+
+---
+
+### Part 6 — Legal Pages (Create/Upgrade)
+
+**New pages to create:**
+1. `src/pages/ContactUs.tsx` → `/contact`
+2. `src/pages/PricingPolicy.tsx` → `/pricing`  
+3. `src/pages/ShippingPolicy.tsx` → `/shipping`
+
+**Upgrade existing pages** (keep structure, enhance content):
+4. `src/pages/PrivacyPolicy.tsx` — add section about payment gateway data processing (Razorpay)
+5. `src/pages/Terms.tsx` — add Razorpay payment terms, duplicate payment handling, gateway refund section
+6. `src/pages/RefundPolicy.tsx` — add gateway fee clause, failed payment / duplicate charge handling  
+7. `src/pages/EventParticipationTerms.tsx` — minor refinements
+8. `src/pages/DisclaimerPolicy.tsx` — minor refinements
+
+**New page content highlights:**
+
+*ContactUs* — Business name, address, phone, email, support hours, link to register  
+*ShippingPolicy* — "No physical shipping", digital passes delivered via website, verification may delay pass release  
+*PricingPolicy* — Seat pricing structure, match-specific pricing, loyalty/returning customer rates, extra seat pricing, payment options
+
+---
+
+### Part 7 — Footer + App.tsx Updates
+
+**`LandingFooter.tsx`** — Add new links: Contact Us, Shipping Policy, Pricing Policy
+
+**`App.tsx`** — Add 3 new routes: `/contact`, `/pricing`, `/shipping`
+
+**`src/pages/admin/AdminSiteConfig.tsx`** — No changes needed, existing config keys cover all text
+
+---
+
+### Files Summary
 
 | File | Action |
 |---|---|
-| `supabase/migrations/new.sql` | Create `site_config` table + seed defaults |
-| `src/hooks/useSiteConfig.ts` | New hook |
-| `src/pages/admin/AdminSiteConfig.tsx` | New admin page |
-| `src/pages/Index.tsx` | Use hook instead of hardcoded strings |
-| `src/pages/Register.tsx` | Use hook for VPA, payee name, headers |
-| `src/components/ui/LandingFooter.tsx` | Use hook for all company info |
-| `src/App.tsx` | Add new route |
-| `src/components/admin/AdminSidebar.tsx` | Add nav item |
-| `src/components/admin/AdminBottomNav.tsx` | Add nav item |
+| `supabase/migrations/new.sql` | Add razorpay columns + enum value |
+| `supabase/functions/razorpay-create-order/index.ts` | New edge function |
+| `supabase/functions/razorpay-verify-payment/index.ts` | New edge function |
+| `supabase/config.toml` | Add 2 new function entries |
+| `src/pages/Register.tsx` | Add Razorpay method + flow |
+| `src/pages/admin/AdminOrders.tsx` | Show payment method badge + Razorpay IDs |
+| `src/pages/ContactUs.tsx` | New page |
+| `src/pages/PricingPolicy.tsx` | New page |
+| `src/pages/ShippingPolicy.tsx` | New page |
+| `src/pages/PrivacyPolicy.tsx` | Upgrade with gateway/Razorpay section |
+| `src/pages/Terms.tsx` | Upgrade with Razorpay payment terms |
+| `src/pages/RefundPolicy.tsx` | Upgrade with gateway fee/duplicate payment |
+| `src/components/ui/LandingFooter.tsx` | Add 3 new footer links |
+| `src/App.tsx` | Add 3 new routes |
+
+---
+
+### Razorpay Script Loading
+
+Razorpay checkout requires loading `https://checkout.razorpay.com/v1/checkout.js` dynamically. We'll use a utility that:
+1. Checks if script already loaded
+2. Injects `<script>` tag and waits for `onload`
+3. Returns a Promise that resolves when `window.Razorpay` is available
+
+No npm package needed — Razorpay standard checkout works via CDN script.
+
+---
+
+### Ticket Generation Logic (Updated)
+
+`create-order` function: tickets generated when `payment_method` is `pay_at_hotel`, `cash`, or `card`.  
+Razorpay tickets: generated inside `razorpay-verify-payment` function after signature verification.  
+UPI QR tickets: already generated inside `verify-payment-proof` function after AI verification.
+
+The flow is correct — no change to UPI or Pay at Hotel. Only Razorpay is added.
