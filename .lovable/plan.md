@@ -1,160 +1,108 @@
 
-## Analysis
+## Analysis of Current State
 
-**Current state of leaderboard/points engine:**
-- `resolve-prediction-window` hardcodes `const pointsPerCorrect = 10` — no per-match configuration
-- No tie-breaker logic: when two players have equal `total_points`, order is arbitrary
-- No `leaderboard_frozen` concept beyond `windows_locked` (which stops scoring, not display)
-- No admin ability to adjust individual player points
-- No CSV export
-- No `per-over` scoring mode (only ball-by-ball)
-- No "speed bonus" or any configurable scoring options
-- Leaderboard shows up to 20 entries on fan side; no dedicated admin leaderboard management page
-- Leaderboard table lacks: `tiebreaker_score`, `is_frozen`, `points_adjustment`, `last_correct_at`
+**`AdminMatches.tsx`** — list page:
+- "New Match" dialog: basic fields only, no clone option
+- Activate toggle exists but no confirmation guard — one accidental tap deactivates a live match
+- No registration toggle separate from the "Active" toggle (they're conflated)
+- No preview link per match
 
-**What needs building:**
+**`AdminMatchDetail.tsx`** — detail page (opened from Edit button):
+- Has match info, pricing, and asset sections — all functional
+- Pricing section exists but has no visual price-tier cards
+- No "Clone from previous match" button
+- No "Preview Registration Page" link
+- Status dropdown includes `registrations_open/closed` but it's buried in a plain Select — no dedicated toggle
+- Asset thumbnails are small (w-12 h-12) and hard to verify at a glance
 
-1. **DB migration** — extend `leaderboard` and add `match_scoring_config` table
-2. **`resolve-prediction-window`** — read scoring config, support over-mode windows, apply tie-breaker
-3. **New admin page `/admin/leaderboard`** — freeze toggle, manual point adjustments, full table + CSV export
-4. **Updated fan `Leaderboard.tsx`** — show accuracy %, rank movement indicator
-5. **`AdminSidebar.tsx`** — add nav entry
-
----
-
-## Part 1 — DB migration
-
-**New table: `match_scoring_config`** (one row per match)
-```sql
-CREATE TABLE public.match_scoring_config (
-  match_id uuid PRIMARY KEY REFERENCES matches(id),
-  points_per_correct int NOT NULL DEFAULT 10,
-  points_per_over_correct int NOT NULL DEFAULT 25,
-  speed_bonus_enabled boolean NOT NULL DEFAULT false,
-  speed_bonus_points int NOT NULL DEFAULT 5,       -- extra for first N correct
-  speed_bonus_first_n int NOT NULL DEFAULT 10,     -- first 10 correct get bonus
-  tiebreaker_mode text NOT NULL DEFAULT 'accuracy', -- 'accuracy' | 'time'
-  leaderboard_frozen boolean NOT NULL DEFAULT false,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.match_scoring_config ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Scoring config readable by all" ON public.match_scoring_config FOR SELECT USING (true);
-CREATE POLICY "Scoring config writable by authenticated" ON public.match_scoring_config FOR ALL TO authenticated USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
-```
-
-**Extend `leaderboard` table:**
-```sql
-ALTER TABLE public.leaderboard
-  ADD COLUMN IF NOT EXISTS tiebreaker_score numeric NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS points_adjustment int NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS adjustment_reason text,
-  ADD COLUMN IF NOT EXISTS last_correct_at timestamptz,
-  ADD COLUMN IF NOT EXISTS rank_position int;
-```
-
-`tiebreaker_score` = accuracy ratio (correct/total as a float) stored on each resolve — used for deterministic ORDER BY when `total_points` ties. If `tiebreaker_mode = 'time'`, it stores the timestamp of last correct prediction as a unix epoch (lower = better).
+**`Register.tsx`** — public page:
+- Reads from the `is_active_for_registration` flag on `matches` table
+- Supports `match_id` in the URL query already? No — it always reads the active match. We can add a `?preview=<matchId>` mode.
 
 ---
 
-## Part 2 — `resolve-prediction-window` edge function
+## Plan
 
-**Per-window scoring config:**
-- Fetch `match_scoring_config` for the match on every resolve call
-- Use `points_per_correct` (ball window) or `points_per_over_correct` (over window)
-- Speed bonus: if `speed_bonus_enabled`, for each correct prediction check if they're within the first `speed_bonus_first_n` correct answers — award `speed_bonus_points` extra
+### Changes: `AdminMatchDetail.tsx` (primary target — most features land here)
 
-**Tie-breaker update:**
-- After updating `total_points` and `correct_predictions`, recalculate `tiebreaker_score`:
-  - accuracy mode: `correct_predictions / total_predictions` (float)
-  - time mode: unix epoch of `last_correct_at` as a negative (so smaller = better rank)
+**1. Clone from previous match**
+- Add a "Clone from" button in the header area → opens a small popover/dialog listing all other matches
+- On select: fetches that match's `match_pricing_rules`, `match_assets`, and `match_scoring_config`, then fills the current page's forms. Does NOT save automatically — admin still clicks "Save Changes" / "Save Pricing" to commit.
 
-**Frozen leaderboard guard:**
-- Check `match_scoring_config.leaderboard_frozen` before writing leaderboard updates
-- If frozen, still score the `predictions` table (mark is_correct/points_earned) but skip leaderboard writes
-- Return `{ success: true, leaderboard_frozen: true }` so admin UI can show warning
+**2. Visual pricing tiers**
+- Replace the flat input grid with two side-by-side pricing cards:
+  - Left card: "New Customer" (blue tint) — price input + badge showing savings vs. returning
+  - Right card: "Returning / Loyal" (green tint) — price input + loyalty link selector
+- Shows a live "savings badge": "₹50 off for returning fans" calculated from the two values
+- Loyalty link select (already exists) stays below, but now shown contextually inside the Returning card with a visual indicator
 
----
+**3. Larger asset previews + drag-to-replace UX**
+- Asset grid cells: increase preview image to `w-full h-24 object-cover` (instead of w-12 h-12)
+- Add a "Replace" button on hover overlay for already-uploaded assets
+- Add a "Remove" button (sets file to empty / deletes the asset row)
 
-## Part 3 — New `/admin/leaderboard` page
+**4. Registration toggle + status quick-actions (dedicated section)**
+- Add a "Registration Controls" card with:
+  - **Status quick-toggle row**: button-group for `draft | registrations_open | registrations_closed` (highlights current)
+  - **Active for Registration switch**: styled Switch component with confirmation dialog when turning ON (warns if another match is active) — calls `set-match-active` edge function
+  - Shows current state prominently
 
-New file: `src/pages/admin/AdminLeaderboard.tsx`
+**5. Preview Registration Page button**
+- Add a "Preview Registration Page" button that navigates to `/register?preview=<matchId>` in a new tab
+- In `Register.tsx`: read `?preview=<matchId>` query param — if present AND user is coming from admin (we can check `document.referrer` or just always allow it for the demo), fetch that specific match instead of the active one, show a "PREVIEW MODE" banner at the top
 
-**Sections:**
+### Changes: `AdminMatches.tsx`
 
-**Header card: match selector + scoring config**
-- Select active match (dropdown)
-- Inline editable config: `points_per_correct`, `points_per_over_correct`, `speed_bonus_enabled`, `tiebreaker_mode`
-- Save button → upsert `match_scoring_config`
-- **Freeze Leaderboard** toggle → updates `match_scoring_config.leaderboard_frozen`
-
-**Leaderboard table (full, not top-20 cap)**
-- Columns: Rank, Name, Points, Adjustment, Total, Accuracy, Windows Predicted, Last Correct, Actions
-- "Total" = `total_points + points_adjustment`
-- Row action: **"Adjust Points"** inline — click opens an inline +/- input and reason field → `UPDATE leaderboard SET points_adjustment, adjustment_reason` directly
-- Search/filter by name
-- Realtime updates using `useRealtimeChannel`
-
-**Export CSV button** — client-side CSV generation from current leaderboard data:
-```typescript
-const csv = [header, ...entries.map(row => cols.join(','))].join('\n');
-const blob = new Blob([csv], { type: 'text/csv' });
-const url = URL.createObjectURL(blob);
-// trigger download
-```
-
----
-
-## Part 4 — Fan `Leaderboard.tsx` improvements
-
-- Show accuracy percentage: `(correct/total * 100).toFixed(0)%`
-- Use `total_points + points_adjustment` as displayed score (need to add `points_adjustment` to the SELECT)
-- Order by `total_points + points_adjustment DESC, tiebreaker_score DESC` — but since we can't do arithmetic in Supabase client `.order()`, add a `rank_position` column that gets updated on every resolve to pre-compute rank — the leaderboard is ordered by `rank_position ASC`
-- Small accuracy badge next to name
-
-Actually simpler: compute effective score in `resolve-prediction-window` and store `rank_position`. Then the fan leaderboard can just `order('rank_position', ascending: true)`.
-
----
-
-## Part 5 — `AdminSidebar` + routing
-
-Add `{ icon: Trophy, label: 'Leaderboard', to: '/admin/leaderboard' }` to nav items.
-Add route in `App.tsx`: `<Route path="leaderboard" element={<AdminLeaderboard />} />`.
+**6. Safety confirmation for Activate toggle**
+- Wrap the Activate button in an `AlertDialog` confirmation: "Are you sure? This will deactivate any currently active match and open registration for [match name]."
+- Add a clone icon button next to Edit — clicking it navigates to create-new-match flow but pre-fills the form via URL params `?clone=<matchId>`
 
 ---
 
 ## Files changed
 
-| File | Change |
+| File | What changes |
 |---|---|
-| `supabase/migrations/[new].sql` | `match_scoring_config` table + extend `leaderboard` columns |
-| `supabase/functions/resolve-prediction-window/index.ts` | Read scoring config, speed bonus, tie-breaker update, frozen guard |
-| `src/pages/admin/AdminLeaderboard.tsx` | New page: config editor, full leaderboard table, manual adjust, freeze, CSV export |
-| `src/components/admin/AdminSidebar.tsx` | Add Leaderboard nav entry |
-| `src/App.tsx` | Add `/admin/leaderboard` route |
-| `src/components/live/Leaderboard.tsx` | Show accuracy %, use `points_adjustment` in display, order by `rank_position` |
+| `src/pages/admin/AdminMatchDetail.tsx` | Clone dialog, visual pricing cards, larger assets, registration controls card, preview button |
+| `src/pages/admin/AdminMatches.tsx` | AlertDialog confirmation on activate toggle |
+| `src/pages/Register.tsx` | Read `?preview=<matchId>` param, show PREVIEW banner |
+
+No DB schema changes needed — all within existing tables.
 
 ---
 
-## Tie-breaker detail
-
-`rank_position` is recomputed after each window resolve:
-```sql
--- In edge function, after all leaderboard rows updated for this window:
-UPDATE leaderboard SET rank_position = sub.rn
-FROM (
-  SELECT id,
-    ROW_NUMBER() OVER (
-      ORDER BY (total_points + points_adjustment) DESC,
-              tiebreaker_score DESC,
-              last_updated ASC  -- earliest last update = faster player
-    ) AS rn
-  WHERE match_id = $match_id
-) sub
-WHERE leaderboard.id = sub.id
-  AND leaderboard.match_id = $match_id;
+## Detail: Clone logic
+```typescript
+const handleClone = async (sourceMatchId: string) => {
+  const [pricingRes, configRes] = await Promise.all([
+    supabase.from('match_pricing_rules').select('*').eq('match_id', sourceMatchId).single(),
+    supabase.from('match_scoring_config').select('*').eq('match_id', sourceMatchId).maybeSingle(),
+  ]);
+  // Pre-fill pricingForm from pricingRes.data (don't save yet)
+  // Pre-fill scoringConfig from configRes.data
+  toast({ title: 'Settings cloned — review and save to apply' });
+};
 ```
-This runs inside the edge function using the service role client.
+Assets are NOT cloned (they need to be re-uploaded per match — file paths are match-scoped).
 
-## Non-gambling compliance note
-The admin leaderboard page will include a visible disclaimer at the top: "This is a fun entertainment leaderboard. Points have no monetary value. No gambling or wagering." The export CSV also includes a header row with this disclaimer.
+## Detail: Preview mode in Register.tsx
+```typescript
+const previewMatchId = new URLSearchParams(window.location.search).get('preview');
+// if previewMatchId exists, fetch that specific match + show banner
+```
+No auth check — preview is read-only so safe to expose. Shows a yellow "⚠️ PREVIEW MODE — Not live" sticky banner.
+
+## Detail: Registration Controls card layout
+```
+┌─────────────────────────────────────────────────┐
+│ Registration Controls                            │
+│                                                  │
+│ Status:  [Draft] [Open ✓] [Closed]              │
+│          (button-group, one active)              │
+│                                                  │
+│ Active for registration:  ●──── ON              │
+│  [Only one match can be active at a time]        │
+│                                                  │
+│ [👁 Preview Registration Page ↗]                │
+└─────────────────────────────────────────────────┘
+```
