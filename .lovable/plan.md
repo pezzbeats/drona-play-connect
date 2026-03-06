@@ -1,166 +1,107 @@
 
-## Analysis
+## Analysis of Current Cricket Engine Bugs
 
-### Current realtime gaps
+### `record-delivery/index.ts` — Critical bugs found:
 
-**Scoreboard (`Scoreboard.tsx`):**
-- Single channel subscription with no reconnect logic
-- `setConnected(status === 'SUBSCRIBED')` — only the subscription status, no handling for `CHANNEL_ERROR` or `TIMED_OUT`
-- No reconnect on socket drop — if the Supabase realtime socket disconnects, `connected` stays `false` and no re-subscribe happens
-- No missed-update replay — if a delivery comes in while disconnected, the score is stale until refresh
+1. **`ballNo` is wrong for illegal deliveries (line 58):** `const ballNo = isIllegal ? legalBallCount + 1 : legalBallCount + 1;` — both branches are identical. For a wide/no-ball, `ball_no` should stay at the NEXT legal ball position (i.e., `legalBallCount + 1`), but for legal deliveries it should be `legalBallCount + 1`. The formula is correct by accident but misleading — the real issue is in the over completion check below.
 
-**PredictionPanel (`PredictionPanel.tsx`):**
-- On any prediction_window change → calls `fetchWindows()` (full DB fetch). Race condition: if two rapid window events arrive, two concurrent fetches run, second may overwrite first
-- No reconnect handling on the channel `subscribe` callback
-- `action === "open"` in `resolve-prediction-window/index.ts` has a bug: calls `await req.json()` twice — the second call will return `{}` because the body stream is already consumed
+2. **Over auto-completes itself (lines 148-155):** When 6 legal balls are bowled, the function auto-marks the over as `complete`. This means the admin **cannot** record a 7th delivery (wide/no-ball on ball 6) because the over closes immediately. Per cricket rules: the over only closes after the 6th *legal* ball is confirmed, but **an illegal delivery on what would be ball 6 should still be allowed**. The check needs to be: only auto-complete if the 6th legal ball was NOT an illegal delivery. Actually, the correct behaviour: the over completes at exactly 6 legal balls — if ball 6 is a no-ball/wide, the over is NOT complete.
 
-**Leaderboard (`Leaderboard.tsx`):**
-- Same pattern: any change → `fetchLeaderboard()`. No debounce, no reconnect
+3. **Overs display is wrong (lines 104-113):** `completedOversCount` counts completed overs (before this delivery), then adds `remainingBalls / 10` (e.g., 3 balls in current over = 0.3). But it uses `allOvers?.length` which counts ALL completed overs — after auto-completing the over, this will include the just-completed one, double-counting. The correct formula: `completedOversCount` should NOT include the current over, then `newLegalBalls % 6` is the partial count.
 
-**AdminControl (`AdminControl.tsx`):**
-- Shows `<Wifi className="text-success" />` hardcoded — no actual connection state tracking
-- `over_control` changes trigger full `fetchAll()` — heavyweight for frequent events
-- No idempotency guard on "Open Prediction Window" — if admin clicks twice rapidly, two windows open
+4. **Strike rotation is not implemented:** After recording a delivery, there is no strike rotation logic. Odd runs = striker and non-striker swap. End of over = striker and non-striker swap. This needs to be added to the live state update.
 
-**Race conditions on backend:**
-- `over-control/create_over`: no check for existing active over — two concurrent "New Over" calls can create two active overs simultaneously
-- `resolve-prediction-window/open`: no check for existing open window — admin can open a second window while one is already open
+5. **Over inactive guard is missing:** Nothing prevents recording a delivery if `over_id` is null or the over is not `active` status. Need to fetch and validate the over status before insert.
 
-**Panic controls:** None exist anywhere.
+6. **Wicket: no incoming batsman selection:** After a wicket, `current_striker_id` (or non-striker) is set to `null`. The admin then has no UI to set the incoming batsman — they need to set it before the next delivery.
+
+7. **Innings end: no prediction lock, no field reset:** When transitioning to `break` or `innings2`, open prediction windows should auto-lock, and current player IDs should be cleared on the live state.
+
+### `match-control/index.ts` — Gaps:
+
+8. **Innings transition missing field resets (lines 67-75):** When setting phase to `innings2`, it swaps batting/bowling teams and sets `current_innings = 2`, but does NOT clear: `current_striker_id`, `current_non_striker_id`, `current_bowler_id`. These carry over from innings 1.
+
+9. **Innings break missing prediction lock:** No auto-lock of open/locked windows when phase changes to `break` or `ended`.
+
+### `AdminControl.tsx` — UI gaps:
+
+10. **After recording delivery, form resets only manually:** After a wicket or over completion, the admin needs to select the incoming batsman. The form should prompt for this.
+
+11. **No over inactive guard in UI:** `handleRecordDelivery` fires even if `activeOver` is null or the over is already complete. The "Record Delivery" button should be disabled if no active over.
+
+12. **No strike rotation override toggle:** No UI to manually override who is striker/non-striker.
+
+13. **`auto_rotate_strike` flag for the delivery form:** Add a checkbox "Auto-rotate strike" (default true) that the admin can uncheck for edge cases (e.g. run-out where striker doesn't rotate, overthrows, etc.).
 
 ---
 
 ## Plan
 
-### Part 1 — DB migration: `match_flags` table (panic controls)
-A single-row table per match with boolean flags for emergency overrides:
+### Part 1 — `record-delivery/index.ts` — Rewrite scoring logic
 
-```sql
-CREATE TABLE public.match_flags (
-  match_id uuid PRIMARY KEY,
-  predictions_frozen boolean NOT NULL DEFAULT false,
-  scanning_frozen boolean NOT NULL DEFAULT false,
-  windows_locked boolean NOT NULL DEFAULT false,
-  frozen_by_admin_id uuid,
-  frozen_at timestamptz,
-  freeze_reason text
-);
-```
+**Fixes:**
+- **Guard: validate over is active** — fetch over from DB before anything else; return 409 if `status !== 'active'`.
+- **Fix ball_no assignment** — legal: `legalBallCount + 1`; illegal: same position (doesn't consume a ball slot, but delivery_no still increments).
+- **Fix overs display** — count completed overs (status=complete, excluding current), then add partial: `(newLegalBalls % 6) / 10`.
+- **Over auto-complete fix** — after recording, if `newLegalBallsTotal >= 6` AND the current delivery is legal, mark over complete. If it's an illegal delivery and we're at 6+ legal balls, that's impossible (the over would already have been complete after the previous delivery). So the logic stays the same but the display calc is corrected.
+- **Strike rotation** — after recording delivery:
+  - If `auto_rotate` is true (sent from client, default `true`):
+    - Runs are **odd**: swap `current_striker_id` ↔ `current_non_striker_id`
+    - End of over (6th legal ball): swap striker/non-striker (batsmen cross for end-of-over)
+    - Wicket: null the out batsman (existing logic); no rotation on wicket
 
-RLS: readable by all (public clients need to check flags), writable by authenticated only.
+- **Wicket clearing** — already sets player to null; add a field `needs_new_batsman: true` in response so UI can prompt.
 
-Also add a unique constraint fix to `over_control`: add a **partial unique index** to prevent two active overs in the same innings:
-```sql
-CREATE UNIQUE INDEX over_control_one_active_per_innings 
-ON public.over_control (match_id, innings_no) 
-WHERE status = 'active';
-```
+- **Summary string improvement** — include ball number in summary.
 
-And on `prediction_windows`: partial unique index to prevent two open windows per match:
-```sql
-CREATE UNIQUE INDEX prediction_windows_one_open_per_match
-ON public.prediction_windows (match_id) 
-WHERE status = 'open';
-```
+**New `auto_rotate` body param** (boolean, default `true`).
 
-### Part 2 — Shared realtime hook: `useRealtimeChannel`
+### Part 2 — `match-control/index.ts` — Innings transition cleanup
 
-Create `src/hooks/useRealtimeChannel.ts` — a reusable hook that wraps Supabase realtime with:
-
-- **Auto-reconnect**: on `CHANNEL_ERROR` or `TIMED_OUT` status, wait exponential backoff (2s, 4s, 8s max 30s) then re-subscribe
-- **Missed-update replay**: on reconnect, call a provided `onReconnect()` callback to re-fetch fresh data
-- **Connection state**: returns `{ connected: boolean, reconnecting: boolean }`
-- Cleans up on unmount
+When `set_phase` is called with `innings2` or `break` or `ended`:
+- Clear `current_striker_id`, `current_non_striker_id`, `current_bowler_id` to null
+- Auto-resolve any `open` prediction windows to `locked` (stop accepting predictions but don't score them — admin will resolve manually)
 
 ```typescript
-export function useRealtimeChannel(
-  channelName: string,
-  subscriptions: ChannelSubscription[],
-  onReconnect: () => void
-): { connected: boolean; reconnecting: boolean }
-```
-
-### Part 3 — Upgrade `Scoreboard.tsx` with new hook
-
-Replace the manual `subscribeRealtime` / `channelRef` pattern:
-- Use `useRealtimeChannel` — on reconnect calls `fetchInitialData()` to replay missed updates
-- Show `reconnecting` state in the WiFi indicator with a yellow/amber spinner
-
-### Part 4 — Upgrade `PredictionPanel.tsx`
-
-- Use `useRealtimeChannel` — on reconnect calls `fetchWindows()`
-- Deduplicate rapid fetches: add a `fetchingRef = useRef(false)` guard — if a fetch is already in-flight, skip the duplicate trigger
-- Fix the double `req.json()` bug in `resolve-prediction-window/index.ts` `open` action — parse the full body once at the top of the handler
-
-### Part 5 — Upgrade `Leaderboard.tsx`
-
-- Use `useRealtimeChannel` — on reconnect calls `fetchLeaderboard()`
-- Add fetch debounce (200ms) to avoid N parallel fetches on burst leaderboard updates after a window resolve
-
-### Part 6 — Fix race conditions in edge functions
-
-**`over-control/index.ts`** — `create_over` action: check for existing active over before inserting:
-```typescript
-const { data: existingActive } = await supabase
-  .from("over_control")
-  .select("id")
-  .eq("match_id", match_id)
-  .eq("innings_no", innings_no || 1)
-  .eq("status", "active")
-  .single();
-
-if (existingActive) {
-  return new Response(JSON.stringify({ error: "An over is already active. Complete it first." }), { status: 409 });
+if (['innings2', 'break', 'ended'].includes(phase)) {
+  updateData.current_striker_id = null;
+  updateData.current_non_striker_id = null;
+  updateData.current_bowler_id = null;
+  
+  // Lock any open windows
+  await supabase
+    .from('prediction_windows')
+    .update({ status: 'locked' })
+    .eq('match_id', match_id)
+    .eq('status', 'open');
 }
 ```
 
-**`resolve-prediction-window/index.ts`** — `open` action: fix double `req.json()` bug (body already parsed once at top), add check for existing open window:
-```typescript
-const { data: existingOpen } = await supabase
-  .from("prediction_windows")
-  .select("id")
-  .eq("match_id", match_id)
-  .eq("status", "open")
-  .single();
+### Part 3 — `AdminControl.tsx` — UI improvements
 
-if (existingOpen) {
-  return new Response(JSON.stringify({ error: "A prediction window is already open." }), { status: 409 });
-}
+**Over management section changes:**
+
+1. **Block delivery recording when no active over** — "Record Delivery" button disabled, show message "Activate a new over to record deliveries".
+
+2. **After delivery succeeds (`record-delivery` returns `needs_new_batsman: true`)** — show an inline "Select incoming batsman" prompt (a `Select` component populated with the batting team players who are not currently active). On selection, call `match-control` with `action: 'update_players'`.
+
+3. **Strike rotation toggle** — add a small checkbox `Auto-rotate strike` (default checked) in the delivery form. When unchecked, sends `auto_rotate: false`.
+
+4. **Batting/bowling team split for player selects** — split the `players` state into `battingPlayers` and `bowlingPlayers` based on `batting_team_id`/`bowling_team_id` from `liveState` and `match_roster`. Striker/non-striker selects show only batting team; bowler shows only bowling team.
+
+5. **Over ball counter** — show `X / 6 legal balls` in the over header so admin knows how many balls have been bowled this over.
+
+**Implementation detail for batting players:**
+```typescript
+// Already have players[] and liveState.batting_team_id / liveState.bowling_team_id
+// Split based on team_id field on players (from match_roster team_id)
+const battingPlayers = players.filter(p => p.team_id === liveState?.batting_team_id);
+const bowlingPlayers = players.filter(p => p.team_id === liveState?.bowling_team_id);
 ```
 
-**`submit-prediction/index.ts`** — check `match_flags.predictions_frozen` before accepting submission:
-```typescript
-const { data: flags } = await supabase.from("match_flags").select("predictions_frozen").eq("match_id", access.match_id).single();
-if (flags?.predictions_frozen) {
-  return new Response(JSON.stringify({ error: "Predictions are currently paused." }), { status: 423 });
-}
-```
-
-**`admin-checkin/index.ts`** — check `match_flags.scanning_frozen`:
-```typescript
-const { data: flags } = await supabase.from("match_flags").select("scanning_frozen").eq("match_id", ticket.match_id).single();
-if (flags?.scanning_frozen) {
-  return new Response(JSON.stringify({ error: "Gate scanning is currently frozen by admin." }), { status: 423 });
-}
-```
-
-### Part 7 — Admin panic controls in `AdminControl.tsx`
-
-Add a new **"Panic Controls"** card below the phase controls. Uses a `match_flags` row for the active match:
-
-- **Freeze Predictions** toggle — sets `predictions_frozen = true/false` with a reason prompt
-- **Freeze Scanning** toggle — sets `scanning_frozen = true/false`
-- **Lock All Windows** button — updates all `open` and `locked` windows to `resolved` status instantly
-- Show current flag state (frozen/active) with colored badges
-- Each action logs to `admin_activity`
-
-Realtime subscribe to `match_flags` row so the panel updates live when another admin changes flags.
-
-Fix the hardcoded `<Wifi className="text-success" />` — replace with actual connection state from `useRealtimeChannel`.
-
-### Part 8 — `AdminValidate.tsx` freeze check
-
-Add a real-time check: subscribe to `match_flags` for the active match. If `scanning_frozen = true`, show a full-width red banner "⛔ Scanning frozen by admin" and disable the check-in button. This is client-side safety in addition to the backend gate in `admin-checkin`.
+6. **Incoming batsman prompt after wicket** — add state `needsNewBatsman` (boolean). After a successful delivery call that had `is_wicket = true`:
+   - Set `needsNewBatsman = true`
+   - Show a card prompting "Select incoming batsman" with batting team players minus already-active ones
 
 ---
 
@@ -168,31 +109,8 @@ Add a real-time check: subscribe to `match_flags` for the active match. If `scan
 
 | File | Change |
 |---|---|
-| `supabase/migrations/[new].sql` | `match_flags` table + RLS + partial unique indexes on `over_control` and `prediction_windows` |
-| `src/hooks/useRealtimeChannel.ts` | New shared hook: auto-reconnect + missed-update replay |
-| `src/components/live/Scoreboard.tsx` | Use `useRealtimeChannel`, show reconnecting state |
-| `src/components/live/PredictionPanel.tsx` | Use `useRealtimeChannel`, fetch dedup guard |
-| `src/components/live/Leaderboard.tsx` | Use `useRealtimeChannel`, fetch debounce |
-| `supabase/functions/over-control/index.ts` | Add active-over guard (409 on duplicate) |
-| `supabase/functions/resolve-prediction-window/index.ts` | Fix double req.json() bug, add open-window guard, check `windows_locked` flag |
-| `supabase/functions/submit-prediction/index.ts` | Check `predictions_frozen` flag |
-| `supabase/functions/admin-checkin/index.ts` | Check `scanning_frozen` flag |
-| `src/pages/admin/AdminControl.tsx` | Panic controls card, real connection state indicator, `match_flags` realtime |
-| `src/pages/admin/AdminValidate.tsx` | Subscribe to `match_flags`, show freeze banner, disable check-in when frozen |
+| `supabase/functions/record-delivery/index.ts` | Guard vs inactive over, fix overs display, fix ball_no, add strike rotation with `auto_rotate` param, add `needs_new_batsman` in response |
+| `supabase/functions/match-control/index.ts` | On innings2/break/ended: clear player IDs, auto-lock open windows |
+| `src/pages/admin/AdminControl.tsx` | Batting/bowling player split, ball counter per over, auto-rotate toggle, incoming batsman prompt after wicket, disable record-delivery when no active over |
 
----
-
-## What this achieves
-
-| Requirement | Implementation |
-|---|---|
-| No refresh ever | `useRealtimeChannel` auto-reconnects + replays missed data on reconnect |
-| Missed updates replay | `onReconnect()` callback re-fetches fresh data from DB |
-| Socket reconnection | Exponential backoff re-subscribe on CHANNEL_ERROR/TIMED_OUT |
-| No duplicate window opens | Partial unique index + 409 check in edge function |
-| No double scoring | Already handled by `upsert` in `submit-prediction`; added open-window guard |
-| No overlapping overs | Partial unique index + 409 check in `over-control` |
-| Freeze predictions | `match_flags.predictions_frozen` checked in `submit-prediction` |
-| Freeze scanning | `match_flags.scanning_frozen` checked in `admin-checkin` + shown in `AdminValidate` |
-| Lock all windows instantly | Admin button → sets all open/locked windows to resolved |
-| Panic controls | New card in `AdminControl` with live flag state badges |
+No DB schema changes needed.
