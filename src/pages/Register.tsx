@@ -10,9 +10,27 @@ import { useToast } from '@/hooks/use-toast';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
   CheckCircle2, ChevronRight, CreditCard, Smartphone, Users, MapPin,
-  Upload, Loader2, AlertCircle, Star, Info
+  Upload, Loader2, AlertCircle, Star, Info, Zap
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+
+// Declare global Razorpay type
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 interface Match {
   id: string;
@@ -99,10 +117,11 @@ export default function RegisterPage() {
   const [quoteLoading, setQuoteLoading] = useState(false);
 
   // Step 3
-  const [paymentMethod, setPaymentMethod] = useState<'pay_at_hotel' | 'upi_qr'>('upi_qr');
+  const [paymentMethod, setPaymentMethod] = useState<'pay_at_hotel' | 'upi_qr' | 'razorpay'>('upi_qr');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyResult, setVerifyResult] = useState<any>(null);
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Step 4
@@ -174,10 +193,11 @@ export default function RegisterPage() {
     setStep(2);
   };
 
-  const handleCreateOrder = async () => {
-    if (!activeMatch || !priceQuote) return;
+  const handleCreateOrder = async (overrideMethod?: string) => {
+    if (!activeMatch || !priceQuote) return null;
     setLoading(true);
     try {
+      const method = overrideMethod || paymentMethod;
       const { data, error } = await supabase.functions.invoke('create-order', {
         body: {
           match_id: activeMatch.id,
@@ -186,20 +206,97 @@ export default function RegisterPage() {
           purchaser_email: email || null,
           seating_type: seatingType,
           seats_count: seatsCount,
-          payment_method: paymentMethod,
+          payment_method: method,
           pricing_snapshot: priceQuote,
         }
       });
       if (error) throw error;
       setOrderId(data.order_id);
-      if (paymentMethod === 'pay_at_hotel') {
+      if (method === 'pay_at_hotel') {
         setTickets(data.tickets || []);
         setStep(3);
       }
+      setLoading(false);
+      return data.order_id as string;
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Order failed', description: e.message });
+      setLoading(false);
+      return null;
     }
-    setLoading(false);
+  };
+
+  const handleRazorpayPayment = async () => {
+    if (!activeMatch || !priceQuote) return;
+    setRazorpayLoading(true);
+    try {
+      // 1. Create internal order
+      const newOrderId = await handleCreateOrder('razorpay');
+      if (!newOrderId) return;
+
+      // 2. Create Razorpay order
+      const { data: rzpData, error: rzpErr } = await supabase.functions.invoke('razorpay-create-order', {
+        body: {
+          order_id: newOrderId,
+          amount_paise: priceQuote.total * 100,
+          currency: 'INR',
+          receipt: `order_${newOrderId.slice(0, 12)}`,
+        }
+      });
+      if (rzpErr || !rzpData?.razorpay_order_id) throw new Error(rzpErr?.message || 'Failed to create payment order');
+
+      // 3. Load script
+      const loaded = await loadRazorpayScript();
+      if (!loaded) throw new Error('Payment gateway failed to load. Please try again.');
+
+      // 4. Open Razorpay checkout
+      const options = {
+        key: rzpData.key_id,
+        amount: rzpData.amount,
+        currency: rzpData.currency,
+        name: getConfig('register_header_venue', 'Hotel Drona Palace'),
+        description: `T20 Fan Night — ${activeMatch.name}`,
+        order_id: rzpData.razorpay_order_id,
+        prefill: {
+          name: fullName,
+          contact: `+91${mobile}`,
+          email: email || undefined,
+        },
+        theme: { color: '#e8423c' },
+        handler: async (response: any) => {
+          // 5. Verify on backend
+          try {
+            const { data: verifyData, error: verifyErr } = await supabase.functions.invoke('razorpay-verify-payment', {
+              body: {
+                order_id: newOrderId,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }
+            });
+            if (verifyErr || !verifyData?.verified) {
+              toast({ variant: 'destructive', title: '⚠️ Verification Failed', description: 'Payment received but verification failed. Contact support.' });
+              return;
+            }
+            setTickets(verifyData.tickets || []);
+            setStep(3);
+            toast({ title: '✅ Payment Successful!', description: 'Your passes are ready.' });
+          } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Verification error', description: e.message });
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            toast({ variant: 'destructive', title: 'Payment cancelled', description: 'You can retry payment below.' });
+            setRazorpayLoading(false);
+          }
+        }
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Payment failed', description: e.message });
+    }
+    setRazorpayLoading(false);
   };
 
   const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -469,7 +566,33 @@ export default function RegisterPage() {
                 <div className="space-y-4">
                   <Label className="text-foreground block text-center">Choose Payment Method</Label>
 
-                  {/* UPI QR — recommended */}
+                  {/* Razorpay — Cards, UPI, Wallets */}
+                  <button
+                    onClick={() => setPaymentMethod('razorpay')}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      paymentMethod === 'razorpay'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Zap className={`h-6 w-6 mt-0.5 flex-shrink-0 ${paymentMethod === 'razorpay' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-display font-bold text-base ${paymentMethod === 'razorpay' ? 'text-primary' : 'text-foreground'}`}>
+                            Pay via Razorpay
+                          </span>
+                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">Secure Gateway</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">Cards, UPI, Net Banking, Wallets — instant confirmation</p>
+                      </div>
+                      {paymentMethod === 'razorpay' && (
+                        <CheckCircle2 className="h-5 w-5 text-primary ml-auto flex-shrink-0" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* UPI QR */}
                   <button
                     onClick={() => setPaymentMethod('upi_qr')}
                     className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
@@ -485,9 +608,8 @@ export default function RegisterPage() {
                           <span className={`font-display font-bold text-base ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-foreground'}`}>
                             Pay via UPI / QR
                           </span>
-                          <span className="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full font-semibold">Recommended</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR & upload screenshot — instant verification</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR & upload screenshot — AI verification</p>
                       </div>
                       {paymentMethod === 'upi_qr' && (
                         <CheckCircle2 className="h-5 w-5 text-success ml-auto flex-shrink-0" />
@@ -533,9 +655,15 @@ export default function RegisterPage() {
 
                   <div className="flex gap-3 pt-1">
                     <GlassButton variant="ghost" size="md" className="flex-1 h-12" onClick={() => setStep(1)}>Back</GlassButton>
-                    <GlassButton variant="primary" size="lg" className="flex-1" loading={loading} onClick={handleCreateOrder}>
-                      {paymentMethod === 'pay_at_hotel' ? 'Get My Tickets' : 'Proceed to Pay'} <ChevronRight className="h-4 w-4" />
-                    </GlassButton>
+                    {paymentMethod === 'razorpay' ? (
+                      <GlassButton variant="primary" size="lg" className="flex-1" loading={razorpayLoading} onClick={handleRazorpayPayment}>
+                        <Zap className="h-4 w-4" /> Pay ₹{priceQuote?.total}
+                      </GlassButton>
+                    ) : (
+                      <GlassButton variant="primary" size="lg" className="flex-1" loading={loading} onClick={() => handleCreateOrder()}>
+                        {paymentMethod === 'pay_at_hotel' ? 'Get My Tickets' : 'Proceed to Pay'} <ChevronRight className="h-4 w-4" />
+                      </GlassButton>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -611,6 +739,8 @@ export default function RegisterPage() {
                 }`}>
                   {paymentMethod === 'pay_at_hotel'
                     ? '⚠️ UNPAID — Pay at Hotel on Arrival'
+                    : paymentMethod === 'razorpay'
+                    ? '✅ PAID via Razorpay — Entry Confirmed'
                     : '✅ PAID — Entry Confirmed'}
                 </div>
 
