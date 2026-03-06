@@ -249,32 +249,47 @@ export type Database = {
       }
       leaderboard: {
         Row: {
+          adjustment_reason: string | null
           correct_predictions: number
           id: string
+          last_correct_at: string | null
           last_updated: string
           match_id: string
           mobile: string
           player_name: string | null
+          points_adjustment: number
+          rank_position: number | null
+          tiebreaker_score: number
           total_points: number
           total_predictions: number
         }
         Insert: {
+          adjustment_reason?: string | null
           correct_predictions?: number
           id?: string
+          last_correct_at?: string | null
           last_updated?: string
           match_id: string
           mobile: string
           player_name?: string | null
+          points_adjustment?: number
+          rank_position?: number | null
+          tiebreaker_score?: number
           total_points?: number
           total_predictions?: number
         }
         Update: {
+          adjustment_reason?: string | null
           correct_predictions?: number
           id?: string
+          last_correct_at?: string | null
           last_updated?: string
           match_id?: string
           mobile?: string
           player_name?: string | null
+          points_adjustment?: number
+          rank_position?: number | null
+          tiebreaker_score?: number
           total_points?: number
           total_predictions?: number
         }
@@ -553,6 +568,53 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_scoring_config: {
+        Row: {
+          created_at: string
+          leaderboard_frozen: boolean
+          match_id: string
+          points_per_correct: number
+          points_per_over_correct: number
+          speed_bonus_enabled: boolean
+          speed_bonus_first_n: number
+          speed_bonus_points: number
+          tiebreaker_mode: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          leaderboard_frozen?: boolean
+          match_id: string
+          points_per_correct?: number
+          points_per_over_correct?: number
+          speed_bonus_enabled?: boolean
+          speed_bonus_first_n?: number
+          speed_bonus_points?: number
+          tiebreaker_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          leaderboard_frozen?: boolean
+          match_id?: string
+          points_per_correct?: number
+          points_per_over_correct?: number
+          speed_bonus_enabled?: boolean
+          speed_bonus_first_n?: number
+          speed_bonus_points?: number
+          tiebreaker_mode?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_scoring_config_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
             referencedColumns: ["id"]
           },
         ]

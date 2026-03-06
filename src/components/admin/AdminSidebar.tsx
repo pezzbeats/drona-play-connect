@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, Trophy, Users, ScanLine, ShoppingBag,
-  BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio
+  BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio, Star
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +15,7 @@ const navItems = [
   { icon: ScanLine, label: 'Gate Validate', to: '/admin/validate' },
   { icon: BookOpen, label: 'Manual Booking', to: '/admin/manual-booking' },
   { icon: Radio, label: 'Live Control', to: '/admin/control' },
+  { icon: Star, label: 'Leaderboard', to: '/admin/leaderboard' },
 ];
 
 interface AdminSidebarProps {
