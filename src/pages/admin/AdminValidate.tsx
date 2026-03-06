@@ -382,7 +382,7 @@ export default function AdminValidate() {
 
       {/* Reissue QR Confirmation Dialog */}
       <AlertDialog open={showReissueDialog} onOpenChange={setShowReissueDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="glass-card-elevated border-border">
           <AlertDialogHeader>
             <AlertDialogTitle>⚠️ Reissue QR Code?</AlertDialogTitle>
             <AlertDialogDescription>

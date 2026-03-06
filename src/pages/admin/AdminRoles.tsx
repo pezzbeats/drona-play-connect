@@ -336,7 +336,7 @@ export default function AdminRoles() {
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent>
+                          <AlertDialogContent className="glass-card-elevated border-border">
                             <AlertDialogHeader>
                               <AlertDialogTitle>Remove admin access?</AlertDialogTitle>
                               <AlertDialogDescription>
