@@ -174,7 +174,8 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
             return (
               <div
                 key={entry.mobile}
-                className={`flex items-center gap-3 px-3 py-3.5 transition-colors ${getRowBg(rank, isMe)}`}
+                className={`flex items-center gap-3 px-3 py-3.5 transition-colors animate-slide-up ${getRowBg(rank, isMe)}`}
+                style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' } as React.CSSProperties}
               >
                 <div className="w-6 flex-shrink-0 flex justify-center">
                   {getRankIcon(rank)}
