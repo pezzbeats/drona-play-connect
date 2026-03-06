@@ -31,7 +31,6 @@ export default function LivePage() {
   }, []);
 
   const initSession = async () => {
-    // Read session from localStorage
     const raw = localStorage.getItem('game_session');
     if (!raw) {
       navigate('/play');
@@ -46,7 +45,6 @@ export default function LivePage() {
       }
       setSession(sess);
 
-      // Get active match
       const { data: match } = await supabase
         .from('matches')
         .select('id, name, predictions_enabled, disclaimer_enabled')
@@ -54,7 +52,6 @@ export default function LivePage() {
         .single();
 
       if (!match) {
-        // Try to get match from session
         if (sess.match_id) {
           const { data: sessionMatch } = await supabase
             .from('matches')
@@ -71,7 +68,6 @@ export default function LivePage() {
         setMatchId(match.id);
         setMatchName(match.name);
         setPredictionsEnabled(match.predictions_enabled);
-        // Update session with match_id
         const updatedSession = { ...sess, match_id: match.id };
         localStorage.setItem('game_session', JSON.stringify(updatedSession));
         setSession(updatedSession);
@@ -113,7 +109,7 @@ export default function LivePage() {
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'score', label: 'Live Score', icon: <BarChart3 className="h-4 w-4" /> },
-    ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: 'Predict', icon: <Gamepad2 className="h-4 w-4" /> }] : []),
+    ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: '🎯 Guess', icon: <Gamepad2 className="h-4 w-4" /> }] : []),
     { key: 'leaderboard', label: 'Leaderboard', icon: <Trophy className="h-4 w-4" /> },
   ];
 
@@ -152,6 +148,7 @@ export default function LivePage() {
             >
               {tab.icon}
               <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.key === 'predict' ? '🎯' : tab.key === 'leaderboard' ? '🏆' : '📊'}</span>
             </button>
           ))}
         </div>
@@ -169,9 +166,9 @@ export default function LivePage() {
           <Leaderboard matchId={matchId} mobile={session?.mobile} />
         )}
 
-        {/* Bottom disclaimer */}
+        {/* Bottom disclaimer — always visible */}
         <div className="mt-6 disclaimer-bar rounded-lg p-3 text-xs">
-          🎯 <strong>Disclaimer:</strong> This is a fun entertainment game only. No real money, no gambling, no wagering. All predictions are purely for fun.
+          🎯 <strong>Disclaimer:</strong> This is a fun entertainment game only. No real money, no gambling, no wagering. All guesses are purely for fun and participation.
         </div>
       </div>
     </div>

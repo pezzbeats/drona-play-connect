@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Zap, CheckCircle2, Clock } from 'lucide-react';
+import { Lock, Zap, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 
 interface PredictionWindow {
   id: string;
@@ -47,7 +47,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
     if (data) setWindows(data as any);
 
-    // Check for existing submissions
     if (data && data.length > 0) {
       const windowIds = data.map(w => w.id);
       const { data: myPreds } = await supabase
@@ -95,7 +94,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         toast({ variant: 'destructive', title: data?.error || 'Failed to submit' });
       } else {
         setSubmittedWindows(prev => ({ ...prev, [windowId]: answer }));
-        toast({ title: '🎯 Prediction locked in!' });
+        toast({ title: '🎯 Guess locked in!' });
       }
     } catch {
       toast({ variant: 'destructive', title: 'Submission failed' });
@@ -106,18 +105,25 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const openWindows = windows.filter(w => w.status === 'open');
   const closedWindows = windows.filter(w => w.status !== 'open');
 
-  if (windows.length === 0) {
-    return (
-      <GlassCard className="p-5 text-center">
-        <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-        <p className="text-foreground font-bold">No Active Prediction</p>
-        <p className="text-muted-foreground text-sm">Predictions open when a window is active</p>
-      </GlassCard>
-    );
-  }
-
   return (
     <div className="space-y-3">
+      {/* Persistent legal disclaimer — non-removable */}
+      <div className="disclaimer-bar rounded-lg px-4 py-3 flex items-start gap-2 text-xs">
+        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+        <span>
+          <strong>Fun Guess Game for entertainment only.</strong> This is not betting, gambling, or wagering.
+          No real money is staked. Participation is voluntary and purely for fun.
+        </span>
+      </div>
+
+      {windows.length === 0 && (
+        <GlassCard className="p-5 text-center">
+          <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-foreground font-bold">No Active Fun Guess</p>
+          <p className="text-muted-foreground text-sm">Guesses open when an active window appears</p>
+        </GlassCard>
+      )}
+
       {/* Open Windows */}
       {openWindows.map(window => {
         const submitted = submittedWindows[window.id];
@@ -127,7 +133,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
           <GlassCard key={window.id} className="p-4 border border-primary/30" glow>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs font-bold text-primary uppercase tracking-wide">Prediction Open!</span>
+              <span className="text-xs font-bold text-primary uppercase tracking-wide">🎯 Fun Guess Open!</span>
             </div>
 
             <p className="text-foreground font-semibold text-sm mb-3">
@@ -167,12 +173,12 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
                 disabled={!selected}
                 onClick={() => handleSubmit(window.id)}
               >
-                <Zap className="h-4 w-4" /> Lock Prediction
+                <Zap className="h-4 w-4" /> Lock My Guess
               </GlassButton>
             ) : (
               <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium">
                 <CheckCircle2 className="h-4 w-4" />
-                Prediction locked in!
+                Guess locked in!
               </div>
             )}
           </GlassCard>
@@ -202,7 +208,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
             <p className="text-xs text-foreground">{window.question}</p>
             {submitted && (
               <p className="text-xs text-muted-foreground mt-1">
-                Your answer: {(window.options as any[])?.find(o => o.key === submitted)?.label || submitted}
+                Your guess: {(window.options as any[])?.find(o => o.key === submitted)?.label || submitted}
                 {isResolved && correctKey && (
                   <> · Correct: {(window.options as any[])?.find(o => o.key === correctKey)?.label || correctKey}</>
                 )}

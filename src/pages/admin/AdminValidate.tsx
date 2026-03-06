@@ -9,9 +9,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   ScanLine, QrCode, CheckCircle2, Upload, Copy, RefreshCw, Loader2,
   User, DollarSign, ShieldAlert, ShieldCheck, ShieldOff, AlertTriangle,
-  WifiOff, Banknote, Smartphone, CreditCard
+  WifiOff, Banknote, Smartphone, CreditCard, XCircle,
 } from 'lucide-react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -80,10 +85,12 @@ export default function AdminValidate() {
   const [blockingTicket, setBlockingTicket] = useState(false);
   const [unblockingTicket, setUnblockingTicket] = useState(false);
   const [reissuingQr, setReissuingQr] = useState(false);
+  const [showReissueDialog, setShowReissueDialog] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>(loadOfflineQueue);
-  // Panic flags realtime state
   const [matchFlags, setMatchFlags] = useState<any>(null);
+  // For inline error card
+  const [notFoundError, setNotFoundError] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -91,10 +98,8 @@ export default function AdminValidate() {
   const fileRef = useRef<HTMLInputElement>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // auto-focus on mount
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // fetch active match + flags
   useEffect(() => {
     supabase.from('matches').select('id, name').eq('is_active_for_registration', true).maybeSingle()
       .then(({ data }) => {
@@ -106,7 +111,6 @@ export default function AdminValidate() {
       });
   }, []);
 
-  // feedback → sound + vibration
   useEffect(() => {
     if (scanFeedback === 'idle' || scanFeedback === 'loading') return;
     const isGood = scanFeedback === 'success';
@@ -117,7 +121,6 @@ export default function AdminValidate() {
     return () => clearTimeout(feedbackTimerRef.current);
   }, [scanFeedback]);
 
-  // online / offline events
   const processOfflineQueue = useCallback(async () => {
     const queue = loadOfflineQueue();
     if (!queue.length) return;
@@ -147,7 +150,6 @@ export default function AdminValidate() {
     return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, [processOfflineQueue]);
 
-  // ── Realtime: match_flags (freeze checks) ─────────────────────────────────
   useEffect(() => {
     if (!activeMatch?.id) return;
     const channel = supabase
@@ -159,8 +161,6 @@ export default function AdminValidate() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeMatch?.id]);
-
-  // ── scan log ───────────────────────────────────────────────────────────────
 
   const logScanAttempt = async (qrText: string, outcome: string, ticketId?: string, matchId?: string) => {
     try {
@@ -175,8 +175,6 @@ export default function AdminValidate() {
     } catch { /* non-blocking */ }
   };
 
-  // ── lookup ─────────────────────────────────────────────────────────────────
-
   const lookupTicket = async (qrText: string) => {
     const trimmed = qrText.trim();
     if (!trimmed) return;
@@ -184,6 +182,7 @@ export default function AdminValidate() {
     setTicketData(null); setGamePin(null); setVerifyResult(null);
     setShowBlockForm(false); setBlockReason('');
     setCollectMethod(null); setCollectAmount(''); setCollectRef('');
+    setNotFoundError(false);
     try {
       const { data, error } = await supabase
         .from('tickets')
@@ -194,6 +193,7 @@ export default function AdminValidate() {
       if (error || !data) {
         await logScanAttempt(trimmed, 'not_found');
         setScanFeedback('error');
+        setNotFoundError(true);
         toast({ variant: 'destructive', title: '❌ Ticket not found' });
         return;
       }
@@ -216,11 +216,11 @@ export default function AdminValidate() {
       setScanFeedback(feedback);
     } catch (e: any) {
       setScanFeedback('error');
+      setNotFoundError(true);
       toast({ variant: 'destructive', title: 'Lookup failed', description: e.message });
     }
   };
 
-  // auto-submit on paste
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pasted = e.clipboardData.getData('text').trim();
     if (pasted) {
@@ -228,8 +228,6 @@ export default function AdminValidate() {
       setTimeout(() => lookupTicket(pasted), 50);
     }
   };
-
-  // ── check-in ───────────────────────────────────────────────────────────────
 
   const handleCheckIn = async () => {
     if (!ticketData) return;
@@ -276,8 +274,6 @@ export default function AdminValidate() {
     toast({ title: '📋 Copied!', description: 'WhatsApp message copied' });
   };
 
-  // ── payment ────────────────────────────────────────────────────────────────
-
   const handleCollect = async () => {
     if (!ticketData || !collectAmount || !collectMethod) return;
     if (collectMethod !== 'cash' && !collectRef.trim()) {
@@ -313,8 +309,6 @@ export default function AdminValidate() {
     setVerifying(false);
   };
 
-  // ── admin controls ─────────────────────────────────────────────────────────
-
   const handleBlockTicket = async () => {
     if (!ticketData || blockReason.trim().length < 5) return;
     setBlockingTicket(true);
@@ -340,7 +334,7 @@ export default function AdminValidate() {
     setUnblockingTicket(false);
   };
 
-  const handleReissueQr = async () => {
+  const handleReissueQrConfirmed = async () => {
     if (!ticketData) return;
     setReissuingQr(true);
     try {
@@ -351,6 +345,7 @@ export default function AdminValidate() {
       await lookupTicket(data.new_qr_text);
     } catch (e: any) { toast({ variant: 'destructive', title: 'Reissue failed', description: e.message }); }
     setReissuingQr(false);
+    setShowReissueDialog(false);
   };
 
   // ── derived state ──────────────────────────────────────────────────────────
@@ -363,7 +358,6 @@ export default function AdminValidate() {
   const isScanningFrozen = !!matchFlags?.scanning_frozen;
   const canCheckIn = isPaid && !isCheckedIn && !isBlocked && !isMatchMismatch && !isScanningFrozen;
 
-  // scan zone border color based on feedback
   const feedbackBorder: Record<ScanFeedback, string> = {
     idle: 'border-border',
     loading: 'border-primary/40',
@@ -385,6 +379,39 @@ export default function AdminValidate() {
 
   return (
     <div className="p-4 space-y-4 max-w-xl">
+
+      {/* Reissue QR Confirmation Dialog */}
+      <AlertDialog open={showReissueDialog} onOpenChange={setShowReissueDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Reissue QR Code?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will <strong>permanently invalidate</strong> the current QR code for this ticket.
+              The attendee will need the new QR code to enter. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleReissueQrConfirmed}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Yes, Reissue QR
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Sticky check-in success bar */}
+      {isCheckedIn && order && (
+        <div className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 rounded-lg bg-success/20 border border-success/50 text-success font-bold text-sm shadow-glow-success">
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          <span>✅ CHECKED IN — {order.purchaser_full_name}</span>
+          {gamePin && (
+            <span className="ml-auto font-display text-lg tracking-widest">{gamePin}</span>
+          )}
+        </div>
+      )}
 
       {/* Scanning frozen banner */}
       {matchFlags?.scanning_frozen && (
@@ -438,13 +465,12 @@ export default function AdminValidate() {
             size="lg"
             loading={scanFeedback === 'loading'}
             onClick={() => lookupTicket(qrInput)}
-            className="shrink-0"
+            className="shrink-0 h-14"
           >
             <ScanLine className="h-5 w-5" />
           </GlassButton>
         </div>
 
-        {/* feedback hint row */}
         <div className="mt-3 h-5 text-sm font-medium">
           {scanFeedback === 'success' && <span className="text-success">✓ Ticket found</span>}
           {scanFeedback === 'error' && <span className="text-destructive">✗ Not found or already used</span>}
@@ -452,6 +478,27 @@ export default function AdminValidate() {
           {scanFeedback === 'blocked' && <span className="text-destructive">🚫 Ticket blocked</span>}
         </div>
       </GlassCard>
+
+      {/* Inline error card — ticket not found */}
+      {notFoundError && !ticketData && (
+        <GlassCard className="p-4 border border-destructive/50 bg-destructive/5">
+          <div className="flex items-start gap-3">
+            <XCircle className="h-6 w-6 text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="font-display font-bold text-destructive text-lg">❌ Ticket Not Found</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                No ticket matches this QR code. Try scanning again or check that the QR is for the correct event.
+              </p>
+              <GlassButton
+                variant="ghost" size="sm" className="mt-3"
+                onClick={() => { setNotFoundError(false); setQrInput(''); inputRef.current?.focus(); }}
+              >
+                Try Again
+              </GlassButton>
+            </div>
+          </div>
+        </GlassCard>
+      )}
 
       {/* ── Ticket result ── */}
       {ticketData && order && (
@@ -484,7 +531,6 @@ export default function AdminValidate() {
 
           {/* Critical info card */}
           <GlassCard className={`p-5 border ${isCheckedIn ? 'border-success/40' : isBlocked ? 'border-destructive/40' : isPaid ? 'border-primary/40' : 'border-destructive/40'}`}>
-            {/* Name + mobile — large */}
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-1">
                 <User className="h-5 w-5 text-muted-foreground" />
@@ -493,18 +539,25 @@ export default function AdminValidate() {
               <p className="text-muted-foreground text-sm ml-7">{order.purchaser_mobile}</p>
             </div>
 
-            {/* Payment badge — oversized */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`flex-1 flex items-center justify-center py-3 rounded-xl border-2 font-display text-xl font-bold tracking-wide ${isPaid ? 'bg-success/15 border-success/50 text-success' : 'bg-destructive/15 border-destructive/50 text-destructive'}`}>
+            {/* Quick summary chips */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <div className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border-2 ${
+                isPaid ? 'bg-success/15 border-success/50 text-success' : 'bg-destructive/15 border-destructive/50 text-destructive'
+              }`}>
                 {isPaid ? '✅ PAID' : '❌ UNPAID'}
               </div>
-              <div className="text-center min-w-[70px]">
-                <p className="text-xs text-muted-foreground">Seats</p>
-                <p className="font-display text-3xl font-bold text-foreground">{order.seats_count}</p>
+              <div className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border-2 ${
+                isCheckedIn ? 'bg-success/15 border-success/50 text-success' : 'bg-muted/40 border-border text-muted-foreground'
+              }`}>
+                {isCheckedIn ? '✅ CHECKED IN' : '⏳ NOT YET IN'}
               </div>
+              {isBlocked && (
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border-2 bg-destructive/15 border-destructive/50 text-destructive">
+                  🚫 BLOCKED
+                </div>
+              )}
             </div>
 
-            {/* Match + amount + status */}
             <div className="grid grid-cols-3 gap-2 text-center border-t border-border pt-3">
               <div className="col-span-2 text-left">
                 <p className="text-xs text-muted-foreground">Match</p>
@@ -518,6 +571,7 @@ export default function AdminValidate() {
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
               <StatusBadge status={ticketData.status} />
               <span className="text-xs text-muted-foreground">Seat #{ticketData.seat_index + 1}</span>
+              <span className="text-xs text-muted-foreground ml-auto">{order.seats_count} seat{order.seats_count !== 1 ? 's' : ''}</span>
             </div>
           </GlassCard>
 
@@ -536,15 +590,16 @@ export default function AdminValidate() {
                       Offline — check-in will be queued and synced when reconnected
                     </div>
                   )}
+                  {/* Larger check-in button */}
                   <GlassButton
                     variant="success"
                     size="lg"
-                    className="w-full text-lg"
+                    className="w-full h-14 text-lg"
                     loading={checkingIn}
                     onClick={handleCheckIn}
                     disabled={!canCheckIn && isOnline}
                   >
-                    <CheckCircle2 className="h-5 w-5" /> Check In & Generate PIN
+                    <CheckCircle2 className="h-6 w-6" /> Check In & Generate PIN
                   </GlassButton>
                 </>
               ) : (
@@ -555,7 +610,7 @@ export default function AdminValidate() {
                       <p className="font-display font-bold text-success tracking-[0.5em] text-7xl leading-none">{gamePin}</p>
                     </div>
                   )}
-                  <GlassButton variant="success" size="lg" className="w-full" onClick={copyWhatsApp} disabled={!gamePin}>
+                  <GlassButton variant="success" size="lg" className="w-full h-14" onClick={copyWhatsApp} disabled={!gamePin}>
                     <Copy className="h-5 w-5" /> Copy WhatsApp Message
                   </GlassButton>
                   <GlassButton variant="ghost" size="md" className="w-full" loading={checkingIn} onClick={handleRegenPin}>
@@ -573,7 +628,7 @@ export default function AdminValidate() {
                 <DollarSign className="h-5 w-5 text-warning" /> Collect Payment
               </h2>
 
-              {/* Quick method buttons */}
+              {/* Quick method buttons — large min-height */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {([
                   { id: 'cash', label: 'Cash', icon: Banknote },
@@ -583,13 +638,13 @@ export default function AdminValidate() {
                   <button
                     key={id}
                     onClick={() => setCollectMethod(id)}
-                    className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 font-semibold text-sm transition-all duration-150 ${
+                    className={`flex flex-col items-center gap-1.5 py-4 rounded-xl border-2 font-semibold text-sm transition-all duration-150 min-h-[70px] ${
                       collectMethod === id
                         ? 'bg-primary/20 border-primary text-primary shadow-[0_0_12px_hsl(210_100%_56%/0.3)]'
                         : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className="h-6 w-6" />
                     {label}
                   </button>
                 ))}
@@ -613,7 +668,6 @@ export default function AdminValidate() {
                     />
                   )}
 
-                  {/* Proof upload */}
                   <div>
                     <Label className="text-muted-foreground text-xs mb-1.5 block">Upload proof (optional)</Label>
                     {verifying ? (
@@ -630,7 +684,7 @@ export default function AdminValidate() {
                     )}
                   </div>
 
-                  <GlassButton variant="warning" size="lg" className="w-full" loading={collecting} onClick={handleCollect} disabled={!collectAmount}>
+                  <GlassButton variant="warning" size="lg" className="w-full h-14" loading={collecting} onClick={handleCollect} disabled={!collectAmount}>
                     Record {collectMethod.toUpperCase()} Payment
                   </GlassButton>
                 </div>
@@ -658,7 +712,7 @@ export default function AdminValidate() {
                     </GlassButton>
                   )}
                   {!isCheckedIn && (
-                    <GlassButton variant="ghost" size="sm" loading={reissuingQr} onClick={handleReissueQr}>
+                    <GlassButton variant="ghost" size="sm" loading={reissuingQr} onClick={() => setShowReissueDialog(true)}>
                       <QrCode className="h-4 w-4" /> Reissue QR
                     </GlassButton>
                   )}
