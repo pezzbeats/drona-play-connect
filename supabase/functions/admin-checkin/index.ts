@@ -87,6 +87,32 @@ serve(async (req) => {
     const { ticket_id, admin_id, regenerate, qr_text } = await req.json();
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    // Fetch ticket first (needed for match_id freeze check)
+    const { data: ticket } = await supabase
+      .from("tickets")
+      .select("*, orders(purchaser_mobile, match_id, purchaser_full_name)")
+      .eq("id", ticket_id)
+      .single();
+    if (!ticket) throw new Error("Ticket not found");
+
+    const matchId = (ticket as any).orders?.match_id;
+
+    // ── Check panic flag: scanning frozen ──
+    if (matchId) {
+      const { data: flags } = await supabase
+        .from("match_flags")
+        .select("scanning_frozen")
+        .eq("match_id", matchId)
+        .maybeSingle();
+
+      if (flags?.scanning_frozen) {
+        return new Response(
+          JSON.stringify({ error: "Gate scanning is currently frozen by admin. Please contact your supervisor." }),
+          { status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // --- HMAC signature verification (if QR text provided) ---
     if (qr_text) {
       const { valid, tampered } = await verifyQrSignature(qr_text, hmacSecret);
@@ -106,17 +132,9 @@ serve(async (req) => {
       }
     }
 
-    const { data: ticket } = await supabase
-      .from("tickets")
-      .select("*, orders(purchaser_mobile, match_id, purchaser_full_name)")
-      .eq("id", ticket_id)
-      .single();
-    if (!ticket) throw new Error("Ticket not found");
-
     const pin = generatePin();
     const pinHash = await hashPin(pin);
     const mobile = (ticket as any).orders?.purchaser_mobile;
-    const matchId = (ticket as any).orders?.match_id;
 
     if (!regenerate) {
       await supabase.from("tickets").update({

@@ -32,12 +32,30 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     if (action === "create_over") {
+      const inningsNo = innings_no || 1;
+
+      // ── Race condition guard: reject if an active over already exists ──
+      const { data: existingActive } = await supabase
+        .from("over_control")
+        .select("id, over_no")
+        .eq("match_id", match_id)
+        .eq("innings_no", inningsNo)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (existingActive) {
+        return new Response(
+          JSON.stringify({ error: `Over ${existingActive.over_no} is already active. Complete it before starting a new one.` }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       // Determine next over number
       const { data: existingOvers } = await supabase
         .from("over_control")
         .select("over_no")
         .eq("match_id", match_id)
-        .eq("innings_no", innings_no || 1)
+        .eq("innings_no", inningsNo)
         .order("over_no", { ascending: false })
         .limit(1);
 
@@ -47,7 +65,7 @@ serve(async (req) => {
         .from("over_control")
         .insert({
           match_id,
-          innings_no: innings_no || 1,
+          innings_no: inningsNo,
           over_no: over_no || nextOverNo,
           status: "active",
           bowler_id: bowler_id || null,

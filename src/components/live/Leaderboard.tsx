@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Trophy, Medal, Star } from 'lucide-react';
+import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
 
 interface LeaderboardEntry {
   mobile: string;
@@ -18,17 +19,9 @@ interface LeaderboardProps {
 
 export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const channelRef = useRef<any>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => {
-    fetchLeaderboard();
-    subscribeRealtime();
-    return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
-    };
-  }, [matchId]);
-
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async () => {
     const { data } = await supabase
       .from('leaderboard')
       .select('mobile, player_name, total_points, correct_predictions, total_predictions')
@@ -37,22 +30,32 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
       .limit(20);
 
     if (data) setEntries(data);
-  };
+  }, [matchId]);
 
-  const subscribeRealtime = () => {
-    const channel = supabase
-      .channel(`leaderboard-${matchId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'leaderboard',
-        filter: `match_id=eq.${matchId}`,
-      }, () => {
-        fetchLeaderboard();
-      })
-      .subscribe();
-    channelRef.current = channel;
-  };
+  // Debounce to prevent burst fetches after a window resolve (N players scored at once)
+  const debouncedFetch = useCallback(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchLeaderboard(), 200);
+  }, [fetchLeaderboard]);
+
+  const subscriptions = useMemo(() => [
+    {
+      event: '*' as const,
+      schema: 'public',
+      table: 'leaderboard',
+      filter: `match_id=eq.${matchId}`,
+      callback: debouncedFetch,
+    },
+  ], [matchId, debouncedFetch]);
+
+  useRealtimeChannel(
+    `leaderboard-${matchId}`,
+    subscriptions,
+    fetchLeaderboard,
+  );
+
+  useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="h-4 w-4 text-primary" />;
@@ -76,7 +79,7 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
 
   return (
     <div className="space-y-3">
-      {/* My rank card if not in top 20 visible area */}
+      {/* My rank card if not in top 10 visible area */}
       {myEntry && myRank > 10 && (
         <GlassCard className="p-3 border border-primary/30">
           <div className="flex items-center justify-between">
