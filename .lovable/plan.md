@@ -1,126 +1,190 @@
 
-# T20 Fan Night Ops Suite — Phase 1 Plan
-## React + Supabase | Premium Glassmorphism | Mobile-First
+# Full Build Plan — T20 Fan Night Phase 1 + Live Engine
+
+## Current State Assessment
+
+The app already has:
+- ✅ Complete DB schema (Phase 1 tables)
+- ✅ 7 edge functions deployed
+- ✅ Registration flow (4 steps) + Ticket page + Play login
+- ✅ Admin suite: login, dashboard, matches, match detail, orders, validate, manual booking
+- ✅ Glassmorphism design system
+
+## What's MISSING / Broken
+
+**Critical gaps:**
+1. **Live Cricket Engine** — no tables, no admin control center, no `/live` page
+2. **Prediction Game** — no tables, no windows, no UI
+3. **Leaderboard** — no table, no UI
+4. **Teams/Players/Roster** — no tables
+5. **`/live` route** — doesn't exist (Play.tsx redirects there but nothing renders)
+6. **Realtime** — not implemented anywhere
+7. **`order_seat_pricing` INSERT policy** — current policy broken (non-service inserts fail)
+8. **Loyalty pricing logic** — `pricing-quote` function has incomplete loyalty logic (first-seat returning but no seat-count-cap logic)
+9. **Admin Control Center** — not built
+10. **Match detail** — no link to loyalty match picker (UI-only fix)
+11. **`/ticket` page** — needs order lookup by mobile+match
+12. **`/live` page** — full realtime scoreboard + prediction game UI
 
 ---
 
-### What We're Building (Phase 1)
+## Phase 2 DB Schema (new migration)
 
-**Ticketing, Payments, Admin Core Operations**
+### New tables:
+```
+teams               — id, name, short_code, color, logo_path
+players             — id, team_id, name, role (batsman/bowler/all_rounder/wicketkeeper)
+match_roster        — id, match_id, team_id (home/away), is_batting_first
 
----
+match_live_state    — id (1 per match), match_id, phase (pre/innings1/break/innings2/ended),
+                      innings1_score, innings1_wickets, innings1_overs,
+                      innings2_score, innings2_wickets, innings2_overs,
+                      current_innings, target_runs, current_striker_id,
+                      current_non_striker_id, current_bowler_id,
+                      last_delivery_summary, updated_at
 
-## 🗄️ Database (Supabase / PostgreSQL)
+over_control        — id, match_id, innings_no, over_no, status (pending/active/complete/locked),
+                      bowler_id, created_at
 
-Set up all Phase 1 tables via migrations:
+deliveries          — id, match_id, over_id, innings_no, over_no, ball_no (legal), 
+                      delivery_no (all incl. extras), bowler_id, striker_id,
+                      runs_off_bat, extras_type (none/wide/no_ball/bye/leg_bye),
+                      extras_runs, is_wicket, wicket_type, out_player_id,
+                      fielder_id, free_hit, notes, created_at
 
-- **`admins`** — id, full_name, email, password_hash, role (super_admin / admin / counter_staff), is_active
-- **`admin_activity`** — audit log: admin_id, action, entity_type, entity_id, meta, ip_address
-- **`events`** — id, name, venue, is_active
-- **`matches`** — id, event_id, name, opponent, match_type, status, is_active_for_registration (partial unique index: only 1 active allowed), prediction_mode, disclaimer_enabled
-- **`match_assets`** — match_id, asset_type (banner, poster, team flags, terms PDF, seating map), file_path
-- **`match_pricing_rules`** — match_id, rule_type (standard/loyalty), base_price_new, base_price_returning, loyalty_from_match_id
-- **`orders`** — match_id, purchaser details, seating_type, seats_count, total_amount, pricing_model_snapshot, payment_method, payment_status, created_source
-- **`order_seat_pricing`** — per-seat price breakdown
-- **`tickets`** — match_id, order_id, seat_index, qr_text (unique), status (active/used/blocked), checked_in_at, checked_in_by_admin_id
-- **`payment_proofs`** — order_id, file_path, file_sha256 (unique), extracted fields, ai_verdict, ai_reason
-- **`payment_collections`** — on-gate collection by admin
-- **`game_access`** — match_id, ticket_id, mobile, pin_hash, is_active (unique per match+ticket)
+prediction_windows  — id, match_id, over_id, window_type (ball/over),
+                      opens_at, locks_at, status (open/locked/resolved),
+                      correct_answer (jsonb)
 
-Enforce: partial unique index so only one match can have `is_active_for_registration = true` at a time.
+predictions         — id, window_id, match_id, mobile, prediction (jsonb),
+                      is_correct, points_earned, created_at,
+                      UNIQUE(window_id, mobile)
 
-Seed: 1 event ("T20 Fan Night", Hotel Drona Palace) + 1 super_admin (credentials logged to console).
+leaderboard         — id, match_id, mobile, player_name, total_points,
+                      correct_predictions, total_predictions, last_updated
+                      UNIQUE(match_id, mobile)
+```
 
----
-
-## ⚙️ Supabase Edge Functions
-
-1. **`pricing-quote`** — Given mobile, seats_count, seating_type: compute per-seat pricing (new/returning/loyalty rules), return seat-by-seat breakdown + total
-2. **`create-order`** — Creates order + tickets in a transaction; blocks if payment not OK (unless pay_at_hotel)
-3. **`verify-payment-proof`** — Uploads file, computes SHA-256 (blocks duplicate files), uses Lovable AI (Gemini Vision) to extract txn ID / amount / VPA / date from screenshot or PDF; blocks duplicate txn IDs; validates amount + payee VPA; returns verdict
-4. **`admin-checkin`** — Validates QR ticket, marks checked_in, generates 4-digit gameplay PIN, returns WhatsApp message text
-5. **`admin-gate-collect`** — Records payment collection at gate (cash/UPI/card) with reference + optional proof upload
-6. **`set-match-active`** — Transaction: sets all matches to inactive, then activates chosen one
-
----
-
-## 🌐 Public Pages (Glassmorphism, Mobile-First)
-
-### `/register` — Customer Registration
-- Fetches active match info + assets (banner, seating map, terms)
-- Shows match closed state if no active match
-- Step 1: Enter name, mobile, email (optional)
-- Step 2: Seat count + seating type selector; real-time price quote (seat-by-seat table)
-- Step 3: Payment choice — "Pay at Hotel" OR "UPI QR" (dynamic QR with amount + remark `NAME_SEATS_MOBILE`)
-- If UPI: show QR, then upload payment screenshot/PDF → live verification feedback
-- Step 4: Ticket generation (only when verified or pay-at-hotel)
-- No gambling disclaimer shown persistently
-
-### `/ticket?token=…` — Seat Passes
-- Shows N passes (one per seat) — each with QR code, seat number, customer name, match info
-- Paid / Unpaid badge per pass
-- Clean print/share layout
-
-### `/play` — Gameplay Login (Phase 2 prep)
-- Mobile + 4-digit PIN entry
-- Validates via game_access table
-- Issues game_token cookie, redirects to `/live`
+### Realtime enabled on:
+- `match_live_state`
+- `over_control`
+- `prediction_windows`
+- `leaderboard`
 
 ---
 
-## 🔐 Admin Pages (Glassmorphism Sidebar Layout)
+## New Edge Functions
 
-### `/admin/login`
-- Email + password auth (Supabase Auth for admins)
-- Role-based redirect
-
-### `/admin/dashboard`
-- Stats: total registrations, paid vs unpaid, check-ins today, seats sold
-- Quick action buttons
-
-### `/admin/matches`
-- List all matches with status badges
-- Create new match
-- Toggle "Active for Registration" (one at a time — transaction enforced)
-
-### `/admin/matches/:id`
-- Edit match details (name, opponent, type, start time, venue, status)
-- Upload match assets (banner, poster, team flags, seating map, terms PDF) via Supabase Storage
-- Set pricing rules (standard + optional loyalty rule linked to a past match)
-
-### `/admin/manual-booking`
-- Search by mobile to check existing registration
-- Same quote form as public registration
-- Force-create order with any payment method
-- Audit logged
-
-### `/admin/validate` — Gate Operations
-- QR code scanner (camera)
-- Shows: customer name, seat count, paid/unpaid status, check-in status
-- If unpaid: collect payment form (cash/UPI/card + reference + optional proof upload + AI verify)
-- Check-in button: marks ticket used, generates 4-digit PIN
-- Shows PIN + "Copy WhatsApp Message" button (no API — copies text to clipboard)
-- PIN regeneration button
-
-### `/admin/orders`
-- Searchable list of all orders
-- Filter by match, status (paid/unpaid/pending)
-- Click order to see details, payment proof, and manual verify/reject button
+1. **`match-control`** — admin-only: update live state phase, set innings active/ended, manage breaks. Returns updated state.
+2. **`over-control`** — admin-only: create over, open/lock/complete over, toggle ball window.
+3. **`record-delivery`** — admin-only: record full delivery data, auto-compute score, handle extras (illegal delivery = extra ball), update `match_live_state` + update leaderboard if prediction window resolves.
+4. **`submit-prediction`** — authenticated via game_access PIN session: validate user checked in, window open, submit/update prediction.
+5. **`resolve-prediction-window`** — admin-only: lock window, set correct answer, score all predictions, update leaderboard.
 
 ---
 
-## 🎨 Design System
+## New / Updated Frontend Pages
 
-- **Glassmorphism**: frosted glass cards (`backdrop-blur`, semi-transparent backgrounds), soft gradient backgrounds (deep navy/purple/indigo), glowing accents
-- **Color palette**: Deep space navy base + electric blue/cyan accents + amber for warnings + green for success
-- **Typography**: Modern, clean — large headings, readable body
-- **Mobile-first**: All pages stack cleanly on 375px screens
-- **Components**: Reusable GlassCard, GlassButton, StatusBadge, QRDisplay, SeatPricingTable
+### New pages:
+- `/live` — **Customer Live Page** — realtime scoreboard + prediction game
+  - Requires valid game_access session (mobile + PIN in localStorage after /play login)
+  - Shows: live score, current over, batsmen, bowler, last delivery
+  - Prediction UI: when window open, show choices, submit, lock feedback
+  - Leaderboard tab
+  - Disclaimer always visible
+
+- `/admin/control` — **Admin Control Center**
+  - Active match stats (registrations, paid, check-ins)
+  - Live innings control (start innings, end innings, set break)
+  - Over management (create over, open window, lock window, complete over)
+  - Delivery entry form (full ball data)
+  - Live score panel
+  - Current prediction window status
+  - Panic controls: freeze predictions, lock all windows
+  - Top 10 leaderboard
+
+### Updated pages:
+- `/admin/matches/:id` — Add loyalty match picker dropdown (link `loyalty_from_match_id` to another match)
+- `/ticket` — Fix lookup to handle orders by mobile + active match (currently uses token= param)
+- `pricing-quote` edge function — Fix loyalty logic: cap at previous seat count for lower price, extras at full price
 
 ---
 
-## 📋 Phase 2 Preview (not built now)
-- Live match engine (innings/overs/deliveries)
-- Prediction windows
-- Leaderboard
-- Realtime Supabase subscriptions for scoreboard
+## Implementation Order
+
+### Step 1 — DB Migration (Phase 2 tables + realtime)
+- Create teams, players, match_roster, match_live_state, over_control, deliveries, prediction_windows, predictions, leaderboard
+- Enable realtime for: match_live_state, over_control, prediction_windows, leaderboard
+- Fix `order_seat_pricing` INSERT policy (currently broken for service_role)
+- Fix `game_access` SELECT policy (duplicate open policy + authenticated)
+
+### Step 2 — Edge Functions
+- `match-control` (admin phase control)
+- `over-control` (admin over management)
+- `record-delivery` (full ball recording + score compute + leaderboard)
+- `submit-prediction` (customer prediction)
+- `resolve-prediction-window` (score predictions)
+- Update `pricing-quote` — fix loyalty seat-count-cap logic
+- Update `admin-checkin` — use `getClaims()` instead of `getUser()`
+
+### Step 3 — Admin Control Center (`/admin/control`)
+- Phase control panel (pre / innings1 / break / innings2 / ended)
+- Over management UI
+- Delivery entry form
+- Realtime scoreboard preview
+- Prediction window controls
+- Stats counters
+
+### Step 4 — Customer Live Page (`/live`)
+- Guard: check localStorage for mobile+pin session
+- Realtime Supabase subscription on match_live_state
+- Scoreboard component (team scores, overs, batsmen, bowler)
+- Live delivery feed
+- Prediction game panel (animated window open/close)
+- Leaderboard tab
+- Always-visible disclaimer
+
+### Step 5 — Routing + Navigation
+- Add `/admin/control` to AdminLayout sidebar
+- Add `/live` public route
+- Fix `/play` to store session in localStorage and redirect to `/live`
+- Add "Live Control" link in admin sidebar
+
+---
+
+## Files to Create/Edit
+
+**New files:**
+- `supabase/migrations/[ts]_phase2_live_engine.sql`
+- `supabase/functions/match-control/index.ts`
+- `supabase/functions/over-control/index.ts`
+- `supabase/functions/record-delivery/index.ts`
+- `supabase/functions/submit-prediction/index.ts`
+- `supabase/functions/resolve-prediction-window/index.ts`
+- `src/pages/admin/AdminControl.tsx`
+- `src/pages/Live.tsx`
+- `src/components/live/Scoreboard.tsx`
+- `src/components/live/PredictionPanel.tsx`
+- `src/components/live/Leaderboard.tsx`
+- `src/components/admin/DeliveryForm.tsx`
+
+**Edited files:**
+- `src/App.tsx` — add `/live`, `/admin/control` routes
+- `src/components/admin/AdminSidebar.tsx` — add Control Center link
+- `src/pages/Play.tsx` — save mobile/pin to localStorage on success
+- `src/pages/admin/AdminMatchDetail.tsx` — add loyalty match picker
+- `supabase/config.toml` — add new functions with verify_jwt=false
+- `supabase/functions/pricing-quote/index.ts` — fix loyalty cap logic
+- `supabase/functions/admin-checkin/index.ts` — getClaims fix
+
+---
+
+## Technical Notes
+
+- Realtime subscriptions use `supabase.channel()` with `postgres_changes` on `public` schema
+- Session for `/live` stored in `localStorage` as `{ mobile, match_id }` — validated against `game_access` on mount
+- Scoreboard updates via realtime on `match_live_state` — no polling
+- Prediction window state via realtime on `prediction_windows`
+- Admin delivery form auto-increments `delivery_no`, handles extra ball on wide/no-ball automatically
+- Leaderboard updates server-side in `record-delivery` when prediction window resolves
+- All 5 new edge functions use `getClaims()` pattern for auth (admin-only functions check auth.uid())
