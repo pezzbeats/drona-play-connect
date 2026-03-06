@@ -85,11 +85,6 @@ export default function AdminLoginPage() {
             </GlassButton>
           </form>
 
-          <div className="mt-5 p-3 bg-muted/30 rounded-lg">
-            <p className="text-xs text-muted-foreground text-center">Default Super Admin Credentials</p>
-            <p className="text-xs text-center text-foreground mt-1">admin@t20fannight.com</p>
-            <p className="text-xs text-center text-muted-foreground">See Cloud → Database for setup instructions</p>
-          </div>
         </GlassCard>
       </div>
     </div>
