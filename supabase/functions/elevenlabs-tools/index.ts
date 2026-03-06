@@ -185,17 +185,7 @@ serve(async (req) => {
 
       case "check_registration": {
         // Check if a mobile number is already registered
-        const mobile = params.mobile?.toString().trim();
-        if (!mobile) {
-          result = { success: false, message: "Mobile number nahi mila. Kripya apna mobile number batayein." };
-          break;
-        }
-
-        const { data: activeMatch } = await supabase
-          .from("matches")
-          .select("id, name")
-          .eq("is_active_for_registration", true)
-          .single();
+        const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
 
         if (!activeMatch) {
           result = {
