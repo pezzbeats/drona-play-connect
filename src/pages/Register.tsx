@@ -712,14 +712,23 @@ export default function RegisterPage() {
               ) : priceQuote ? (
                 <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">Price Breakdown</p>
-                  {priceQuote.seats.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Seat {i + 1}
-                        {s.reason !== 'new_customer' && <span className="ml-1 text-xs text-success font-medium">({s.reason.replace(/_/g, ' ')})</span>}
-                      </span>
-                      <span className="font-semibold text-foreground">₹{s.price}</span>
-                    </div>
-                  ))}
+                  {priceQuote.seats.map((s, i) => {
+                    const reasonLabel: Record<string, string> = {
+                      semifinal_attendee: '⭐ Special ₹949 eligible',
+                      loyal_base: '⭐ Returning rate',
+                      extra_seat: 'Standard rate',
+                      new_customer: '',
+                    };
+                    const label = reasonLabel[s.reason] ?? s.reason.replace(/_/g, ' ');
+                    return (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Seat {i + 1}
+                          {label && <span className="ml-1 text-xs text-success font-medium">({label})</span>}
+                        </span>
+                        <span className="font-semibold text-foreground">₹{s.price}</span>
+                      </div>
+                    );
+                  })}
                   <div className="pt-2 border-t border-border/50 flex items-center justify-between">
                     <span className="font-display font-bold text-foreground">Total</span>
                     <span className="font-display text-2xl font-bold gradient-text">₹{priceQuote.total}</span>

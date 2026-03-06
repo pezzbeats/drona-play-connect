@@ -5,16 +5,31 @@ import { useToast } from '@/hooks/use-toast';
 import { GlassCard } from '@/components/ui/GlassCard';
 import {
   Download, Upload, Trash2, Loader2, CheckCircle2, AlertCircle,
-  Users, Clock, FileText, RefreshCw
+  Users, Clock, FileText, RefreshCw, ToggleLeft, ToggleRight,
+  AlertTriangle, XCircle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface EligibilityRow {
   id: string;
   mobile: string;
+  full_name: string | null;
+  notes: string | null;
   match_label: string | null;
   uploaded_at: string;
+}
+
+interface PreviewRow {
+  mobile: string;
+  full_name: string;
+  notes: string;
+  valid: boolean;
 }
 
 export default function AdminEligibility() {
@@ -27,9 +42,9 @@ export default function AdminEligibility() {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [uploadMode, setUploadMode] = useState<'append' | 'replace'>('append');
 
-  // CSV preview state
-  const [preview, setPreview] = useState<{ mobile: string; valid: boolean }[]>([]);
+  const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [matchLabel, setMatchLabel] = useState('Semi Final - Mar 2026');
 
@@ -40,7 +55,7 @@ export default function AdminEligibility() {
       .select('*')
       .order('uploaded_at', { ascending: false });
     if (error) toast({ variant: 'destructive', title: 'Failed to load', description: error.message });
-    else setRows(data || []);
+    else setRows((data || []) as EligibilityRow[]);
     setLoading(false);
   };
 
@@ -49,16 +64,37 @@ export default function AdminEligibility() {
   // ── Download template ──────────────────────────────────────────────────────
   const handleDownloadTemplate = () => {
     const csv = [
-      'mobile',
-      '9876543210',
-      '9123456789',
-      '# Add one 10-digit mobile number per row (remove this comment line)',
+      'mobile,full_name,notes',
+      '9876543210,Sample Name,Semifinal attendee',
+      '9123456789,Another Name,Eligible for ₹949',
+      '# Add one number per row — remove this comment line',
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'semifinal_eligibility_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Export current list ────────────────────────────────────────────────────
+  const handleExportList = () => {
+    if (rows.length === 0) return;
+    const header = 'mobile,full_name,notes,match_label,uploaded_at';
+    const body = rows.map(r => [
+      r.mobile,
+      r.full_name ?? '',
+      r.notes ?? '',
+      r.match_label ?? '',
+      r.uploaded_at,
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    const csv = [header, ...body].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `eligibility_export_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -72,11 +108,20 @@ export default function AdminEligibility() {
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      const parsed: { mobile: string; valid: boolean }[] = [];
+      const parsed: PreviewRow[] = [];
+      let hasHeader = false;
+
       for (const line of lines) {
-        if (line.toLowerCase() === 'mobile' || line.startsWith('#')) continue;
-        const mobile = line.replace(/\D/g, '').slice(0, 10);
-        parsed.push({ mobile, valid: /^\d{10}$/.test(mobile) });
+        if (line.startsWith('#')) continue;
+        // Detect header row
+        if (!hasHeader && /^mobile/i.test(line)) { hasHeader = true; continue; }
+
+        // Simple CSV parse (handles quoted fields)
+        const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+        const mobile = cols[0]?.replace(/\D/g, '').slice(0, 10) ?? '';
+        const full_name = cols[1] ?? '';
+        const notes = cols[2] ?? '';
+        parsed.push({ mobile, full_name, notes, valid: /^\d{10}$/.test(mobile) });
       }
       setPreview(parsed);
     };
@@ -91,19 +136,31 @@ export default function AdminEligibility() {
       return;
     }
     setUploading(true);
+
+    // Replace mode: clear existing first
+    if (uploadMode === 'replace') {
+      const { error: delErr } = await supabase.from('semifinal_eligibility').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (delErr) {
+        toast({ variant: 'destructive', title: 'Clear failed', description: delErr.message });
+        setUploading(false);
+        return;
+      }
+    }
+
     const payload = valid.map(p => ({
       mobile: p.mobile,
+      full_name: p.full_name || null,
+      notes: p.notes || null,
       match_label: matchLabel || 'Semi Final',
-      uploaded_by: user?.id || null,
+      uploaded_by: user?.id ?? null,
     }));
 
-    // Upsert in batches of 500
     const BATCH = 500;
     let inserted = 0;
     for (let i = 0; i < payload.length; i += BATCH) {
       const { error } = await supabase
         .from('semifinal_eligibility')
-        .upsert(payload.slice(i, i + BATCH), { onConflict: 'mobile' });
+        .upsert(payload.slice(i, i + BATCH) as any, { onConflict: 'mobile' });
       if (error) {
         toast({ variant: 'destructive', title: 'Upload error', description: error.message });
         setUploading(false);
@@ -111,7 +168,7 @@ export default function AdminEligibility() {
       }
       inserted += Math.min(BATCH, payload.length - i);
     }
-    toast({ title: `✅ Uploaded ${inserted} numbers`, description: 'Eligibility list updated.' });
+    toast({ title: `✅ Uploaded ${inserted} numbers`, description: uploadMode === 'replace' ? 'List replaced.' : 'Appended to existing list.' });
     setPreview([]);
     setPreviewFile(null);
     if (fileRef.current) fileRef.current.value = '';
@@ -131,7 +188,17 @@ export default function AdminEligibility() {
     setDeleting(null);
   };
 
-  const filtered = rows.filter(r => !search || r.mobile.includes(search));
+  // ── Clear all ──────────────────────────────────────────────────────────────
+  const handleClearAll = async () => {
+    const { error } = await supabase.from('semifinal_eligibility').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (error) toast({ variant: 'destructive', title: 'Clear failed', description: error.message });
+    else {
+      setRows([]);
+      toast({ title: '🗑️ Eligibility list cleared' });
+    }
+  };
+
+  const filtered = rows.filter(r => !search || r.mobile.includes(search) || (r.full_name ?? '').toLowerCase().includes(search.toLowerCase()));
   const validCount = preview.filter(p => p.valid).length;
   const invalidCount = preview.filter(p => !p.valid).length;
 
@@ -179,7 +246,8 @@ export default function AdminEligibility() {
           <h2 className="font-display font-semibold text-foreground">Step 1: Download Template</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-3">
-          Download the CSV template, fill in the 10-digit mobile numbers of previous semifinal attendees (one per row), then upload below.
+          Download the CSV template with <code className="bg-muted/40 px-1 rounded text-xs">mobile,full_name,notes</code> columns.
+          Fill in the 10-digit mobile numbers, then upload below.
         </p>
         <button
           onClick={handleDownloadTemplate}
@@ -191,12 +259,41 @@ export default function AdminEligibility() {
 
       {/* Upload CSV */}
       <GlassCard className="p-5">
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-3 mb-4">
           <Upload className="h-5 w-5 text-primary" />
           <h2 className="font-display font-semibold text-foreground">Step 2: Upload Numbers</h2>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Upload mode toggle */}
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-muted/10">
+            <button
+              onClick={() => setUploadMode(m => m === 'append' ? 'replace' : 'append')}
+              className="text-primary flex-shrink-0"
+            >
+              {uploadMode === 'append'
+                ? <ToggleLeft className="h-6 w-6" />
+                : <ToggleRight className="h-6 w-6 text-warning" />
+              }
+            </button>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {uploadMode === 'append' ? 'Append to existing list' : 'Replace entire list'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {uploadMode === 'append'
+                  ? 'New numbers are added; duplicates are updated in place.'
+                  : 'All existing records will be deleted before uploading.'}
+              </p>
+            </div>
+          </div>
+          {uploadMode === 'replace' && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-warning/10 border border-warning/30 text-xs text-warning font-semibold">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+              <span>Replace mode will permanently delete all {rows.length} existing entries before uploading.</span>
+            </div>
+          )}
+
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Match Label (shown in records)</label>
             <Input
@@ -228,13 +325,19 @@ export default function AdminEligibility() {
                   {invalidCount > 0 && <span className="text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {invalidCount} invalid</span>}
                 </div>
               </div>
+              {/* Header row */}
+              <div className="grid grid-cols-[1fr_1fr_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2 border-b border-border/20">
+                <span>Mobile</span><span>Name</span><span>Notes</span><span></span>
+              </div>
               <div className="max-h-52 overflow-y-auto">
                 {preview.slice(0, 20).map((p, i) => (
-                  <div key={i} className={`flex items-center justify-between px-4 py-1.5 text-sm border-b border-border/20 last:border-0 ${p.valid ? '' : 'bg-destructive/5'}`}>
+                  <div key={i} className={`grid grid-cols-[1fr_1fr_1fr_auto] items-center px-4 py-1.5 text-xs border-b border-border/20 last:border-0 gap-2 ${p.valid ? '' : 'bg-destructive/5'}`}>
                     <span className={`font-mono ${p.valid ? 'text-foreground' : 'text-destructive'}`}>{p.mobile || '(empty)'}</span>
+                    <span className="text-muted-foreground truncate">{p.full_name || '—'}</span>
+                    <span className="text-muted-foreground truncate">{p.notes || '—'}</span>
                     {p.valid
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                      : <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-success flex-shrink-0" />
+                      : <AlertCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
                     }
                   </div>
                 ))}
@@ -252,7 +355,7 @@ export default function AdminEligibility() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success/10 border border-success/30 text-success text-sm font-semibold hover:bg-success/20 transition-colors disabled:opacity-50"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading ? 'Uploading…' : `Upload ${validCount} numbers`}
+              {uploading ? 'Uploading…' : `${uploadMode === 'replace' ? 'Replace with' : 'Upload'} ${validCount} numbers`}
             </button>
           )}
         </div>
@@ -262,12 +365,22 @@ export default function AdminEligibility() {
       <GlassCard className="p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-display font-semibold text-foreground">Eligibility List</h2>
-          <span className="text-xs text-muted-foreground">{filtered.length} entries</span>
+          <div className="flex items-center gap-2">
+            {rows.length > 0 && (
+              <button
+                onClick={handleExportList}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" /> Export CSV
+              </button>
+            )}
+            <span className="text-xs text-muted-foreground">{filtered.length} entries</span>
+          </div>
         </div>
 
         <Input
           className="glass-input text-sm mb-3"
-          placeholder="Search mobile number…"
+          placeholder="Search mobile or name…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -282,15 +395,17 @@ export default function AdminEligibility() {
           </div>
         ) : (
           <div className="rounded-xl border border-border/50 overflow-hidden">
-            <div className="grid grid-cols-[1fr_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2.5 border-b border-border/30">
+            <div className="grid grid-cols-[1fr_1fr_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2.5 border-b border-border/30">
               <span>Mobile</span>
+              <span>Name</span>
               <span>Label / Date</span>
               <span></span>
             </div>
             <div className="max-h-96 overflow-y-auto divide-y divide-border/20">
               {filtered.map(row => (
-                <div key={row.id} className="grid grid-cols-[1fr_1fr_auto] items-center px-4 py-2.5 text-sm hover:bg-muted/20 transition-colors">
+                <div key={row.id} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center px-4 py-2.5 text-sm hover:bg-muted/20 transition-colors gap-2">
                   <span className="font-mono font-medium text-foreground">{row.mobile}</span>
+                  <span className="text-xs text-muted-foreground truncate">{row.full_name || '—'}</span>
                   <div>
                     <p className="text-xs text-foreground">{row.match_label || '—'}</p>
                     <p className="text-xs text-muted-foreground">{new Date(row.uploaded_at).toLocaleDateString('en-IN')}</p>
@@ -305,6 +420,37 @@ export default function AdminEligibility() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Clear all */}
+        {rows.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-border/30">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm font-semibold hover:bg-destructive/20 transition-colors">
+                  <XCircle className="h-4 w-4" /> Clear All ({rows.length} entries)
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear entire eligibility list?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all {rows.length} entries from the eligibility list.
+                    Users will no longer receive the ₹949 discount. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleClearAll}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Yes, clear all
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         )}
       </GlassCard>
