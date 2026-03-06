@@ -60,7 +60,7 @@ function StepBar({ step }: { step: number }) {
             }`}>
               {i < step ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
             </div>
-            <span className={`text-xs font-medium text-center leading-tight ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>{s}</span>
+            <span className={`text-[10px] font-medium text-center leading-tight truncate w-full ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>{s}</span>
           </div>
         ))}
       </div>
@@ -442,7 +442,15 @@ export default function RegisterPage() {
           pricing_snapshot: priceQuote,
         }
       });
-      if (error) throw error;
+      // Supabase SDK wraps non-200 in FunctionsHttpError with generic "non-2xx" message.
+      // Our function now always returns 200 — check data.success instead.
+      if (error) {
+        // Still handle network-level errors
+        throw new Error(error.message || 'Network error calling create-order');
+      }
+      if (!data?.success) {
+        throw new Error(data?.error || 'Order creation failed');
+      }
       setOrderId(data.order_id);
       if (method === 'pay_at_hotel') {
         setTickets(data.tickets || []);
@@ -710,8 +718,8 @@ export default function RegisterPage() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label className="text-foreground w-full text-center">Mobile Number *</Label>
-                  <span className={`text-xs font-mono ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>{mobile.length}/10</span>
+                  <Label className="text-foreground">Mobile Number *</Label>
+                  <span className={`text-xs font-mono flex-shrink-0 ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>{mobile.length}/10</span>
                 </div>
                 <Input className={`glass-input ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
                   placeholder="10-digit mobile number" value={mobile}
