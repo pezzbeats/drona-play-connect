@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
               <Input
                 className="glass-input h-14 text-base"
                 type="email"
-                placeholder="admin@t20fannight.com"
+                placeholder="Enter your email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 autoComplete="email"
