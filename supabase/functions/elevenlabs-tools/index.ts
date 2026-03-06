@@ -26,7 +26,7 @@ serve(async (req) => {
     switch (tool) {
       case "lookup_ticket": {
         // Check ticket/order status by mobile number
-        const mobile = params.mobile?.toString().trim();
+        const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
         if (!mobile) {
           result = { success: false, message: "Mobile number nahi mila. Kripya apna mobile number batayein." };
           break;
@@ -138,7 +138,7 @@ serve(async (req) => {
 
       case "get_pricing": {
         // Get ticket pricing for the active match
-        const mobile = params.mobile?.toString().trim();
+        const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
 
         const { data: activeMatch } = await supabase
           .from("matches")
@@ -191,17 +191,7 @@ serve(async (req) => {
 
       case "check_registration": {
         // Check if a mobile number is already registered
-        const mobile = params.mobile?.toString().trim();
-        if (!mobile) {
-          result = { success: false, message: "Mobile number nahi mila. Kripya apna mobile number batayein." };
-          break;
-        }
-
-        const { data: activeMatch } = await supabase
-          .from("matches")
-          .select("id, name")
-          .eq("is_active_for_registration", true)
-          .single();
+        const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
 
         if (!activeMatch) {
           result = {

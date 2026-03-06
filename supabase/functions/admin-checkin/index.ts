@@ -134,7 +134,7 @@ serve(async (req) => {
 
     const pin = generatePin();
     const pinHash = await hashPin(pin);
-    const mobile = (ticket as any).orders?.purchaser_mobile?.toString().replace(/\D/g, "").slice(-10);
+    const mobile = (ticket as any).orders?.purchaser_mobile;
 
     if (!regenerate) {
       await supabase.from("tickets").update({
