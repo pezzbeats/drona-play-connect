@@ -1,51 +1,57 @@
 
-## Teams & Players Management — `/admin/teams`
+## Bulk Import Players — Plan
 
 ### What to build
 
-A new admin page at `/admin/teams` with 3 sections in tabs:
+A "Bulk Import" dialog button next to "Add Player" in the Players tab. Admin pastes a multi-line list, each line is parsed into a player row, previewed, then inserted in one batch.
 
-1. **Teams tab** — list of teams, create/edit team (name, short code, color)
-2. **Players tab** — list all players grouped by team, add player (name, role, jersey number, assign to team)
-3. **Match Roster tab** — pick the active match, then assign Home/Away teams and toggle which team bats first; this populates the delivery form dropdowns in `/admin/control`
+### Paste format (flexible, auto-detected)
 
-### Files to create/edit
+Each line = one player. Supported formats:
+```
+Rohit Sharma, batsman, 45
+Jasprit Bumrah, bowler, 93
+Hardik Pandya, all_rounder, 33
+MS Dhoni, wicketkeeper, 7
+Virat Kohli
+```
 
-**New:**
-- `src/pages/admin/AdminTeams.tsx` — full page with 3 tabs
+Parse rules:
+- Field 1 (required): name
+- Field 2 (optional): role keyword match — if it contains "bowl" → bowler, "all" → all_rounder, "keep" or "wk" or "wicket" → wicketkeeper, else → batsman (default)
+- Field 3 (optional): jersey number
+- Separator: comma OR tab OR pipe (`|`)
+- Blank lines skipped
+- Case-insensitive role matching
 
-**Edited:**
-- `src/App.tsx` — add `/admin/teams` route
-- `src/components/admin/AdminSidebar.tsx` — add "Teams & Players" nav item with `Users` icon
+### Format hint shown in the dialog textarea placeholder:
+```
+Rohit Sharma, batsman, 45
+Jasprit Bumrah, bowler, 93
+Hardik Pandya, all_rounder, 33
+MS Dhoni, wicketkeeper, 7
+```
 
-### Implementation detail
+### UI flow
 
-**Teams tab:**
-- `supabase.from('teams').select('*')` to list
-- Create dialog: fields for `name`, `short_code`, `color` (color picker input type=color)
-- Edit inline or via same dialog
-- Shows player count badge per team
+1. "Bulk Import" button (with `Upload` icon) opens a Dialog
+2. Dialog has:
+   - Team selector at top (required — all imported players assigned to this team)
+   - Textarea for paste input
+   - "Preview" button → parses and shows a small table of parsed rows with name, role badge, jersey — with inline error indicator for rows that couldn't parse
+   - "Import X players" button (disabled until preview shows at least 1 valid row)
+   - Progress state during insert
+   - Success summary: "X players imported"
+3. On import: `supabase.from('players').insert(rows)` for all valid rows at once
+4. Close dialog → refresh player list
 
-**Players tab:**
-- `supabase.from('players').select('*, teams(name)')` to list with team name
-- Create dialog: fields for `name`, `role` (enum: batsman/bowler/all_rounder/wicketkeeper), `jersey_number`, `team_id` (select from teams)
-- Grouped by team with a simple filter dropdown
-- Edit / delete player rows
+### Only change needed
 
-**Match Roster tab:**
-- Fetch active match (`is_active_for_registration = true`) — show match name
-- Load current `match_roster` for that match
-- Two dropdowns: "Home Team" and "Away Team" (both pull from `teams`)
-- Toggle: "Which team bats first?" (radio: Home / Away)
-- Save → upsert into `match_roster` (2 rows: one home, one away with `is_batting_first` set)
-- After save, show confirmation that the delivery form in Live Control will now see these players
+`src/pages/admin/AdminTeams.tsx` — add `BulkImportDialog` component inside `PlayersTab`:
+- New state: `bulkOpen`, `bulkText`, `bulkTeamId`, `parsedRows`, `previewed`, `importing`
+- Parse function: split by newline, split each line by `,` or `\t` or `|`, map to player shape
+- New imports: `Textarea` from `@/components/ui/textarea`, `Upload` from `lucide-react`
+- No DB schema changes needed
 
-**Connection to AdminControl delivery form:**
-- The existing `AdminControl.tsx` already queries `match_roster → players` — once roster is set here, it automatically populates the dropdowns in Live Control with no additional changes needed.
-
-### DB changes
-No schema changes needed — `teams`, `players`, and `match_roster` tables already exist with correct columns from Phase 2 migration.
-
-### Route & Sidebar
-- Add `{ icon: Users, label: 'Teams & Players', to: '/admin/teams' }` to navItems array in `AdminSidebar.tsx`
-- Add `<Route path="teams" element={<AdminTeams />} />` inside the protected `/admin` block in `App.tsx`
+### Files changed
+- `src/pages/admin/AdminTeams.tsx` only
