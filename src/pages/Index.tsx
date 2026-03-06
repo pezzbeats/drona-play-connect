@@ -503,7 +503,8 @@ export default function IndexPage() {
       {/* ─── STICKY BOTTOM CTA BAR ─── */}
       <div className="fixed bottom-0 inset-x-0 z-[9000] pb-safe">
         <div className="backdrop-blur-md bg-background/80 border-t border-border/50 px-4 pt-2.5 pb-3">
-          <div className="flex gap-2.5 max-w-2xl mx-auto">
+          {/* pr-[84px] leaves room for the VoiceAgent mic button (w-14 + right-5 gap) */}
+          <div className="flex gap-2.5 max-w-2xl mx-auto pr-[84px]">
             <Link to="/register" className="flex-1">
               <button className="w-full h-12 btn-gradient rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 animate-glow-pulse">
                 Reserve Seats <ChevronRight className="h-4 w-4" />
