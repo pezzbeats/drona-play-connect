@@ -50,6 +50,27 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       deliveries: {
         Row: {
           ball_no: number
@@ -1098,6 +1119,24 @@ export type Database = {
           },
         ]
       }
+      rate_limit_events: {
+        Row: {
+          created_at: string | null
+          id: string
+          key: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key?: string
+        }
+        Relationships: []
+      }
       teams: {
         Row: {
           color: string | null
@@ -1231,6 +1270,7 @@ export type Database = {
         Args: { p_match_id: string; p_mobile: string; p_seats_count: number }
         Returns: Json
       }
+      get_admin_role: { Args: { _user_id: string }; Returns: string }
       get_order_with_tickets: {
         Args: { p_match_id: string; p_mobile: string }
         Returns: Json

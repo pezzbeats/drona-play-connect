@@ -1,22 +1,38 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, AdminRole } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, Trophy, Users, ScanLine, ShoppingBag,
-  BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio, Star, BarChart2
+  BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio, Star,
+  BarChart2, Activity, HeartPulse,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', to: '/admin/dashboard' },
-  { icon: Trophy, label: 'Matches', to: '/admin/matches' },
-  { icon: Users, label: 'Teams & Players', to: '/admin/teams' },
-  { icon: ShoppingBag, label: 'Orders', to: '/admin/orders' },
-  { icon: ScanLine, label: 'Gate Validate', to: '/admin/validate' },
-  { icon: BookOpen, label: 'Manual Booking', to: '/admin/manual-booking' },
-  { icon: Radio, label: 'Live Control', to: '/admin/control' },
-  { icon: Star, label: 'Leaderboard', to: '/admin/leaderboard' },
-  { icon: BarChart2, label: 'Analytics', to: '/admin/analytics' },
+type NavItem = {
+  icon: React.ElementType;
+  label: string;
+  to: string;
+  minRole?: NonNullable<AdminRole>;
+};
+
+const ROLE_LEVEL: Record<NonNullable<AdminRole>, number> = {
+  gate_staff: 1,
+  operator: 2,
+  super_admin: 3,
+};
+
+const navItems: NavItem[] = [
+  { icon: LayoutDashboard, label: 'Dashboard',      to: '/admin/dashboard' },
+  { icon: ScanLine,        label: 'Gate Validate',  to: '/admin/validate' },
+  { icon: Trophy,          label: 'Matches',        to: '/admin/matches',       minRole: 'operator' },
+  { icon: Users,           label: 'Teams & Players',to: '/admin/teams',         minRole: 'operator' },
+  { icon: ShoppingBag,     label: 'Orders',         to: '/admin/orders',        minRole: 'operator' },
+  { icon: BookOpen,        label: 'Manual Booking', to: '/admin/manual-booking',minRole: 'operator' },
+  { icon: Radio,           label: 'Live Control',   to: '/admin/control',       minRole: 'operator' },
+  { icon: BarChart2,       label: 'Analytics',      to: '/admin/analytics',     minRole: 'operator' },
+  { icon: HeartPulse,      label: 'Health',         to: '/admin/health',        minRole: 'operator' },
+  { icon: Star,            label: 'Leaderboard',    to: '/admin/leaderboard',   minRole: 'super_admin' },
+  { icon: Activity,        label: 'Activity Log',   to: '/admin/activity',      minRole: 'super_admin' },
 ];
 
 interface AdminSidebarProps {
@@ -25,13 +41,19 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
-  const { user, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/admin/login');
   };
+
+  const visibleItems = navItems.filter(item => {
+    if (!item.minRole) return true;
+    if (!role) return false;
+    return ROLE_LEVEL[role] >= ROLE_LEVEL[item.minRole];
+  });
 
   return (
     <aside
@@ -57,7 +79,7 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
 
       {/* Nav Items */}
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-        {navItems.map(({ icon: Icon, label, to }) => (
+        {visibleItems.map(({ icon: Icon, label, to }) => (
           <NavLink
             key={to}
             to={to}
@@ -75,11 +97,16 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
         ))}
       </nav>
 
-      {/* User + Sign Out */}
+      {/* Role badge + User + Sign Out */}
       <div className="p-2 border-t border-sidebar-border space-y-1">
-        {!collapsed && user && (
-          <div className="px-3 py-2">
-            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+        {!collapsed && (
+          <div className="px-3 py-2 space-y-0.5">
+            {user && <p className="text-xs text-muted-foreground truncate">{user.email}</p>}
+            {role && (
+              <span className="inline-block text-xs font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                {role.replace('_', ' ')}
+              </span>
+            )}
           </div>
         )}
         <button

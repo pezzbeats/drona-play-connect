@@ -13,6 +13,20 @@ async function hashPin(pin: string): Promise<string> {
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function checkRateLimit(supabase: any, key: string, limitCount: number, windowMs: number): Promise<boolean> {
+  const windowStart = new Date(Date.now() - windowMs).toISOString();
+  // Clean old rows first (>5 min old) for this key
+  await supabase.from("rate_limit_events").delete().eq("key", key).lt("created_at", new Date(Date.now() - 300_000).toISOString());
+  const { count } = await supabase
+    .from("rate_limit_events")
+    .select("*", { count: "exact", head: true })
+    .eq("key", key)
+    .gte("created_at", windowStart);
+  if ((count ?? 0) >= limitCount) return false;
+  await supabase.from("rate_limit_events").insert({ key });
+  return true;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -31,9 +45,19 @@ serve(async (req) => {
       .single();
 
     if (!access) {
-      return new Response(JSON.stringify({ error: "Invalid game session. Please check in and get your PIN." }), {
+      return new Response(JSON.stringify({ error: "Invalid game session. Please check in and get your PIN.", code: "INVALID_SESSION", retryable: false }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ── Rate limiting: max 30 predictions/mobile/match per minute ──
+    const limitKey = `predict:${mobile}:${access.match_id}`;
+    const allowed = await checkRateLimit(supabase, limitKey, 30, 60_000);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Too many predictions. Please slow down.", code: "RATE_LIMITED", retryable: true }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // ── Check panic flag: predictions frozen ──
@@ -45,7 +69,7 @@ serve(async (req) => {
 
     if (flags?.predictions_frozen) {
       return new Response(
-        JSON.stringify({ error: "Predictions are currently paused. Please wait." }),
+        JSON.stringify({ error: "Predictions are currently paused. Please wait.", code: "PREDICTIONS_FROZEN", retryable: true }),
         { status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -58,13 +82,13 @@ serve(async (req) => {
       .single();
 
     if (!window) {
-      return new Response(JSON.stringify({ error: "Prediction window not found" }), {
+      return new Response(JSON.stringify({ error: "Prediction window not found", code: "NOT_FOUND", retryable: false }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (window.status !== "open") {
-      return new Response(JSON.stringify({ error: "Prediction window is closed" }), {
+      return new Response(JSON.stringify({ error: "Prediction window is closed", code: "WINDOW_CLOSED", retryable: false }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -112,7 +136,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ error: e.message, code: "INTERNAL_ERROR", retryable: true }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/admin/ProtectedRoute";
+import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 
 import Index from "./pages/Index";
@@ -24,6 +25,8 @@ import AdminControl from "./pages/admin/AdminControl";
 import AdminTeams from "./pages/admin/AdminTeams";
 import AdminLeaderboard from "./pages/admin/AdminLeaderboard";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminActivity from "./pages/admin/AdminActivity";
+import AdminHealth from "./pages/admin/AdminHealth";
 
 const queryClient = new QueryClient();
 
@@ -46,18 +49,32 @@ const App = () => (
             <Route path="/admin/login" element={<AdminLoginPage />} />
 
             {/* Admin Protected */}
-            <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+            <Route
+              path="/admin"
+              element={
+                <ErrorBoundary>
+                  <ProtectedRoute>
+                    <AdminLayout />
+                  </ProtectedRoute>
+                </ErrorBoundary>
+              }
+            >
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              {/* gate_staff + operator + super_admin */}
               <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="matches" element={<AdminMatches />} />
-              <Route path="matches/:id" element={<AdminMatchDetail />} />
-              <Route path="orders" element={<AdminOrders />} />
               <Route path="validate" element={<AdminValidate />} />
-              <Route path="manual-booking" element={<AdminManualBooking />} />
-              <Route path="control" element={<AdminControl />} />
-              <Route path="teams" element={<AdminTeams />} />
-              <Route path="leaderboard" element={<AdminLeaderboard />} />
-              <Route path="analytics" element={<AdminAnalytics />} />
+              {/* operator + super_admin */}
+              <Route path="matches" element={<ProtectedRoute requiredRole="operator"><AdminMatches /></ProtectedRoute>} />
+              <Route path="matches/:id" element={<ProtectedRoute requiredRole="operator"><AdminMatchDetail /></ProtectedRoute>} />
+              <Route path="orders" element={<ProtectedRoute requiredRole="operator"><AdminOrders /></ProtectedRoute>} />
+              <Route path="manual-booking" element={<ProtectedRoute requiredRole="operator"><AdminManualBooking /></ProtectedRoute>} />
+              <Route path="control" element={<ProtectedRoute requiredRole="operator"><AdminControl /></ProtectedRoute>} />
+              <Route path="teams" element={<ProtectedRoute requiredRole="operator"><AdminTeams /></ProtectedRoute>} />
+              <Route path="analytics" element={<ProtectedRoute requiredRole="operator"><AdminAnalytics /></ProtectedRoute>} />
+              <Route path="health" element={<ProtectedRoute requiredRole="operator"><AdminHealth /></ProtectedRoute>} />
+              {/* super_admin only */}
+              <Route path="leaderboard" element={<ProtectedRoute requiredRole="super_admin"><AdminLeaderboard /></ProtectedRoute>} />
+              <Route path="activity" element={<ProtectedRoute requiredRole="super_admin"><AdminActivity /></ProtectedRoute>} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

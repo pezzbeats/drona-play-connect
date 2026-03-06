@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +58,7 @@ const DEFAULT_CONFIG: Omit<ScoringConfig, 'match_id'> = {
 
 // ──────────────────────────────────────────────────────────────────────────────
 export default function AdminLeaderboard() {
+  const { user } = useAuth();
   const { toast } = useToast();
 
   // Match list & selection
@@ -149,6 +151,7 @@ export default function AdminLeaderboard() {
     } else {
       toast({ title: 'Config saved' });
       setConfigDirty(false);
+      supabase.from('admin_activity').insert({ admin_id: user?.id, action: 'scoring_config_save', entity_type: 'match', entity_id: selectedMatchId, meta: config as any });
     }
   };
 
@@ -164,6 +167,7 @@ export default function AdminLeaderboard() {
     } else {
       setConfig(c => ({ ...c, leaderboard_frozen: newFrozen }));
       toast({ title: newFrozen ? '❄️ Leaderboard frozen' : '🔥 Leaderboard unfrozen' });
+      supabase.from('admin_activity').insert({ admin_id: user?.id, action: newFrozen ? 'leaderboard_freeze' : 'leaderboard_unfreeze', entity_type: 'match', entity_id: selectedMatchId });
     }
   };
 
@@ -190,6 +194,7 @@ export default function AdminLeaderboard() {
     } else {
       cancelAdjust(entry.id);
       toast({ title: 'Adjustment saved' });
+      supabase.from('admin_activity').insert({ admin_id: user?.id, action: 'leaderboard_adjust', entity_type: 'leaderboard', entity_id: entry.id, meta: { delta, reason } as any });
       fetchLeaderboard();
     }
   };
