@@ -1,43 +1,66 @@
 
-## Plan: CSV Export for Razorpay Transactions Tab
+## What's Already Working
 
-### What to change
-Single file edit: `src/pages/admin/AdminPayments.tsx`
+After a thorough review, the Razorpay integration is largely in place:
+- Order creation, checkout popup, backend signature verification, and automatic ticket generation all exist in the current code
+- Gateway secrets management, admin reconciliation page, and CSV export are all built
 
-### Implementation
+## What's Actually Missing
 
-1. **Add `Download` icon** to the existing lucide-react import line (alongside `RefreshCw`, `Search`, etc.)
+The prompt highlights 3 genuine gaps that need to be built:
 
-2. **Add `exportCSV` function** inside `TransactionsTab` — pure client-side, no new dependencies needed:
-   - Takes the current `filtered` array (respects active search + filter)
-   - Builds CSV rows with these 7 columns: `Date`, `Customer Name`, `Mobile`, `Amount (INR)`, `Payment ID`, `Order ID`, `Status`
-   - Escapes values that may contain commas by wrapping in double quotes
-   - Creates a Blob with `text/csv` MIME type
-   - Uses `URL.createObjectURL` + a temporary `<a>` click to trigger browser download
-   - Filename: `razorpay-transactions-YYYY-MM-DD.csv` (today's date)
-   - Shows `toast.success` with the row count: "Exported 12 transactions"
-   - Disabled when `filtered.length === 0` or `loading`
+---
 
-3. **Add Export button** in the controls row (alongside Refresh button):
-   - `variant="outline"` size `sm`
-   - Icon: `Download` (h-3.5 w-3.5)
-   - Label: `Export CSV`
-   - Disabled when loading or no filtered results
-   - Tooltip note via `title` attribute: shows count like "Export 12 rows"
+### 1. Razorpay Webhook Handler (Critical for reliability)
+A new edge function `razorpay-webhook` that handles the case where a user closes the browser after Razorpay processes payment but before the frontend receives the callback.
 
-### CSV column mapping
+- Receives Razorpay webhook POST to `/functions/v1/razorpay-webhook`
+- Verifies `X-Razorpay-Signature` header (HMAC-SHA256 of raw body using webhook secret)
+- Handles `payment.captured` event only
+- Looks up the order by `razorpay_order_id` from the payment notes
+- **Idempotent**: checks if tickets already exist before generating — skips if already done
+- Updates order to `paid_verified` if not already
+- Returns 200 immediately (Razorpay requires a fast response)
 
-| CSV column | Source field |
+The webhook secret will be stored in the existing `gateway_secrets` table under key `razorpay_webhook_secret`. The admin can enter it in the Gateway Settings tab on `/admin/payments`.
+
+---
+
+### 2. Fix Duplicate Ticket Risk in `razorpay-verify-payment`
+Currently the edge function blindly inserts tickets every time it's called. If the frontend calls it twice (e.g. on retry), duplicate tickets are created.
+
+- Add a check: query `tickets` where `order_id = order.id` — if tickets already exist, skip generation and return existing tickets instead
+- Also guard against re-verifying an already `paid_verified` order
+
+---
+
+### 3. Payment Retry Flow in Register.tsx
+When the Razorpay modal is dismissed (`ondismiss`), the internal order is already created but the user sees a dead end. They need to retry.
+
+- Add `razorpayOrderId` state to track the Razorpay order ID once created
+- On `ondismiss`: set `razorpayLoading = false` but keep `orderId` and `razorpayOrderId` in state
+- Show a "Retry Payment" button in the payment step if `orderId` is set and `paymentMethod === 'razorpay'`
+- The retry skips order creation and goes directly to opening the Razorpay checkout with the existing Razorpay order ID
+
+---
+
+### Files to Create/Edit
+
+| File | Change |
 |---|---|
-| Date | `format(new Date(o.created_at), 'dd MMM yyyy HH:mm')` |
-| Customer Name | `o.purchaser_full_name` |
-| Mobile | `o.purchaser_mobile` |
-| Amount (INR) | `o.total_amount` (plain number, no ₹ symbol) |
-| Payment ID | `o.razorpay_payment_id ?? ''` |
-| Order ID | `o.razorpay_order_id ?? ''` |
-| Status | `o.payment_status` |
+| `supabase/functions/razorpay-webhook/index.ts` | **New** — webhook handler with idempotent ticket generation |
+| `supabase/functions/razorpay-verify-payment/index.ts` | **Fix** — idempotency check before ticket generation |
+| `src/pages/Register.tsx` | **Fix** — retry payment flow after modal dismiss |
+| `src/pages/admin/AdminPayments.tsx` | **Add** — `razorpay_webhook_secret` field in Gateway Settings tab |
+| `supabase/config.toml` | **Add** — `[functions.razorpay-webhook]` entry |
 
-### Files changed
-- `src/pages/admin/AdminPayments.tsx` — add `exportCSV` function + `Download` import + Export button in controls bar
+---
 
-No backend changes, no new dependencies, no migration needed. Pure frontend.
+### Webhook Registration Note
+The webhook URL to register in the Razorpay dashboard will be:
+```
+https://fkblggtrpyubuglndotz.supabase.co/functions/v1/razorpay-webhook
+```
+Events to subscribe: `payment.captured`
+
+The Gateway Settings tab in `/admin/payments` will include a third field for the webhook secret alongside Key ID and Key Secret.
