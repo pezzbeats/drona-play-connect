@@ -1,53 +1,38 @@
 
-## Root Cause — Found
+The user wants a fully detailed ElevenLabs system prompt — not code changes, just a copy-pasteable system prompt document. This is a content generation task, not an implementation task. No plan needed — I should just write and present the system prompt directly.
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+Let me now construct the full system prompt with all the required sections:
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+1. Agent identity & personality — "Drona", warm Hinglish persona
+2. Knowledge base references — reference the two KB files (voice-agent-knowledge-base.txt and any second file)
+3. #TOOLS section — all 4 tools with when to call them, what mobile to extract, etc.
+4. Guardrails — no gambling talk, no off-topic, no hallucination, stay in scope
+5. Conversation flow — greeting, how to handle queries, escalation
+6. Error handling
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+Wait — the user mentioned "two files in knowledge base". I only see one file referenced: voice-agent-knowledge-base.txt. The second one may be the FAQ or a separate file they've uploaded to ElevenLabs directly. I'll write the system prompt referencing "knowledge base documents" generally since ElevenLabs presents them to the agent as context.
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
-```
+The four tools are:
+- lookup_ticket: requires mobile number
+- get_match_info: no params needed
+- get_pricing: optional mobile
+- check_registration: requires mobile
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+Key details to include:
+- Agent name: Drona
+- Language: Hinglish (Hindi + English mix)
+- Venue: Hotel Drona Palace, Kashipur
+- Contact: +91 72170 16170, dronapalace@gmail.com
+- Mobile normalization: ask user to say "digits only" or clarify if garbled
+- Pricing: ₹999 new, ₹949 returning
+- Payment methods: Razorpay, UPI QR, Pay at Hotel
+- Always call tools for live data (bookings, match info) — never guess
+- Knowledge base for static FAQ (event info, game rules, policies, food, etc.)
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+This is NOT a code change, it's a content response. I should present the full system prompt in clean markdown code blocks directly in chat — no presentation-plan needed since this is not an implementation task.
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+Actually wait — the instructions say "Present plans for implementation tasks (add feature, refactor). Skip for research ('how does X work?')." This is a content generation task (write a system prompt), not a codebase implementation task. So I should respond directly without a plan.
 
-## Changes
+But I'm in Plan mode (READ-ONLY). I can still provide text responses — I just can't make code changes. So I'll write the full system prompt as a response.
 
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
-```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
-```
-
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
-
-## Why this is the correct fix
-
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
-
-## Files Changed
-| File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+Let me write the system prompt now:
