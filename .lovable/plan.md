@@ -1,31 +1,103 @@
 
-## Plan: Eligibility Discount Badge on Step 3
+## Root Cause Analysis
 
-### What needs changing
+The screenshot shows `/ticket` with "No ticket reference provided" — this happens because:
+1. The **"View Your Passes"** link on the homepage goes to `/ticket` with **no URL params** (no `?order_id=` or `?mobile=`)
+2. The current page immediately shows the error state when both params are absent
 
-There are **two visible areas in Step 3**:
+Additionally there are two other bugs to fix:
+- The mobile lookup `query.eq('order.purchaser_mobile', mobile)` **won't work** — Supabase client can't filter on a joined table column this way; need to query orders first to get order IDs, then fetch tickets
+- WhatsApp share and QR PNG download are missing
 
-1. **Payment method selector** (`select_method` state, lines 843–848) — the "Total Amount" prominent block already shows the total. The eligibility badge should appear just below this total amount box.
+---
 
-2. **Pre-payment summary** (`razorpay_summary` state, the `PrePaymentSummary` component) — the order summary card (lines 101–128) shows a rows-based breakdown but only shows "Total Payable" at the bottom with no seat-by-seat breakdown or eligibility indicator. The badge and per-seat breakdown should appear here.
+## Plan
 
-### Changes to make
+### 1. Phone number entry gate (the main fix)
 
-**1. `PrePaymentSummary` component (lines 83–88, 101–128)**
-- Add `eligibilityStatus` and `priceQuote` as new props
-- Insert the eligibility banner (green star badge for eligible, muted info for standard) between the header and the order summary card
-- Replace the static `Seats: N × type` row with a small per-seat breakdown from `priceQuote.seats` — the same readable labels used on Step 2 (`⭐ Special ₹949 eligible`, `Standard rate`, etc.)
+When `/ticket` loads with **no params**, instead of showing "No Tickets Found", show a **mobile input form**:
 
-**2. `select_method` panel (lines 843–848)**
-- Add the eligibility badge directly under the "Total Amount" box so eligible users see it even before picking a method
-- Eligible: green star banner — "⭐ Semifinal attendee discount applied — seats at ₹949"
-- Standard: a subtle muted note — "Standard pricing — ₹999/seat"
+```text
+┌─────────────────────────────────────────┐
+│  🎫  View Your Passes                   │
+│  Enter your registered mobile number   │
+│                                         │
+│  [+91  ___________  ]                  │
+│                                         │
+│  [ Find My Tickets → ]                  │
+└─────────────────────────────────────────┘
+```
 
-**3. Pass new props at the call site (line 755–763)**
-- Add `eligibilityStatus={eligibilityStatus}` and `priceQuote={priceQuote}` to the `<PrePaymentSummary>` component call
+- Validate: 10 digits, India mobile (starts 6–9)
+- On submit: normalize to 10-digit string, fetch tickets by mobile
+- Show inline error if number invalid or no tickets found
 
-### Files to modify
-- `src/pages/Register.tsx` only — three small edits within the same file:
-  1. Update `PrePaymentSummary` prop interface + render
-  2. Update the call site to pass the new props
-  3. Add badge under Total Amount in `select_method`
+### 2. Fix the mobile-based ticket lookup query
+
+Current broken approach:
+```ts
+query.eq('order.purchaser_mobile', mobile)  // ❌ can't filter on joined table
+```
+
+Fix — two-step query:
+1. Fetch `order_id`s from `orders` where `purchaser_mobile = mobile`
+2. Fetch tickets where `order_id IN (...)` using `.in('order_id', orderIds)`
+
+### 3. Download QR as PNG
+
+Add a **"Save QR"** button per ticket card. Use an off-screen `<canvas>` to render the QR via `qrcode.react`'s `QRCodeCanvas` component (swap SVG → Canvas for the download target, hidden from view), then call `canvas.toBlob()` → create object URL → trigger download as `ticket-seat-N.png`.
+
+### 4. WhatsApp share
+
+Add a **"Share on WhatsApp"** button that:
+- On mobile: uses `navigator.share({ title, text, url })` (native Web Share API — opens native share sheet, user can pick WhatsApp)
+- Fallback: opens `https://wa.me/?text=` deep link with ticket URL and a friendly message
+- Message template: `"🎫 My T20 Fan Night Pass — Seat N — View at: [URL]"`
+
+---
+
+## Files to change
+
+| File | Change |
+|---|---|
+| `src/pages/Ticket.tsx` | Mobile entry form, fixed query, PNG download, WhatsApp share |
+
+### State machine inside `TicketPage`
+
+```text
+phase: 'input'   → show mobile entry form (when no params)
+phase: 'loading' → spinner
+phase: 'found'   → show tickets
+phase: 'empty'   → show "no tickets" with retry option
+```
+
+When `order_id` param is present, skip `input` phase and go straight to `loading`.
+
+### QR download implementation
+
+```tsx
+// Hidden canvas sibling per ticket, referenced via useRef array
+<QRCodeCanvas id={`qr-canvas-${ticket.id}`} value={ticket.qr_text} size={300} style={{display:'none'}} />
+
+// Download handler
+const canvas = document.getElementById(`qr-canvas-${ticket.id}`) as HTMLCanvasElement;
+canvas.toBlob(blob => {
+  const url = URL.createObjectURL(blob!);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `ticket-seat-${ticket.seat_index + 1}.png`;
+  a.click();
+});
+```
+
+### WhatsApp share
+
+```tsx
+const whatsappShare = (ticket: TicketData) => {
+  const text = `🎫 My T20 Fan Night Pass — ${match.name} — Seat ${ticket.seat_index + 1}\nView at: ${window.location.href}`;
+  if (navigator.share) {
+    navigator.share({ title: 'My T20 Fan Night Ticket', text, url: window.location.href });
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+};
+```
