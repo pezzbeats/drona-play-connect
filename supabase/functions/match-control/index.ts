@@ -22,12 +22,13 @@ serve(async (req) => {
     });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: userData, error: userError } = await supabaseAuth.auth.getUser(token);
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const { action, match_id, phase, batting_team_id, bowling_team_id, target_runs } = await req.json();
+    const body = await req.json();
+    const { action, match_id, phase, batting_team_id, bowling_team_id, target_runs } = body;
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Fetch or create live state
@@ -38,7 +39,6 @@ serve(async (req) => {
       .single();
 
     if (action === "init") {
-      // Initialize live state
       if (existing) {
         const { data, error } = await supabase
           .from("match_live_state")
@@ -74,6 +74,20 @@ serve(async (req) => {
         updateData.current_innings = 2;
       }
 
+      // ── Innings/break/end transitions: clear player IDs + lock open windows ─
+      if (["innings2", "break", "ended"].includes(phase)) {
+        updateData.current_striker_id = null;
+        updateData.current_non_striker_id = null;
+        updateData.current_bowler_id = null;
+
+        // Lock any open prediction windows
+        await supabase
+          .from("prediction_windows")
+          .update({ status: "locked" })
+          .eq("match_id", match_id)
+          .eq("status", "open");
+      }
+
       let data, error;
       if (existing) {
         ({ data, error } = await supabase
@@ -92,14 +106,14 @@ serve(async (req) => {
       if (error) throw error;
 
       // Also update match status
-      const matchStatus = phase === "pre" ? "live" : phase === "ended" ? "ended" : "live";
+      const matchStatus = phase === "ended" ? "ended" : "live";
       await supabase.from("matches").update({ status: matchStatus as any }).eq("id", match_id);
 
       return new Response(JSON.stringify({ success: true, state: data }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "update_players") {
-      const { striker_id, non_striker_id, bowler_id } = await req.json().catch(() => ({}));
+      const { striker_id, non_striker_id, bowler_id } = body ?? {};
       const updateData: any = { updated_at: new Date().toISOString() };
       if (striker_id !== undefined) updateData.current_striker_id = striker_id;
       if (non_striker_id !== undefined) updateData.current_non_striker_id = non_striker_id;

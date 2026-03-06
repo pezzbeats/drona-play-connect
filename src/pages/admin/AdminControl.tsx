@@ -6,12 +6,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
 import {
   Loader2, Zap, Trophy, Users, ScanLine, CheckCircle, AlertCircle,
   Wifi, WifiOff, Loader, ShieldAlert, ShieldOff, Lock, Unlock, AlertTriangle,
+  UserPlus,
 } from 'lucide-react';
 
 export default function AdminControl() {
@@ -25,6 +26,12 @@ export default function AdminControl() {
   const [stats, setStats] = useState({ registrations: 0, paid: 0, checkins: 0 });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // Ball count in active over (legal deliveries only)
+  const [overLegalBalls, setOverLegalBalls] = useState(0);
+  // Wicket flow: prompt for incoming batsman
+  const [needsNewBatsman, setNeedsNewBatsman] = useState(false);
+  const [incomingBatsman, setIncomingBatsman] = useState('');
+  const [incomingPosition, setIncomingPosition] = useState<'striker' | 'non_striker'>('striker');
 
   // Panic flags
   const [matchFlags, setMatchFlags] = useState<any>(null);
@@ -37,6 +44,7 @@ export default function AdminControl() {
     runs_off_bat: '0', extras_type: 'none', extras_runs: '0',
     is_wicket: false, wicket_type: '', out_player_id: '', fielder_id: '',
     free_hit: false, notes: '',
+    auto_rotate: true,
   });
 
   // Prediction window form
@@ -66,6 +74,18 @@ export default function AdminControl() {
     setActiveOver(overRes.data);
     setActiveWindow(windowRes.data);
     setMatchFlags(flagsRes.data);
+
+    // Fetch legal ball count for active over
+    if (overRes.data) {
+      const { data: overDeliveries } = await supabase
+        .from('deliveries')
+        .select('extras_type')
+        .eq('over_id', overRes.data.id);
+      const legal = (overDeliveries || []).filter(d => d.extras_type !== 'wide' && d.extras_type !== 'no_ball').length;
+      setOverLegalBalls(legal);
+    } else {
+      setOverLegalBalls(0);
+    }
 
     const orders = ordersRes.data || [];
     const tickets = ticketsRes.data || [];
@@ -225,19 +245,69 @@ export default function AdminControl() {
     callFunction('over-control', { action: 'update_over', over_id: activeOver.id, status: 'complete' }, 'complete-over');
   };
 
-  const handleRecordDelivery = () => {
+  const handleRecordDelivery = async () => {
     if (!activeOver || !match) return;
-    callFunction('record-delivery', {
-      match_id: match.id, over_id: activeOver.id,
-      innings_no: liveState?.current_innings || 1, over_no: activeOver.over_no,
-      striker_id: delivery.striker_id || null, non_striker_id: delivery.non_striker_id || null,
-      bowler_id: delivery.bowler_id || null,
-      runs_off_bat: parseInt(delivery.runs_off_bat) || 0,
-      extras_type: delivery.extras_type, extras_runs: parseInt(delivery.extras_runs) || 0,
-      is_wicket: delivery.is_wicket, wicket_type: delivery.wicket_type || null,
-      out_player_id: delivery.out_player_id || null, fielder_id: delivery.fielder_id || null,
-      free_hit: delivery.free_hit, notes: delivery.notes || null,
-    }, 'record-delivery');
+    setActionLoading('record-delivery');
+    try {
+      const { data, error } = await supabase.functions.invoke('record-delivery', {
+        body: {
+          match_id: match.id, over_id: activeOver.id,
+          innings_no: liveState?.current_innings || 1, over_no: activeOver.over_no,
+          striker_id: delivery.striker_id || null, non_striker_id: delivery.non_striker_id || null,
+          bowler_id: delivery.bowler_id || null,
+          runs_off_bat: parseInt(delivery.runs_off_bat) || 0,
+          extras_type: delivery.extras_type, extras_runs: parseInt(delivery.extras_runs) || 0,
+          is_wicket: delivery.is_wicket, wicket_type: delivery.wicket_type || null,
+          out_player_id: delivery.out_player_id || null, fielder_id: delivery.fielder_id || null,
+          free_hit: delivery.free_hit, notes: delivery.notes || null,
+          auto_rotate: delivery.auto_rotate,
+        },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      toast({ title: '✅ Delivery recorded' });
+
+      // Handle wicket prompt
+      if (data?.needs_new_batsman) {
+        setNeedsNewBatsman(true);
+        // Default incoming position: striker if striker was out, else non_striker
+        const strikerWasOut = delivery.out_player_id === delivery.striker_id;
+        setIncomingPosition(strikerWasOut ? 'striker' : 'non_striker');
+      }
+
+      // Reset delivery form (keep bowler, reset ball fields)
+      setDelivery(d => ({
+        ...d,
+        runs_off_bat: '0', extras_type: 'none', extras_runs: '0',
+        is_wicket: false, wicket_type: '', out_player_id: '', fielder_id: '',
+        free_hit: false, notes: '',
+      }));
+
+      fetchAll();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed', description: e.message });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSetIncomingBatsman = async () => {
+    if (!match || !incomingBatsman) return;
+    setActionLoading('set-incoming');
+    try {
+      const body: any = { action: 'update_players', match_id: match.id };
+      if (incomingPosition === 'striker') body.striker_id = incomingBatsman;
+      else body.non_striker_id = incomingBatsman;
+      const { data, error } = await supabase.functions.invoke('match-control', { body });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      toast({ title: '✅ Batsman set' });
+      setNeedsNewBatsman(false);
+      setIncomingBatsman('');
+      fetchAll();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed', description: e.message });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleOpenWindow = () => {
@@ -272,6 +342,13 @@ export default function AdminControl() {
     { phase: 'innings2', label: '▶ Innings 2', variant: 'primary' as const },
     { phase: 'ended', label: '🏁 End Match', variant: 'danger' as const },
   ];
+
+  // Derived: split players by team for batting/bowling selects
+  const battingPlayers = players.filter(p => p.team_id === liveState?.batting_team_id);
+  const bowlingPlayers = players.filter(p => p.team_id === liveState?.bowling_team_id);
+  // Fallback: if no live state teams set yet, show all players
+  const effectiveBatting = battingPlayers.length > 0 ? battingPlayers : players;
+  const effectiveBowling = bowlingPlayers.length > 0 ? bowlingPlayers : players;
 
   if (loading) return (
     <div className="flex justify-center items-center h-64">
@@ -490,7 +567,11 @@ export default function AdminControl() {
       <GlassCard className="p-4">
         <h2 className="font-display text-sm font-bold text-foreground mb-3">
           🏏 Over Management
-          {activeOver && <span className="ml-2 text-xs text-primary font-normal">Over {activeOver.over_no} active</span>}
+          {activeOver && (
+            <span className="ml-2 text-xs text-primary font-normal">
+              Over {activeOver.over_no} — {overLegalBalls}/6 legal balls
+            </span>
+          )}
         </h2>
         <div className="flex gap-2 mb-3">
           <GlassButton variant="primary" size="sm" loading={actionLoading === 'create-over'} onClick={handleCreateOver} disabled={!!activeOver}>
@@ -501,24 +582,93 @@ export default function AdminControl() {
           </GlassButton>
         </div>
 
+        {/* No active over warning */}
+        {!activeOver && (
+          <p className="text-xs text-muted-foreground italic">Activate a new over to record deliveries.</p>
+        )}
+
+        {/* Incoming Batsman Prompt (after wicket) */}
+        {needsNewBatsman && activeOver && (
+          <div className="mb-3 border border-warning/40 bg-warning/5 rounded-lg p-3 space-y-2">
+            <div className="flex items-center gap-2 text-warning text-xs font-semibold">
+              <UserPlus className="h-4 w-4" /> Select Incoming Batsman
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-foreground mb-1 block text-xs">POSITION</Label>
+                <Select value={incomingPosition} onValueChange={v => setIncomingPosition(v as any)}>
+                  <SelectTrigger className="glass-input h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="striker">Striker (facing)</SelectItem>
+                    <SelectItem value="non_striker">Non-Striker</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-foreground mb-1 block text-xs">BATSMAN</Label>
+                <Select value={incomingBatsman} onValueChange={setIncomingBatsman}>
+                  <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {effectiveBatting
+                      .filter(p => p.id !== liveState?.current_striker_id && p.id !== liveState?.current_non_striker_id)
+                      .map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <GlassButton variant="primary" size="sm" loading={actionLoading === 'set-incoming'} onClick={handleSetIncomingBatsman} disabled={!incomingBatsman}>
+                Confirm Batsman
+              </GlassButton>
+              <GlassButton variant="ghost" size="sm" onClick={() => setNeedsNewBatsman(false)}>
+                Skip
+              </GlassButton>
+            </div>
+          </div>
+        )}
+
         {/* Delivery Form */}
         {activeOver && (
           <div className="border border-primary/20 rounded-lg p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">Record Delivery — Over {activeOver.over_no}</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              Record Delivery — Over {activeOver.over_no}
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                Ball {overLegalBalls + 1} of 6
+              </span>
+            </h3>
 
+            {/* Batting players: striker/non-striker | Bowling player: bowler */}
             <div className="grid grid-cols-3 gap-2">
-              {['striker_id', 'non_striker_id', 'bowler_id'].map(field => (
-                <div key={field}>
-                  <Label className="text-foreground mb-1 block text-xs">{field.replace('_id', '').replace('_', ' ').toUpperCase()}</Label>
-                  <Select value={(delivery as any)[field]} onValueChange={v => setDelivery(d => ({ ...d, [field]: v }))}>
-                    <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">None</SelectItem>
-                      {players.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+              <div>
+                <Label className="text-foreground mb-1 block text-xs">STRIKER</Label>
+                <Select value={delivery.striker_id} onValueChange={v => setDelivery(d => ({ ...d, striker_id: v }))}>
+                  <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {effectiveBatting.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-foreground mb-1 block text-xs">NON STRIKER</Label>
+                <Select value={delivery.non_striker_id} onValueChange={v => setDelivery(d => ({ ...d, non_striker_id: v }))}>
+                  <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {effectiveBatting.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-foreground mb-1 block text-xs">BOWLER</Label>
+                <Select value={delivery.bowler_id} onValueChange={v => setDelivery(d => ({ ...d, bowler_id: v }))}>
+                  <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {effectiveBowling.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-4 gap-2">
@@ -575,7 +725,7 @@ export default function AdminControl() {
                     <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Who" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">None</SelectItem>
-                      {players.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      {effectiveBatting.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -592,8 +742,25 @@ export default function AdminControl() {
               </div>
             )}
 
-            <GlassButton variant="primary" size="md" className="w-full" loading={actionLoading === 'record-delivery'} onClick={handleRecordDelivery}>
-              Record Delivery
+            {/* Auto-rotate strike toggle */}
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="auto-rotate"
+                checked={delivery.auto_rotate}
+                onCheckedChange={v => setDelivery(d => ({ ...d, auto_rotate: !!v }))}
+              />
+              <label htmlFor="auto-rotate" className="text-xs text-muted-foreground cursor-pointer select-none">
+                Auto-rotate strike (uncheck for run-outs, overthrows, etc.)
+              </label>
+            </div>
+
+            <GlassButton
+              variant="primary" size="md" className="w-full"
+              loading={actionLoading === 'record-delivery'}
+              onClick={handleRecordDelivery}
+              disabled={!activeOver}
+            >
+              🏏 Record Delivery
             </GlassButton>
           </div>
         )}
