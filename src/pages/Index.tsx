@@ -9,6 +9,7 @@ import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
   Loader2, MapPin, Calendar, Trophy, Star, ChevronRight,
   Clock, ShieldCheck, BadgeCheck, QrCode, Tv2, Utensils, Target,
+  Phone, Mail,
 } from 'lucide-react';
 
 interface ActiveMatch {
@@ -360,6 +361,63 @@ export default function IndexPage() {
           <p className="leading-relaxed">
             {get('legal_disclaimer_body', 'This event includes a recreational fun prediction activity. It is not gambling, betting, or wagering. No money is staked or won. All payments are strictly for hospitality services including venue access, food, and beverages. Participation in the fun game is voluntary and for entertainment purposes only.')}
           </p>
+        </div>
+
+        {/* ─── BUSINESS TRUST BLOCK ─── */}
+        <div className="mb-6 animate-slide-up" style={{ animationDelay: '0.36s' } as React.CSSProperties}>
+          <GlassCard className="p-5">
+            <p className="section-title text-center mb-4">Operated By</p>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Identity */}
+              <div className="text-center sm:text-left">
+                <p className="font-display font-bold text-foreground text-base">SR LEISURE INN</p>
+                <p className="text-xs text-muted-foreground">Hotel Drona Palace, Kashipur, Uttarakhand</p>
+                <p className="text-xs font-mono text-secondary/80 mt-0.5">GSTIN: ABOFS1823N1ZS</p>
+              </div>
+              {/* Contact chips */}
+              <div className="flex flex-wrap justify-center gap-2 text-xs">
+                <a
+                  href="tel:7217016170"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors"
+                >
+                  <Phone className="h-3 w-3" /> +91 72170 16170
+                </a>
+                <a
+                  href="mailto:dronapalace@gmail.com"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors"
+                >
+                  <Mail className="h-3 w-3" /> dronapalace@gmail.com
+                </a>
+              </div>
+            </div>
+            {/* Payment methods */}
+            <div className="mt-4 pt-4 border-t border-border/30">
+              <p className="text-xs text-muted-foreground text-center mb-2 font-medium">Accepted Payment Methods</p>
+              <div className="flex flex-wrap justify-center gap-2 text-xs">
+                {['Razorpay (Cards · UPI · Wallets)', 'UPI QR', 'Pay at Venue'].map(m => (
+                  <span key={m} className="px-2.5 py-1 rounded-md bg-muted/60 border border-border/50 text-muted-foreground font-medium">
+                    {m}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {/* Legal links */}
+            <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground/60">
+              {[
+                { to: '/privacy', label: 'Privacy' },
+                { to: '/terms', label: 'Terms' },
+                { to: '/refund-policy', label: 'Refunds' },
+                { to: '/shipping', label: 'Delivery' },
+                { to: '/pricing', label: 'Pricing' },
+                { to: '/contact', label: 'Contact' },
+                { to: '/disclaimer', label: 'Disclaimer' },
+              ].map(({ to, label }) => (
+                <Link key={to} to={to} className="hover:text-primary transition-colors">
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </GlassCard>
         </div>
 
         {/* ─── ADMIN LINK ─── */}
