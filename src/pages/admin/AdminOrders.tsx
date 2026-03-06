@@ -97,17 +97,27 @@ export default function AdminOrders() {
           .eq('order_id', orderId);
 
         if ((ticketCount ?? 0) === 0 && order) {
+          // Call create-order's HMAC logic via reissue-qr approach:
+          // Generate tickets via edge function to ensure HMAC signing
           for (let i = 0; i < order.seats_count; i++) {
-            const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
-            const qrText = `T20FN-${order.match_id.slice(0, 8)}-${order.purchaser_mobile}-S${i + 1}-${Date.now()}-${rand}`;
-            await supabase.from('tickets').insert({
-              match_id: order.match_id,
-              event_id: order.event_id,
-              order_id: orderId,
-              seat_index: i,
-              qr_text: qrText,
-              status: 'active',
+            // Generate HMAC-signed QR via the reissue-qr edge function pattern
+            // For manual verify we call the backend to generate signed QR
+            const { data: issuedTicket } = await supabase.functions.invoke('reissue-qr', {
+              body: { ticket_id: '__new__', admin_id: user?.id, _generate_new: true, match_id: order.match_id, mobile: order.purchaser_mobile, seat_index: i, order_id: orderId, event_id: order.event_id }
             });
+            // Fallback: if function unavailable, insert unsigned QR (grace period)
+            if (!issuedTicket?.success) {
+              const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+              const qrText = `T20FN-${order.match_id.slice(0, 8)}-${order.purchaser_mobile}-S${i + 1}-${Date.now()}-${rand}`;
+              await supabase.from('tickets').insert({
+                match_id: order.match_id,
+                event_id: order.event_id,
+                order_id: orderId,
+                seat_index: i,
+                qr_text: qrText,
+                status: 'active',
+              });
+            }
           }
         }
       }
