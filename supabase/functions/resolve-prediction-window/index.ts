@@ -27,7 +27,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const { window_id, correct_answer, action } = await req.json();
+    // Parse body ONCE at the top
+    const body = await req.json();
+    const { window_id, correct_answer, action, match_id, question, options } = body;
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     if (action === "lock") {
@@ -43,6 +45,21 @@ serve(async (req) => {
     }
 
     if (action === "resolve") {
+      // Check windows_locked flag
+      if (match_id) {
+        const { data: flags } = await supabase
+          .from("match_flags")
+          .select("windows_locked")
+          .eq("match_id", match_id)
+          .maybeSingle();
+        if (flags?.windows_locked) {
+          return new Response(
+            JSON.stringify({ error: "Windows are locked by panic control. Unfreeze first." }),
+            { status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       // Set correct answer and resolve all predictions
       const { data: window, error: windowError } = await supabase
         .from("prediction_windows")
@@ -112,11 +129,40 @@ serve(async (req) => {
     }
 
     if (action === "open") {
-      const { question, options } = await req.json().catch(() => ({}));
+      // Check windows_locked flag
+      if (match_id) {
+        const { data: flags } = await supabase
+          .from("match_flags")
+          .select("windows_locked, predictions_frozen")
+          .eq("match_id", match_id)
+          .maybeSingle();
+        if (flags?.windows_locked || flags?.predictions_frozen) {
+          return new Response(
+            JSON.stringify({ error: "Predictions are frozen by panic control. Unfreeze first." }),
+            { status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
+      // ── Race condition guard: reject if a window is already open ──
+      const { data: existingOpen } = await supabase
+        .from("prediction_windows")
+        .select("id, question")
+        .eq("match_id", match_id)
+        .eq("status", "open")
+        .maybeSingle();
+
+      if (existingOpen) {
+        return new Response(
+          JSON.stringify({ error: "A prediction window is already open. Lock it before opening a new one." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       const { data, error } = await supabase
         .from("prediction_windows")
         .insert({
-          match_id: (await req.json().catch(() => ({}))).match_id,
+          match_id,
           window_type: "ball",
           question: question || "What will happen on the next ball?",
           options: options || [

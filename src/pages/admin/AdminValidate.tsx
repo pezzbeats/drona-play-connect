@@ -82,6 +82,8 @@ export default function AdminValidate() {
   const [reissuingQr, setReissuingQr] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>(loadOfflineQueue);
+  // Panic flags realtime state
+  const [matchFlags, setMatchFlags] = useState<any>(null);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -92,10 +94,16 @@ export default function AdminValidate() {
   // auto-focus on mount
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // fetch active match
+  // fetch active match + flags
   useEffect(() => {
     supabase.from('matches').select('id, name').eq('is_active_for_registration', true).maybeSingle()
-      .then(({ data }) => setActiveMatch(data));
+      .then(({ data }) => {
+        setActiveMatch(data);
+        if (data?.id) {
+          supabase.from('match_flags').select('*').eq('match_id', data.id).maybeSingle()
+            .then(({ data: flags }) => setMatchFlags(flags));
+        }
+      });
   }, []);
 
   // feedback → sound + vibration
@@ -138,6 +146,19 @@ export default function AdminValidate() {
     window.addEventListener('offline', onOffline);
     return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, [processOfflineQueue]);
+
+  // ── Realtime: match_flags (freeze checks) ─────────────────────────────────
+  useEffect(() => {
+    if (!activeMatch?.id) return;
+    const channel = supabase
+      .channel(`validate-flags-${activeMatch.id}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'match_flags',
+        filter: `match_id=eq.${activeMatch.id}`,
+      }, (payload) => { if (payload.new) setMatchFlags(payload.new); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeMatch?.id]);
 
   // ── scan log ───────────────────────────────────────────────────────────────
 
@@ -339,7 +360,8 @@ export default function AdminValidate() {
   const isCheckedIn = ticketData?.status === 'used';
   const isBlocked = ticketData?.status === 'blocked';
   const isMatchMismatch = activeMatch && ticketData && ticketData.match_id !== activeMatch.id;
-  const canCheckIn = isPaid && !isCheckedIn && !isBlocked && !isMatchMismatch;
+  const isScanningFrozen = !!matchFlags?.scanning_frozen;
+  const canCheckIn = isPaid && !isCheckedIn && !isBlocked && !isMatchMismatch && !isScanningFrozen;
 
   // scan zone border color based on feedback
   const feedbackBorder: Record<ScanFeedback, string> = {
@@ -363,6 +385,14 @@ export default function AdminValidate() {
 
   return (
     <div className="p-4 space-y-4 max-w-xl">
+
+      {/* Scanning frozen banner */}
+      {matchFlags?.scanning_frozen && (
+        <div className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 rounded-lg bg-destructive/15 border border-destructive/50 text-destructive text-sm font-bold">
+          <ShieldAlert className="h-5 w-5 shrink-0" />
+          <span>⛔ Gate scanning frozen by admin — check-in disabled until unfrozen</span>
+        </div>
+      )}
 
       {/* Offline banner */}
       {!isOnline && (

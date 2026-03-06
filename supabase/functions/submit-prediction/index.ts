@@ -36,6 +36,20 @@ serve(async (req) => {
       });
     }
 
+    // ── Check panic flag: predictions frozen ──
+    const { data: flags } = await supabase
+      .from("match_flags")
+      .select("predictions_frozen")
+      .eq("match_id", access.match_id)
+      .maybeSingle();
+
+    if (flags?.predictions_frozen) {
+      return new Response(
+        JSON.stringify({ error: "Predictions are currently paused. Please wait." }),
+        { status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Validate prediction window
     const { data: window } = await supabase
       .from("prediction_windows")

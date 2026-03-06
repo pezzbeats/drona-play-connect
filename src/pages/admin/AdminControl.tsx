@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -6,8 +6,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Zap, Trophy, Users, ScanLine, CheckCircle, AlertCircle, Wifi } from 'lucide-react';
+import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
+import {
+  Loader2, Zap, Trophy, Users, ScanLine, CheckCircle, AlertCircle,
+  Wifi, WifiOff, Loader, ShieldAlert, ShieldOff, Lock, Unlock, AlertTriangle,
+} from 'lucide-react';
 
 export default function AdminControl() {
   const { user } = useAuth();
@@ -20,7 +25,11 @@ export default function AdminControl() {
   const [stats, setStats] = useState({ registrations: 0, paid: 0, checkins: 0 });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const channelRef = useRef<any>(null);
+
+  // Panic flags
+  const [matchFlags, setMatchFlags] = useState<any>(null);
+  const [freezeReason, setFreezeReason] = useState('');
+  const [flagLoading, setFlagLoading] = useState<string | null>(null);
 
   // Delivery form state
   const [delivery, setDelivery] = useState({
@@ -33,15 +42,7 @@ export default function AdminControl() {
   // Prediction window form
   const [windowQuestion, setWindowQuestion] = useState('What will happen on the next ball?');
 
-  useEffect(() => {
-    fetchAll();
-    subscribeRealtime();
-    return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
-    };
-  }, []);
-
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     const { data: matchData } = await supabase
       .from('matches')
@@ -52,17 +53,19 @@ export default function AdminControl() {
     if (!matchData) { setLoading(false); return; }
     setMatch(matchData);
 
-    const [stateRes, overRes, windowRes, ordersRes, ticketsRes] = await Promise.all([
+    const [stateRes, overRes, windowRes, ordersRes, ticketsRes, flagsRes] = await Promise.all([
       supabase.from('match_live_state').select('*').eq('match_id', matchData.id).single(),
-      supabase.from('over_control').select('*').eq('match_id', matchData.id).eq('status', 'active').limit(1).single(),
-      supabase.from('prediction_windows').select('*').eq('match_id', matchData.id).eq('status', 'open').order('created_at', { ascending: false }).limit(1).single(),
+      supabase.from('over_control').select('*').eq('match_id', matchData.id).eq('status', 'active').limit(1).maybeSingle(),
+      supabase.from('prediction_windows').select('*').eq('match_id', matchData.id).eq('status', 'open').order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('orders').select('id, payment_status').eq('match_id', matchData.id),
       supabase.from('tickets').select('id, status').eq('match_id', matchData.id),
+      supabase.from('match_flags').select('*').eq('match_id', matchData.id).maybeSingle(),
     ]);
 
     setLiveState(stateRes.data);
     setActiveOver(overRes.data);
     setActiveWindow(windowRes.data);
+    setMatchFlags(flagsRes.data);
 
     const orders = ordersRes.data || [];
     const tickets = ticketsRes.data || [];
@@ -88,23 +91,46 @@ export default function AdminControl() {
     }
 
     setLoading(false);
-  };
+  }, []);
 
-  const subscribeRealtime = async () => {
-    const { data: m } = await supabase.from('matches').select('id').eq('is_active_for_registration', true).single();
-    if (!m) return;
+  // Realtime subscriptions
+  const subscriptions = useMemo(() => {
+    if (!match?.id) return [];
+    return [
+      {
+        event: '*' as const, schema: 'public', table: 'match_live_state',
+        filter: `match_id=eq.${match.id}`,
+        callback: (payload: any) => { if (payload.new) setLiveState(payload.new); },
+      },
+      {
+        event: '*' as const, schema: 'public', table: 'over_control',
+        filter: `match_id=eq.${match.id}`,
+        callback: () => fetchAll(),
+      },
+      {
+        event: '*' as const, schema: 'public', table: 'prediction_windows',
+        filter: `match_id=eq.${match.id}`,
+        callback: (payload: any) => {
+          const s = (payload.new as any)?.status;
+          if (s === 'open') setActiveWindow(payload.new);
+          else setActiveWindow(null);
+        },
+      },
+      {
+        event: '*' as const, schema: 'public', table: 'match_flags',
+        filter: `match_id=eq.${match.id}`,
+        callback: (payload: any) => { if (payload.new) setMatchFlags(payload.new); },
+      },
+    ];
+  }, [match?.id, fetchAll]);
 
-    const channel = supabase
-      .channel('admin-control-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_live_state', filter: `match_id=eq.${m.id}` },
-        (payload) => setLiveState(payload.new))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'over_control', filter: `match_id=eq.${m.id}` },
-        () => fetchAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'prediction_windows', filter: `match_id=eq.${m.id}` },
-        (payload) => { if ((payload.new as any)?.status === 'open') setActiveWindow(payload.new); else if ((payload.new as any)?.status !== 'open') setActiveWindow(null); })
-      .subscribe();
-    channelRef.current = channel;
-  };
+  const { connected, reconnecting } = useRealtimeChannel(
+    'admin-control-live',
+    subscriptions,
+    fetchAll,
+  );
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const callFunction = async (fn: string, body: any, loadingKey: string) => {
     setActionLoading(loadingKey);
@@ -122,10 +148,72 @@ export default function AdminControl() {
     }
   };
 
+  // ── Panic control helpers ──────────────────────────────────────────────────
+
+  const upsertFlag = async (update: Record<string, any>, loadingKey: string) => {
+    if (!match) return;
+    setFlagLoading(loadingKey);
+    try {
+      const { error } = await supabase
+        .from('match_flags')
+        .upsert({
+          match_id: match.id,
+          frozen_by_admin_id: user?.id,
+          frozen_at: new Date().toISOString(),
+          ...update,
+        }, { onConflict: 'match_id' });
+      if (error) throw error;
+
+      // Log to admin_activity
+      await supabase.from('admin_activity').insert({
+        admin_id: user?.id,
+        action: loadingKey,
+        entity_type: 'match',
+        entity_id: match.id,
+        meta: update,
+      });
+
+      toast({ title: '⚡ Flag updated' });
+      const { data } = await supabase.from('match_flags').select('*').eq('match_id', match.id).single();
+      setMatchFlags(data);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed', description: e.message });
+    } finally {
+      setFlagLoading(null);
+      setFreezeReason('');
+    }
+  };
+
+  const handleFreezePredictions = (freeze: boolean) =>
+    upsertFlag({ predictions_frozen: freeze, freeze_reason: freeze ? freezeReason : null }, freeze ? 'freeze_predictions' : 'unfreeze_predictions');
+
+  const handleFreezeScanning = (freeze: boolean) =>
+    upsertFlag({ scanning_frozen: freeze, freeze_reason: freeze ? freezeReason : null }, freeze ? 'freeze_scanning' : 'unfreeze_scanning');
+
+  const handleLockAllWindows = async () => {
+    if (!match) return;
+    setFlagLoading('lock_all_windows');
+    try {
+      // Mark all open/locked windows as resolved instantly
+      await supabase
+        .from('prediction_windows')
+        .update({ status: 'resolved' })
+        .eq('match_id', match.id)
+        .in('status', ['open', 'locked']);
+
+      await upsertFlag({ windows_locked: true }, 'lock_all_windows');
+    } finally {
+      setFlagLoading(null);
+    }
+  };
+
+  const handleUnlockWindows = () =>
+    upsertFlag({ windows_locked: false }, 'unlock_windows');
+
+  // ── Match action handlers ──────────────────────────────────────────────────
+
   const handlePhase = (phase: string) => callFunction('match-control', { action: 'set_phase', match_id: match?.id, phase }, `phase-${phase}`);
-
   const handleInitMatch = () => callFunction('match-control', { action: 'init', match_id: match?.id }, 'init');
-
   const handleCreateOver = () => callFunction('over-control', {
     action: 'create_over', match_id: match?.id,
     innings_no: liveState?.current_innings || 1,
@@ -140,38 +228,26 @@ export default function AdminControl() {
   const handleRecordDelivery = () => {
     if (!activeOver || !match) return;
     callFunction('record-delivery', {
-      match_id: match.id,
-      over_id: activeOver.id,
-      innings_no: liveState?.current_innings || 1,
-      over_no: activeOver.over_no,
-      striker_id: delivery.striker_id || null,
-      non_striker_id: delivery.non_striker_id || null,
+      match_id: match.id, over_id: activeOver.id,
+      innings_no: liveState?.current_innings || 1, over_no: activeOver.over_no,
+      striker_id: delivery.striker_id || null, non_striker_id: delivery.non_striker_id || null,
       bowler_id: delivery.bowler_id || null,
       runs_off_bat: parseInt(delivery.runs_off_bat) || 0,
-      extras_type: delivery.extras_type,
-      extras_runs: parseInt(delivery.extras_runs) || 0,
-      is_wicket: delivery.is_wicket,
-      wicket_type: delivery.wicket_type || null,
-      out_player_id: delivery.out_player_id || null,
-      fielder_id: delivery.fielder_id || null,
-      free_hit: delivery.free_hit,
-      notes: delivery.notes || null,
+      extras_type: delivery.extras_type, extras_runs: parseInt(delivery.extras_runs) || 0,
+      is_wicket: delivery.is_wicket, wicket_type: delivery.wicket_type || null,
+      out_player_id: delivery.out_player_id || null, fielder_id: delivery.fielder_id || null,
+      free_hit: delivery.free_hit, notes: delivery.notes || null,
     }, 'record-delivery');
   };
 
   const handleOpenWindow = () => {
     if (!match) return;
     callFunction('resolve-prediction-window', {
-      action: 'open',
-      match_id: match.id,
-      question: windowQuestion,
+      action: 'open', match_id: match.id, question: windowQuestion,
       options: [
-        { key: 'dot', label: 'Dot Ball' },
-        { key: '1', label: '1 Run' },
-        { key: '2', label: '2 Runs' },
-        { key: '4', label: '4 Boundary' },
-        { key: '6', label: '6 Sixer' },
-        { key: 'wicket', label: 'Wicket 🏏' },
+        { key: 'dot', label: 'Dot Ball' }, { key: '1', label: '1 Run' },
+        { key: '2', label: '2 Runs' }, { key: '4', label: '4 Boundary' },
+        { key: '6', label: '6 Sixer' }, { key: 'wicket', label: 'Wicket 🏏' },
       ],
     }, 'open-window');
   };
@@ -182,13 +258,10 @@ export default function AdminControl() {
   };
 
   const handleResolveWindow = (correctKey: string) => {
-    if (!activeWindow && !match) return;
-    // find last locked window
+    if (!match) return;
     supabase.from('prediction_windows').select('id').eq('match_id', match.id).eq('status', 'locked').order('created_at', { ascending: false }).limit(1).single()
       .then(({ data }) => {
-        if (data) {
-          callFunction('resolve-prediction-window', { action: 'resolve', window_id: data.id, correct_answer: { key: correctKey } }, 'resolve-window');
-        }
+        if (data) callFunction('resolve-prediction-window', { action: 'resolve', window_id: data.id, match_id: match.id, correct_answer: { key: correctKey } }, 'resolve-window');
       });
   };
 
@@ -216,8 +289,11 @@ export default function AdminControl() {
     </div>
   );
 
+  const anyFrozen = matchFlags?.predictions_frozen || matchFlags?.scanning_frozen || matchFlags?.windows_locked;
+
   return (
     <div className="p-4 space-y-4 max-w-4xl">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-gradient-primary flex items-center justify-center">
           <Zap className="h-5 w-5 text-primary-foreground" />
@@ -227,10 +303,28 @@ export default function AdminControl() {
           <p className="text-muted-foreground text-sm">{match?.name}</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
-          <Wifi className="h-4 w-4 text-success" />
-          <span className="text-xs text-success font-medium">Realtime Active</span>
+          {reconnecting ? (
+            <><Loader className="h-4 w-4 animate-spin text-warning" /><span className="text-xs text-warning font-medium">Reconnecting…</span></>
+          ) : connected ? (
+            <><Wifi className="h-4 w-4 text-success" /><span className="text-xs text-success font-medium">Realtime Active</span></>
+          ) : (
+            <><WifiOff className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Connecting…</span></>
+          )}
         </div>
       </div>
+
+      {/* Panic banner */}
+      {anyFrozen && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-destructive/10 border border-destructive/40 text-destructive text-sm font-medium">
+          <ShieldAlert className="h-4 w-4 shrink-0" />
+          <span>
+            Panic controls active:
+            {matchFlags?.predictions_frozen && ' Predictions FROZEN'}
+            {matchFlags?.scanning_frozen && ' Scanning FROZEN'}
+            {matchFlags?.windows_locked && ' Windows LOCKED'}
+          </span>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
@@ -306,6 +400,90 @@ export default function AdminControl() {
             </GlassButton>
           ))}
         </div>
+      </GlassCard>
+
+      {/* ── PANIC CONTROLS ─────────────────────────────────────────────── */}
+      <GlassCard className={`p-4 border ${anyFrozen ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
+        <h2 className="font-display text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-destructive" /> Panic Controls
+        </h2>
+        <p className="text-xs text-muted-foreground mb-4">Emergency overrides — changes are immediate and server-enforced.</p>
+
+        {/* Freeze reason input */}
+        <div className="mb-3">
+          <Label className="text-xs text-foreground mb-1 block">Freeze reason (optional)</Label>
+          <Input
+            className="glass-input text-sm h-8"
+            placeholder="e.g. Network issue, dispute…"
+            value={freezeReason}
+            onChange={e => setFreezeReason(e.target.value)}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Freeze Predictions */}
+          <div className={`rounded-xl border p-3 space-y-2 ${matchFlags?.predictions_frozen ? 'border-destructive/60 bg-destructive/8' : 'border-border'}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Predictions</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${matchFlags?.predictions_frozen ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'}`}>
+                {matchFlags?.predictions_frozen ? 'FROZEN' : 'ACTIVE'}
+              </span>
+            </div>
+            {matchFlags?.predictions_frozen ? (
+              <GlassButton variant="success" size="sm" className="w-full" loading={flagLoading === 'unfreeze_predictions'} onClick={() => handleFreezePredictions(false)}>
+                <Unlock className="h-3.5 w-3.5" /> Unfreeze
+              </GlassButton>
+            ) : (
+              <GlassButton variant="danger" size="sm" className="w-full" loading={flagLoading === 'freeze_predictions'} onClick={() => handleFreezePredictions(true)}>
+                <Lock className="h-3.5 w-3.5" /> Freeze
+              </GlassButton>
+            )}
+          </div>
+
+          {/* Freeze Scanning */}
+          <div className={`rounded-xl border p-3 space-y-2 ${matchFlags?.scanning_frozen ? 'border-destructive/60 bg-destructive/8' : 'border-border'}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Gate Scanning</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${matchFlags?.scanning_frozen ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'}`}>
+                {matchFlags?.scanning_frozen ? 'FROZEN' : 'ACTIVE'}
+              </span>
+            </div>
+            {matchFlags?.scanning_frozen ? (
+              <GlassButton variant="success" size="sm" className="w-full" loading={flagLoading === 'unfreeze_scanning'} onClick={() => handleFreezeScanning(false)}>
+                <Unlock className="h-3.5 w-3.5" /> Unfreeze
+              </GlassButton>
+            ) : (
+              <GlassButton variant="danger" size="sm" className="w-full" loading={flagLoading === 'freeze_scanning'} onClick={() => handleFreezeScanning(true)}>
+                <Lock className="h-3.5 w-3.5" /> Freeze
+              </GlassButton>
+            )}
+          </div>
+
+          {/* Lock all windows */}
+          <div className={`rounded-xl border p-3 space-y-2 ${matchFlags?.windows_locked ? 'border-destructive/60 bg-destructive/8' : 'border-border'}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Pred. Windows</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${matchFlags?.windows_locked ? 'bg-destructive/20 text-destructive' : 'bg-success/20 text-success'}`}>
+                {matchFlags?.windows_locked ? 'LOCKED' : 'OPEN'}
+              </span>
+            </div>
+            {matchFlags?.windows_locked ? (
+              <GlassButton variant="success" size="sm" className="w-full" loading={flagLoading === 'unlock_windows'} onClick={handleUnlockWindows}>
+                <Unlock className="h-3.5 w-3.5" /> Unlock
+              </GlassButton>
+            ) : (
+              <GlassButton variant="danger" size="sm" className="w-full" loading={flagLoading === 'lock_all_windows'} onClick={handleLockAllWindows}>
+                <ShieldOff className="h-3.5 w-3.5" /> Lock All
+              </GlassButton>
+            )}
+          </div>
+        </div>
+
+        {matchFlags?.freeze_reason && (
+          <p className="text-xs text-muted-foreground mt-3">
+            Reason: <span className="text-foreground">{matchFlags.freeze_reason}</span>
+          </p>
+        )}
       </GlassCard>
 
       {/* Over Management */}
@@ -426,6 +604,11 @@ export default function AdminControl() {
         <h2 className="font-display text-sm font-bold text-foreground mb-3">
           🎯 Prediction Window
           {activeWindow && <span className="ml-2 text-xs text-primary animate-pulse">● OPEN</span>}
+          {matchFlags?.predictions_frozen && (
+            <span className="ml-2 text-xs text-destructive font-normal flex items-center gap-1 inline-flex">
+              <AlertTriangle className="h-3 w-3" /> Frozen
+            </span>
+          )}
         </h2>
 
         {!activeWindow ? (
@@ -436,7 +619,12 @@ export default function AdminControl() {
               onChange={e => setWindowQuestion(e.target.value)}
               placeholder="Prediction question..."
             />
-            <GlassButton variant="primary" size="sm" loading={actionLoading === 'open-window'} onClick={handleOpenWindow}>
+            <GlassButton
+              variant="primary" size="sm"
+              loading={actionLoading === 'open-window'}
+              onClick={handleOpenWindow}
+              disabled={!!(matchFlags?.predictions_frozen || matchFlags?.windows_locked)}
+            >
               Open Prediction Window
             </GlassButton>
           </div>
@@ -456,12 +644,8 @@ export default function AdminControl() {
           <p className="text-xs text-muted-foreground mb-2">Quick Resolve (for locked window):</p>
           <div className="flex flex-wrap gap-2">
             {[
-              { key: 'dot', label: 'Dot' },
-              { key: '1', label: '1 Run' },
-              { key: '2', label: '2 Runs' },
-              { key: '4', label: '4 Boundary' },
-              { key: '6', label: '6 Sixer' },
-              { key: 'wicket', label: 'Wicket 🏏' },
+              { key: 'dot', label: 'Dot' }, { key: '1', label: '1 Run' }, { key: '2', label: '2 Runs' },
+              { key: '4', label: '4 Boundary' }, { key: '6', label: '6 Sixer' }, { key: 'wicket', label: 'Wicket 🏏' },
             ].map(opt => (
               <button
                 key={opt.key}

@@ -323,6 +323,47 @@ export type Database = {
           },
         ]
       }
+      match_flags: {
+        Row: {
+          freeze_reason: string | null
+          frozen_at: string | null
+          frozen_by_admin_id: string | null
+          match_id: string
+          predictions_frozen: boolean
+          scanning_frozen: boolean
+          updated_at: string
+          windows_locked: boolean
+        }
+        Insert: {
+          freeze_reason?: string | null
+          frozen_at?: string | null
+          frozen_by_admin_id?: string | null
+          match_id: string
+          predictions_frozen?: boolean
+          scanning_frozen?: boolean
+          updated_at?: string
+          windows_locked?: boolean
+        }
+        Update: {
+          freeze_reason?: string | null
+          frozen_at?: string | null
+          frozen_by_admin_id?: string | null
+          match_id?: string
+          predictions_frozen?: boolean
+          scanning_frozen?: boolean
+          updated_at?: string
+          windows_locked?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_flags_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_live_state: {
         Row: {
           batting_team_id: string | null
