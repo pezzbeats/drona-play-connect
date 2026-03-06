@@ -197,7 +197,13 @@ serve(async (req) => {
         // Check if a mobile number is already registered
         const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
 
-        if (!activeMatch) {
+        const { data: activeMatchCR } = await supabase
+          .from("matches")
+          .select("id, name")
+          .eq("is_active_for_registration", true)
+          .maybeSingle();
+
+        if (!activeMatchCR) {
           result = {
             success: false,
             message: "Abhi koi active match nahi hai registration ke liye."
@@ -209,7 +215,7 @@ serve(async (req) => {
           .from("orders")
           .select("id, payment_status, seats_count, purchaser_full_name")
           .eq("purchaser_mobile", mobile)
-          .eq("match_id", activeMatch.id)
+          .eq("match_id", activeMatchCR.id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
