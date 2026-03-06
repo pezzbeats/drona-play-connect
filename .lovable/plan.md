@@ -1,76 +1,103 @@
 
-## Understanding the request vs. what's technically possible
+## Root Cause Analysis
 
-The user wants: "after successful payment, automatically download the ticket PNG to the device and open WhatsApp automatically to share it."
+The screenshot shows the skeleton permanently stuck — the page never transitions from loading state to real content. The data, RLS policies, and network are all fine. There are **two separate bugs** causing this:
 
-**Critical browser constraint**: The Web Share API (`navigator.share()`) with files requires a **user gesture** (a tap/click). It cannot be triggered automatically after an async operation like a payment callback without a user gesture attached to it. Razorpay's `handler` callback fires asynchronously — the original user tap gesture is gone. Browsers will silently reject any `navigator.share()` call not directly attached to a user gesture. There is no backend edge function that can invoke the device's WhatsApp — that's a client-side action only.
+### Bug 1 — `useSiteConfig` can get permanently stuck at `loading: true`
 
-**What IS fully achievable automatically (no gesture needed)**:
-1. Auto-download the QR PNG immediately when step 3 loads (using `URL.createObjectURL` + `a.click()`)
-2. Show a prominent "Share on WhatsApp" button that triggers `navigator.share` with the PNG file (mobile) or `wa.me` deep-link (desktop) on one tap — pre-filling the message text
+In `src/hooks/useSiteConfig.ts`, the `fetch` function is defined **inside the hook body** but referenced inside a `useEffect`. If `site_config` returns an empty array (no rows) or if `data` is null/falsy, this code path runs:
 
-**What requires a tap** (browser hard limit):
-- `navigator.share()` with file attachment — requires a direct user gesture
-
-## Plan
-
-**Two places to change: `src/pages/Register.tsx` and `src/pages/Ticket.tsx`**
-
-### 1. Auto-download QR PNG on step 3 load (Register.tsx)
-
-When `step` becomes `3`, use a `useEffect` to render a hidden `QRCodeCanvas` per ticket and auto-trigger `canvas.toBlob → a.click()` after a 300ms delay. This fires immediately when the payment confirmation screen appears.
-
-- Add `QRCodeCanvas` from `qrcode.react` (already imported in Ticket.tsx, need to add to Register.tsx)
-- Add hidden `QRCodeCanvas` elements per ticket in the step 3 JSX with `id="qr-auto-{ticket.id}"`
-- `useEffect` watching `[step, tickets]`:
-  ```ts
-  if (step !== 3) return;
-  // 400ms delay to let canvas render
-  setTimeout(() => {
-    tickets.forEach(ticket => {
-      const canvas = document.getElementById(`qr-auto-${ticket.id}`) as HTMLCanvasElement;
-      if (!canvas) return;
-      canvas.toBlob(blob => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `ticket-seat-${ticket.seat_index + 1}.png`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-      });
-    });
-  }, 400);
-  ```
-
-### 2. Prominent WhatsApp share button on step 3 (Register.tsx)
-
-Add a green WhatsApp CTA button that does:
-- Mobile: `navigator.share({ files: [pngBlob], text: ..., title: ... })` — attaches the PNG and prefills message
-- Desktop fallback: `window.open('https://wa.me/?text=...', '_blank')`
-
-```text
-Step 3 layout after:
-┌──────────────────────────┐
-│  🎟️ Payment Confirmed!   │
-│  Ticket cards (QR shown) │
-│                          │
-│  [💚 Share on WhatsApp]  │  ← new, prominent green button
-│  [🖨️ Print Tickets]      │
-│  Need Help footer        │
-└──────────────────────────┘
+```ts
+const { data } = await supabase.from('site_config').select('key, value');
+if (data) {          // ← if data is null or an empty array [], this is falsy
+  ...
+  setLoading(false); // ← setLoading(false) is INSIDE this if block
+}
+setLoading(false);   // ← this DOES exist... but wait:
 ```
 
-The WhatsApp button builds the PNG blob from the canvas, then calls `navigator.share()` with files (mobile) or opens `wa.me/?text=` (desktop). Message pre-filled: `"🎫 My T20 Fan Night Pass — [Match Name] — Seat 1. View at: https://drona-play-connect.lovable.app/ticket?mobile=XXXXXX"`
+Actually the `setLoading(false)` is after the if block. BUT: **there is no `try/catch`**. If the network request throws (mobile data, DNS issue, timeout), the `fetch` function throws, and `setLoading(false)` is **never called**. `loading` stays `true` forever → skeleton never resolves.
 
-### 3. Same WhatsApp button improvement on Ticket.tsx
+### Bug 2 — `fetchData` in `Index.tsx` also has no error handling / no `finally`
 
-Update `whatsappShare` to also try sharing a PNG file alongside the link on mobile — consistent experience.
+Same problem in `Index.tsx` lines 123–150: `setLoading(false)` is only called at the very end of the happy path. A network error, a Supabase exception, or a timeout will leave `loading = true` permanently.
 
-### Files changed
+```ts
+const fetchData = async () => {
+  setLoading(true);
+  const { data: matchData, error: matchError } = await supabase...  // throws? stuck forever
+  ...
+  setLoading(false);  // never reached if exception thrown
+};
+```
+
+### Bug 3 — Module-level `cache` variable in `useSiteConfig` persists across hot reloads
+
+The `let cache: ConfigMap | null = null` at module level means if the site_config fetch ever succeeds, `loading` is initialised to `false` — but if it fails silently once, `cache` stays `null` and every new mount will try to fetch again. On mobile with poor connectivity, the first fetch might simply time out.
+
+---
+
+## The Fix
+
+**`src/hooks/useSiteConfig.ts`** — wrap fetch in try/catch + always call setLoading(false):
+
+```ts
+const fetch = async () => {
+  setLoading(true);
+  try {
+    const { data, error } = await supabase.from('site_config').select('key, value');
+    if (error) throw error;
+    if (data) {
+      const map: ConfigMap = {};
+      data.forEach(row => { map[row.key] = row.value; });
+      cache = map;
+      setConfig(map);
+    }
+  } catch (e) {
+    console.error('[useSiteConfig] fetch failed:', e);
+    // Don't crash — fallbacks will be used from the get() calls
+  } finally {
+    setLoading(false);  // ← ALWAYS unblock
+  }
+};
+```
+
+**`src/pages/Index.tsx`** — wrap `fetchData` in try/catch + use `finally` for `setLoading(false)`:
+
+```ts
+const fetchData = async () => {
+  setLoading(true);
+  try {
+    const { data: matchData, error: matchError } = await supabase...
+    if (matchError) console.error('[Index] match fetch error:', matchError);
+    if (matchData) {
+      setMatch(matchData);
+      // ...banner + pricing fetches (also wrapped)...
+    }
+  } catch (e) {
+    console.error('[Index] fetchData error:', e);
+  } finally {
+    setLoading(false);  // ← ALWAYS unblock, show content or coming-soon
+  }
+};
+```
+
+Additionally add a **timeout safety net** — if both fetches somehow hang beyond 8 seconds, force `loading = false`:
+
+```ts
+useEffect(() => {
+  const timeout = setTimeout(() => setLoading(false), 8000);
+  fetchData().finally(() => clearTimeout(timeout));
+}, []);
+```
+
+---
+
+## Files Changed
+
 | File | Change |
 |---|---|
-| `src/pages/Register.tsx` | Import `QRCodeCanvas`, add auto-download `useEffect` on step 3, add WhatsApp share button |
-| `src/pages/Ticket.tsx` | Upgrade `whatsappShare` to include PNG file in `navigator.share` call on mobile |
+| `src/hooks/useSiteConfig.ts` | Add `try/catch/finally` so `setLoading(false)` is always called |
+| `src/pages/Index.tsx` | Add `try/catch/finally` to `fetchData`, add 8s timeout safety net |
 
-No backend edge function needed — this is entirely a client-side feature. The download is automatic; the WhatsApp share requires one tap on mobile (browser hard limit).
+Two-line root cause summary: both async fetches lack `finally` blocks, so any network hiccup (especially on mobile) silently leaves `loading = true` forever, keeping the skeleton permanently stuck on screen.
