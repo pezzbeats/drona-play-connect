@@ -37,8 +37,9 @@ export function VoiceAgent() {
     <div className="fixed bottom-5 right-5 z-[99999] flex flex-col items-end gap-2">
       {/* Idle nudge label */}
       {!isConnected && !isConnecting && (
-        <p className="text-xs font-body text-muted-foreground/70 italic pr-1 animate-fade-in">
-          Confused? Talk to us live
+        <p className="text-base font-display font-bold tracking-wide pr-1 animate-fade-in"
+          style={{ color: 'hsl(var(--primary))', textShadow: '0 0 12px hsl(var(--primary) / 0.8), 0 0 24px hsl(var(--primary) / 0.5)' }}>
+          Confused? Talk to us live 🎙️
         </p>
       )}
       {/* Status label */}
