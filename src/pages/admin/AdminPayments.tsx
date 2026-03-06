@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   CreditCard, RefreshCw, Search, ChevronDown, ChevronRight,
-  Copy, Check, Eye, EyeOff, AlertTriangle, ShieldAlert,
+  Copy, Check, Eye, EyeOff, AlertTriangle, ShieldAlert, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -79,6 +79,29 @@ function TransactionsTab() {
     setLoading(false);
   }, []);
 
+  const exportCSV = () => {
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const header = ['Date', 'Customer Name', 'Mobile', 'Amount (INR)', 'Payment ID', 'Order ID', 'Status'];
+    const rows = filtered.map(o => [
+      format(new Date(o.created_at), 'dd MMM yyyy HH:mm'),
+      o.purchaser_full_name,
+      o.purchaser_mobile,
+      String(o.total_amount),
+      o.razorpay_payment_id ?? '',
+      o.razorpay_order_id ?? '',
+      o.payment_status,
+    ].map(escape).join(','));
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `razorpay-transactions-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${filtered.length} transaction${filtered.length !== 1 ? 's' : ''}`);
+  };
+
   useEffect(() => { load(); }, [load]);
 
   const filtered = orders.filter(o => {
@@ -146,6 +169,16 @@ function TransactionsTab() {
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={exportCSV}
+          disabled={loading || filtered.length === 0}
+          title={`Export ${filtered.length} row${filtered.length !== 1 ? 's' : ''}`}
+        >
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Export CSV
         </Button>
       </div>
 
