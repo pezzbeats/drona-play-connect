@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Trophy, Medal, Star } from 'lucide-react';
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
+import { SkeletonCard } from '@/components/ui/SkeletonCard';
 
 interface LeaderboardEntry {
   mobile: string;
@@ -21,6 +22,7 @@ interface LeaderboardProps {
 
 export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchLeaderboard = useCallback(async () => {
@@ -32,6 +34,7 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
       .limit(20);
 
     if (data) setEntries(data as LeaderboardEntry[]);
+    setLoading(false);
   }, [matchId]);
 
   const debouncedFetch = useCallback(() => {
@@ -73,10 +76,46 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
     return '';
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {/* My rank stub */}
+        <GlassCard className="p-3 animate-pulse">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-8 skeleton rounded" />
+              <div className="h-4 w-24 skeleton rounded" />
+            </div>
+            <div className="h-4 w-14 skeleton rounded" />
+          </div>
+        </GlassCard>
+        {/* Leaderboard rows */}
+        <GlassCard className="overflow-hidden">
+          <div className="p-3 border-b border-border">
+            <div className="h-4 w-40 skeleton rounded" />
+            <div className="h-3 w-56 skeleton rounded mt-2" />
+          </div>
+          <div className="divide-y divide-border/30">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-3.5 animate-pulse">
+                <div className="w-6 h-4 skeleton rounded shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 skeleton rounded w-3/4" />
+                  <div className="h-3 skeleton rounded w-1/2" />
+                </div>
+                <div className="h-4 w-12 skeleton rounded shrink-0" />
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      </div>
+    );
+  }
+
   if (entries.length === 0) {
     return (
       <GlassCard className="p-5 text-center">
-        <Star className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+        <Star className="h-8 w-8 text-primary/30 mx-auto mb-2" />
         <p className="text-foreground font-bold">Leaderboard Empty</p>
         <p className="text-muted-foreground text-sm">Make guesses to appear here</p>
         <p className="text-xs text-muted-foreground mt-2">Fun participation rankings only — no cash prize</p>
