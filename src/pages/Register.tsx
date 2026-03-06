@@ -38,6 +38,10 @@ export default function RegisterPage() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [matchLoading, setMatchLoading] = useState(true);
 
+  // Preview mode
+  const previewMatchId = new URLSearchParams(window.location.search).get('preview');
+  const isPreviewMode = !!previewMatchId;
+
   // Step 1
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
@@ -65,11 +69,17 @@ export default function RegisterPage() {
 
   const fetchActiveMatch = async () => {
     setMatchLoading(true);
-    const { data, error } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('is_active_for_registration', true)
-      .single();
+    let data: any = null;
+
+    if (isPreviewMode && previewMatchId) {
+      // Preview mode: load specific match regardless of active status
+      const res = await supabase.from('matches').select('*').eq('id', previewMatchId).single();
+      data = res.data;
+    } else {
+      // Normal mode: load the active match
+      const res = await supabase.from('matches').select('*').eq('is_active_for_registration', true).single();
+      data = res.data;
+    }
 
     if (data) {
       setActiveMatch(data);
@@ -204,6 +214,13 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen relative">
       <BackgroundOrbs />
+
+      {/* Preview mode banner */}
+      {isPreviewMode && (
+        <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-warning/90 text-warning-foreground text-sm font-semibold py-2 px-4 backdrop-blur-sm">
+          ⚠️ PREVIEW MODE — This page is not live. Changes are not saved.
+        </div>
+      )}
 
       {/* Disclaimer bar */}
       <div className="disclaimer-bar text-center text-xs py-2 px-4 relative z-10">

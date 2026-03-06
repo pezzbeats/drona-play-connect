@@ -13,6 +13,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 
@@ -34,6 +38,7 @@ export default function AdminMatches() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [settingActive, setSettingActive] = useState<string | null>(null);
+  const [confirmActivateMatch, setConfirmActivateMatch] = useState<Match | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -205,7 +210,13 @@ export default function AdminMatches() {
                     variant={match.is_active_for_registration ? 'success' : 'outline'}
                     size="sm"
                     loading={settingActive === match.id}
-                    onClick={() => handleSetActive(match.id, match.is_active_for_registration)}
+                    onClick={() => {
+                      if (match.is_active_for_registration) {
+                        handleSetActive(match.id, true);
+                      } else {
+                        setConfirmActivateMatch(match);
+                      }
+                    }}
                   >
                     {match.is_active_for_registration ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
                     {match.is_active_for_registration ? 'Active' : 'Activate'}
@@ -216,6 +227,33 @@ export default function AdminMatches() {
           ))}
         </div>
       )}
+
+      {/* Confirm activation dialog */}
+      <AlertDialog open={!!confirmActivateMatch} onOpenChange={open => !open && setConfirmActivateMatch(null)}>
+        <AlertDialogContent className="glass-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-foreground">Activate Registration?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This will deactivate any currently active match and open registration for{' '}
+              <strong className="text-foreground">{confirmActivateMatch?.name}</strong>.
+              Fans will see this match on the registration page immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmActivateMatch) {
+                  handleSetActive(confirmActivateMatch.id, false);
+                  setConfirmActivateMatch(null);
+                }
+              }}
+            >
+              Activate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
