@@ -1,84 +1,134 @@
 
-## Plan: Premium Landing Page Redesign + Legal Pages
+## Full Content Customization from Admin Panel
 
-### Overview
-This is a substantial redesign of `Index.tsx` plus creation of 4 new legal pages, new routes in `App.tsx`, and a shared `LegalPageLayout` component. The existing Terms.tsx already covers T&C, so it stays. The footer will be a shared component used on the landing page only.
+### What's Currently Hardcoded (Customer-Visible)
 
----
+**Landing page (`Index.tsx`):**
+- Hero title: "T20 Fan Night"
+- Subheading: "An Exclusive Cricket Celebration Experience"
+- Venue badge: "Hosted at Hotel Drona Palace, Kashipur"
+- 4 Feature cards (labels + descriptions)
+- 4 Trust strip items
+- Top disclaimer bar text
+- Legal disclaimer body text
 
-### Files to Create
-1. `src/components/ui/LandingFooter.tsx` — premium 4-column footer with organiser info, GSTIN, contact, legal links
-2. `src/pages/PrivacyPolicy.tsx`
-3. `src/pages/RefundPolicy.tsx`
-4. `src/pages/EventParticipationTerms.tsx`
-5. `src/pages/DisclaimerPolicy.tsx`
+**Registration page (`Register.tsx`):**
+- Header title: "T20 Fan Night" + "Hotel Drona Palace"
+- `PAYEE_VPA` = `paytmqr5oka4x@ptys`
+- `PAYEE_NAME` = `Hotel Drona Palace`
+- Top disclaimer bar text
 
-### Files to Modify
-- `src/pages/Index.tsx` — full redesign
-- `src/App.tsx` — add 4 new routes
-
----
-
-### Landing Page Structure (Index.tsx)
-
-**Top disclaimer bar** — unchanged utility, slightly refined copy
-
-**Hero section** — wider max-w-2xl, spotlight radial behind title, stadium-light corner glows, larger 6xl title, refined subheading & venue badge chip, animated cricket ball emoji with drop-shadow pulse
-
-**Match Highlight Card** — elevated glass variant, red glow border, status badge + match type badge as chips, bigger venue/date rows
-
-**Event Experience Includes** — renamed section, 4 larger cards in 2×2 grid, bigger 3xl icon, stronger hover scale (`hover:scale-[1.03]`), stagger animation
-
-**Pricing Card** — keep existing, add "Group & Family" note more prominently
-
-**Primary CTA** — larger h-16 button, pulsing glow animation via keyframe, "Reserve Your Seats Now" text, secondary link "Already booked? View Your Passes"
-
-**Why Attend trust strip** — 4 inline icon+text trust signals: shield, check-circle, qr-code, star
-
-**Legal Disclaimer** — refined formatting, paragraph-style, softer yellow bar
-
-**LandingFooter** — 4-column responsive grid: About | Legal Info (GSTIN) | Contact | Legal Links
+**Footer (`LandingFooter.tsx`):**
+- About blurb, company name "SR LEISURE INN", GSTIN, address, phone, email, copyright line
 
 ---
 
-### Legal Pages (4 new pages)
+### Solution: `site_config` Database Table
 
-All share same structure: BackgroundOrbs, back arrow to `/`, GlassCard sections, gradient header, legal entity "SR LEISURE INN" consistently.
+A single `site_config` table with `key` (text, unique) + `value` (text) rows. This is the lightest approach — no new schemas, just key-value pairs read once on load.
 
-1. **Privacy Policy** (`/privacy`) — data collected (name, mobile, payment proof image), storage, retention, no third-party sale
-2. **Refund & Cancellation Policy** (`/refund-policy`) — no refund post-event, organiser-cancellation full refund, 5-day window, hospitality-only fee clarification
-3. **Event Participation Terms** (`/event-terms`) — entry rules, conduct, photography, liability waiver
-4. **Disclaimer Policy** (`/disclaimer`) — fun game not gambling, no cash prizes, organiser liability limits
+**Rows to seed:**
+| Key | Default Value |
+|---|---|
+| `hero_title` | T20 Fan Night |
+| `hero_subtitle` | An Exclusive Cricket Celebration Experience |
+| `hero_venue_badge` | Hosted at Hotel Drona Palace, Kashipur |
+| `disclaimer_bar_text` | 🎯 Fun Guess Game only — for entertainment... |
+| `legal_disclaimer_title` | 🎯 Fun Guess Game — Legal Disclaimer |
+| `legal_disclaimer_body` | This event includes a recreational... |
+| `feature_1_label` | Live Stadium Screening |
+| `feature_1_desc` | Experience the electrifying atmosphere... |
+| `feature_2_label` | Fun Guess Game |
+| `feature_2_desc` | Make predictions for entertainment... |
+| `feature_3_label` | Premium Food & Beverages |
+| `feature_3_desc` | Unlimited hospitality services... |
+| `feature_4_label` | Live Leaderboard |
+| `feature_4_desc` | Compete with fellow guests... |
+| `trust_1_label` | Safe & professionally managed |
+| `trust_2_label` | Organised hospitality experience |
+| `trust_3_label` | Secure entry & digital passes |
+| `trust_4_label` | Premium venue & arrangements |
+| `footer_about_text` | Hotel Drona Palace is a premium... |
+| `footer_company_name` | SR LEISURE INN |
+| `footer_gstin` | ABOFS1823N1ZS |
+| `footer_address` | Jaitpur Turn, Bazpur Road, Kashipur, Uttarakhand |
+| `footer_phone` | 7217016170 |
+| `footer_email` | dronapalace@gmail.com |
+| `footer_copyright` | © 2026 SR LEISURE INN. All Rights Reserved. |
+| `register_header_title` | T20 Fan Night |
+| `register_header_venue` | Hotel Drona Palace |
+| `payment_vpa` | paytmqr5oka4x@ptys |
+| `payment_payee_name` | Hotel Drona Palace |
 
 ---
 
-### Router Changes (App.tsx)
-Add 4 new public routes before the `*` fallback:
+### Database Changes
+
+1. **Migration** — Create `site_config` table:
+```sql
+CREATE TABLE public.site_config (
+  key text PRIMARY KEY,
+  value text NOT NULL DEFAULT '',
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.site_config ENABLE ROW LEVEL SECURITY;
+-- Public can read
+CREATE POLICY "Config readable by all" ON public.site_config FOR SELECT USING (true);
+-- Only authenticated (admins) can write
+CREATE POLICY "Config writable by authenticated" ON public.site_config FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- Seed default rows (INSERT ... ON CONFLICT DO NOTHING)
 ```
-/privacy
-/refund-policy
-/event-terms
-/disclaimer
-```
 
 ---
 
-### Visual Polish Details
-- Hero spotlight: `radial-gradient(ellipse 60% 50% at 50% 0%, hsl(355 80% 55% / 0.12) 0%, transparent 70%)` absolutely positioned behind title
-- CTA pulse: add `@keyframes glow-pulse` in index.css with box-shadow oscillation; class `.animate-glow-pulse`
-- Feature cards: `transition-transform duration-200 hover:scale-[1.03]` + stagger delay
-- Trust strip: `flex flex-wrap justify-center gap-x-6 gap-y-2` row of 4 items with lucide icons (ShieldCheck, BadgeCheck, QrCode, Star)
-- Footer columns collapse to 2×2 on mobile (`grid-cols-2 md:grid-cols-4`)
-- Max-width expanded to `max-w-2xl` for the landing page to breathe more
+### Frontend Changes
+
+**New hook** `src/hooks/useSiteConfig.ts`:
+- Fetches all rows from `site_config` once
+- Returns a `get(key: string, fallback?: string)` helper
+- Used by `Index.tsx`, `Register.tsx`, `LandingFooter.tsx`
+
+**Update `Index.tsx`** — replace all hardcoded strings with `config.get('key', 'fallback')`
+
+**Update `Register.tsx`** — replace `PAYEE_VPA`, `PAYEE_NAME`, header title, venue, disclaimer bar text
+
+**Update `LandingFooter.tsx`** — replace all hardcoded strings with config values
 
 ---
 
-### New CSS (index.css)
-Add `@keyframes glow-pulse` animation for CTA button:
-```css
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 24px hsl(355 80% 55% / 0.5); }
-  50%       { box-shadow: 0 0 48px hsl(355 80% 55% / 0.85), 0 0 80px hsl(38 75% 52% / 0.3); }
-}
-.animate-glow-pulse { animation: glow-pulse 2.4s ease-in-out infinite; }
-```
+### New Admin Page: `src/pages/admin/AdminSiteConfig.tsx`
+
+A new admin page at `/admin/site-config` (operator+ role) with a clean form:
+
+**Sections (grouped):**
+1. **Landing Page** — hero title, subtitle, venue badge
+2. **Event Features** — 4 feature cards (label + desc each)
+3. **Trust Items** — 4 trust strip labels
+4. **Disclaimers** — top bar text, legal disclaimer title + body
+5. **Registration** — header title, venue line, UPI VPA, payee name
+6. **Footer** — about text, company name, GSTIN, address, phone, email, copyright
+
+Each field is a simple `<Input>` or `<Textarea>` with a Save button per section (or one global Save All). Uses a `useToast` on save success.
+
+---
+
+### Router + Navigation Changes
+
+- Add `/admin/site-config` route in `App.tsx` (operator+ protected)
+- Add "Site Content" nav item with a `FileText` icon to `AdminSidebar.tsx` and `AdminBottomNav.tsx` (minRole: 'operator')
+
+---
+
+### Files Changed
+
+| File | Action |
+|---|---|
+| `supabase/migrations/new.sql` | Create `site_config` table + seed defaults |
+| `src/hooks/useSiteConfig.ts` | New hook |
+| `src/pages/admin/AdminSiteConfig.tsx` | New admin page |
+| `src/pages/Index.tsx` | Use hook instead of hardcoded strings |
+| `src/pages/Register.tsx` | Use hook for VPA, payee name, headers |
+| `src/components/ui/LandingFooter.tsx` | Use hook for all company info |
+| `src/App.tsx` | Add new route |
+| `src/components/admin/AdminSidebar.tsx` | Add nav item |
+| `src/components/admin/AdminBottomNav.tsx` | Add nav item |
