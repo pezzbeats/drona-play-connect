@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Loader2, ChevronRight, User } from 'lucide-react';
+import { Search, Loader2, ChevronRight, User, UserX, UserPlus } from 'lucide-react';
 
 export default function AdminManualBooking() {
   const [searchMobile, setSearchMobile] = useState('');
   const [existing, setExisting] = useState<any>(null);
+  const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
   const [activeMatch, setActiveMatch] = useState<any>(null);
   const [priceQuote, setPriceQuote] = useState<any>(null);
@@ -29,10 +30,11 @@ export default function AdminManualBooking() {
 
   const handleSearch = async () => {
     if (!/^\d{10}$/.test(searchMobile)) return toast({ variant: 'destructive', title: 'Enter 10-digit mobile' });
-    setSearching(true); setExisting(null); setPriceQuote(null);
+    setSearching(true); setExisting(null); setSearched(false); setPriceQuote(null);
     const { data } = await supabase.from('orders').select('*, match:matches!match_id(name)')
       .eq('purchaser_mobile', searchMobile).eq('match_id', activeMatch?.id).single();
     setExisting(data || null);
+    setSearched(true);
     setSearching(false);
   };
 
@@ -57,12 +59,14 @@ export default function AdminManualBooking() {
       if (error) throw error;
       toast({ title: '✅ Order created', description: `Order ID: ${data.order_id}` });
       await supabase.from('admin_activity').insert({ admin_id: user?.id, action: 'manual_booking', entity_type: 'order', entity_id: data.order_id, meta: { mobile: searchMobile, name: form.full_name } });
-      setExisting(null); setPriceQuote(null);
+      setExisting(null); setPriceQuote(null); setSearched(false);
       setForm({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash' });
       handleSearch();
     } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
     setCreating(false);
   };
+
+  const noCustomerFound = searched && !existing && searchMobile.length === 10 && activeMatch;
 
   return (
     <div className="px-4 py-5 space-y-4 max-w-lg mx-auto md:p-6">
@@ -89,7 +93,7 @@ export default function AdminManualBooking() {
             type="tel"
             inputMode="numeric"
             value={searchMobile}
-            onChange={e => setSearchMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            onChange={e => { setSearchMobile(e.target.value.replace(/\D/g, '').slice(0, 10)); setSearched(false); }}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
           />
           <GlassButton variant="primary" size="lg" loading={searching} onClick={handleSearch} disabled={!activeMatch} className="h-12 px-5">
@@ -98,6 +102,7 @@ export default function AdminManualBooking() {
         </div>
       </GlassCard>
 
+      {/* Existing registration found */}
       {existing && (
         <GlassCard className="p-4 border-warning/40">
           <p className="text-sm font-medium text-warning mb-2">⚠️ Existing registration found</p>
@@ -107,8 +112,27 @@ export default function AdminManualBooking() {
         </GlassCard>
       )}
 
-      {searchMobile.length === 10 && !existing && activeMatch && (
-        <GlassCard className="p-4">
+      {/* Empty state — no customer found */}
+      {noCustomerFound && !priceQuote && (
+        <GlassCard className="p-6 flex flex-col items-center text-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center">
+            <UserX className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-display text-base font-bold text-foreground">No registration found</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              <span className="font-mono text-foreground">{searchMobile}</span> hasn't booked for this match.
+            </p>
+          </div>
+          <GlassButton variant="primary" size="sm" className="mt-1 gap-2" onClick={() => setPriceQuote(undefined)}>
+            <UserPlus className="h-4 w-4" /> Create New Booking
+          </GlassButton>
+        </GlassCard>
+      )}
+
+      {/* Booking form */}
+      {noCustomerFound && (priceQuote !== undefined || priceQuote === undefined) && (
+        <GlassCard variant="elevated" className="p-4">
           <h2 className="font-display text-base font-bold text-foreground mb-4 flex items-center gap-2">
             <User className="h-4 w-4 text-primary" />New Booking
           </h2>
@@ -129,7 +153,7 @@ export default function AdminManualBooking() {
               <div>
                 <Label className="text-foreground mb-1.5 block text-sm">Seating</Label>
                 <Select value={form.seating_type} onValueChange={v => setForm(f => ({ ...f, seating_type: v }))}>
-                  <SelectTrigger className="glass-input h-12"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="glass-input h-12 text-base"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="regular">Regular</SelectItem>
                     <SelectItem value="family">Family</SelectItem>
@@ -140,7 +164,7 @@ export default function AdminManualBooking() {
             <div>
               <Label className="text-foreground mb-1.5 block text-sm">Payment Method</Label>
               <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
-                <SelectTrigger className="glass-input h-12"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="glass-input h-12 text-base"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="card">Card</SelectItem>
@@ -156,8 +180,8 @@ export default function AdminManualBooking() {
                 <span className="text-sm text-muted-foreground">Getting quote...</span>
               </div>
             ) : priceQuote ? (
-              <div className="bg-muted/20 rounded-lg p-3 text-sm">
-                <p className="text-foreground font-medium mb-2">Price Breakdown</p>
+              <GlassCard variant="sunken" className="p-3">
+                <p className="text-foreground font-medium mb-2 text-sm">Price Breakdown</p>
                 {priceQuote.seats?.map((s: any) => (
                   <div key={s.seat_index} className="flex justify-between text-muted-foreground text-xs py-0.5">
                     <span>Seat #{s.seat_index + 1} ({s.reason})</span>
@@ -168,9 +192,9 @@ export default function AdminManualBooking() {
                   <span>Total</span>
                   <span className="gradient-text text-lg">₹{priceQuote.total}</span>
                 </div>
-              </div>
+              </GlassCard>
             ) : (
-              <GlassButton variant="outline" size="md" className="w-full h-11" onClick={fetchQuote}>
+              <GlassButton variant="outline" size="md" className="w-full h-12" onClick={fetchQuote}>
                 Get Price Quote
               </GlassButton>
             )}
