@@ -39,14 +39,21 @@ serve(async (req) => {
       });
     }
 
-    const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
-    if (!keySecret) throw new Error("Razorpay secret not configured");
-
     const hmacSecret = Deno.env.get("LOVABLE_API_KEY") || "fallback-secret";
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Prefer gateway_secrets table, fall back to env vars
+    const { data: secretRows } = await supabase
+      .from("gateway_secrets")
+      .select("key, value")
+      .eq("key", "razorpay_key_secret");
+
+    const dbSecret = (secretRows as { key: string; value: string }[] | null)?.find(r => r.key === "razorpay_key_secret")?.value;
+    const keySecret = (dbSecret && dbSecret.length > 0 ? dbSecret : null) || Deno.env.get("RAZORPAY_KEY_SECRET");
+    if (!keySecret) throw new Error("Razorpay secret not configured");
 
     // Verify HMAC-SHA256 signature
     const signatureBody = `${razorpay_order_id}|${razorpay_payment_id}`;

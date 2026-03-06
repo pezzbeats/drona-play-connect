@@ -18,14 +18,25 @@ serve(async (req) => {
       });
     }
 
-    const keyId = Deno.env.get("RAZORPAY_KEY_ID");
-    const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
-    if (!keyId || !keySecret) throw new Error("Razorpay credentials not configured");
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Prefer gateway_secrets table, fall back to env vars
+    const { data: secretRows } = await supabase
+      .from("gateway_secrets")
+      .select("key, value")
+      .in("key", ["razorpay_key_id", "razorpay_key_secret"]);
+
+    const secretMap: Record<string, string> = {};
+    (secretRows ?? []).forEach((r: { key: string; value: string }) => {
+      if (r.value) secretMap[r.key] = r.value;
+    });
+
+    const keyId = secretMap["razorpay_key_id"] || Deno.env.get("RAZORPAY_KEY_ID");
+    const keySecret = secretMap["razorpay_key_secret"] || Deno.env.get("RAZORPAY_KEY_SECRET");
+    if (!keyId || !keySecret) throw new Error("Razorpay credentials not configured");
 
     // Verify order exists
     const { data: existingOrder, error: orderFetchError } = await supabase

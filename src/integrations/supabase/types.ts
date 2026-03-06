@@ -268,6 +268,27 @@ export type Database = {
           },
         ]
       }
+      gateway_secrets: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by_admin_id: string | null
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by_admin_id?: string | null
+          value?: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by_admin_id?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       leaderboard: {
         Row: {
           adjustment_reason: string | null

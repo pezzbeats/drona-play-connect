@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.razorpay-verify-payment]
 verify_jwt = false
+
+[functions.assign-admin-role]
+verify_jwt = false
