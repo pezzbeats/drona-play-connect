@@ -158,15 +158,28 @@ export default function TicketPage() {
     });
   };
 
-  const whatsappShare = (ticket: TicketData) => {
+  const whatsappShare = async (ticket: TicketData) => {
     const order = ticket.order as any;
     const match = order?.match;
-    const text = `🎫 My T20 Fan Night Pass${match?.name ? ` — ${match.name}` : ''} — Seat ${ticket.seat_index + 1}\nView at: ${window.location.href}`;
-    if (navigator.share) {
-      navigator.share({ title: 'My T20 Fan Night Ticket', text, url: window.location.href }).catch(() => {});
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${order?.purchaser_mobile}`;
+    const text = `🎫 My T20 Fan Night Pass${match?.name ? ` — ${match.name}` : ''} — Seat ${ticket.seat_index + 1}\nView tickets: ${ticketUrl}`;
+
+    // Try native share with PNG on mobile
+    if (navigator.canShare) {
+      try {
+        const canvas = document.getElementById(`qr-canvas-${ticket.id}`) as HTMLCanvasElement | null;
+        const blob = canvas ? await new Promise<Blob | null>(res => canvas.toBlob(res)) : null;
+        const files = blob ? [new File([blob], `ticket-seat-${ticket.seat_index + 1}.png`, { type: 'image/png' })] : [];
+        if (files.length > 0 && navigator.canShare({ files })) {
+          await navigator.share({ files, title: 'My T20 Fan Night Ticket', text });
+          return;
+        }
+      } catch {
+        // fall through
+      }
     }
+    // Desktop / fallback: wa.me deep-link
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   // ── INPUT PHASE ──────────────────────────────────────────────────────────
