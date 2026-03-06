@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -111,6 +112,11 @@ export default function AdminOrders() {
     return matchSearch && matchStatus;
   });
 
+  const confidenceClass = (c: string) =>
+    c === 'high'   ? 'bg-success/20 text-success' :
+    c === 'medium' ? 'bg-warning/20 text-warning' :
+                     'bg-destructive/20 text-destructive';
+
   return (
     <div className="px-4 py-5 space-y-4 max-w-2xl mx-auto md:max-w-none md:p-6">
       <div>
@@ -145,14 +151,18 @@ export default function AdminOrders() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonCard key={i} lines={3} showAvatar />
+          ))}
         </div>
       ) : (
         <div className="space-y-2">
           {filtered.length === 0 && (
-            <GlassCard className="p-8 text-center">
-              <p className="text-muted-foreground">No orders found</p>
+            <GlassCard className="p-10 text-center">
+              <Search className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="font-display text-lg font-bold text-foreground">No orders found</p>
+              <p className="text-muted-foreground text-sm mt-1">Try adjusting your search or filter</p>
             </GlassCard>
           )}
           {filtered.map(order => (
@@ -199,18 +209,16 @@ export default function AdminOrders() {
                   </div>
 
                   {order.proofs?.length > 0 && (
-                    <div className="bg-muted/20 rounded-lg p-3 text-sm space-y-2">
-                      <p className="font-medium text-foreground text-xs">Latest Payment Proof</p>
+                    <div className="glass-card-sunken p-3 text-sm space-y-2">
+                      <p className="font-medium text-foreground text-xs section-title">Latest Payment Proof</p>
                       {order.proofs.slice(-1).map((proof: any) => (
                         <div key={proof.id} className="space-y-1.5 text-xs">
                           <div className="flex items-center gap-2 flex-wrap">
                             <StatusBadge status={proof.ai_verdict} />
                             {proof.ai_confidence && (
-                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                proof.ai_confidence === 'high' ? 'bg-green-500/20 text-green-400' :
-                                proof.ai_confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                                'bg-red-500/20 text-red-400'
-                              }`}>{proof.ai_confidence} confidence</span>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${confidenceClass(proof.ai_confidence)}`}>
+                                {proof.ai_confidence} confidence
+                              </span>
                             )}
                           </div>
                           {proof.ai_reason && <p className="text-muted-foreground">{proof.ai_reason}</p>}
@@ -252,7 +260,7 @@ export default function AdminOrders() {
 
                   {/* Override form */}
                   {overrideTarget?.orderId === order.id ? (
-                    <div className="bg-muted/30 rounded-lg p-3 space-y-2 border border-border/50">
+                    <div className="glass-card-sunken p-3 space-y-2 border border-border/50">
                       <p className="text-sm font-medium text-foreground">
                         {overrideTarget.verdict === 'paid_manual_verified' ? '✅ Manual Verify' : '❌ Reject'} — enter reason
                       </p>

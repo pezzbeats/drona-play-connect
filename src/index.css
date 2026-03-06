@@ -43,11 +43,23 @@
     --destructive: 0 75% 55%;
     --destructive-foreground: 60 20% 96%;
 
+    /* Info */
+    --info: 210 60% 55%;
+    --info-foreground: 0 0% 98%;
+
     --border: 38 30% 18%;
     --input: 140 30% 14%;
     --ring: 355 80% 55%;
 
     --radius: 0.75rem;
+    --radius-sm: 0.5rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.25rem;
+
+    /* Surface elevation tokens */
+    --surface-1: 355 20% 9%;
+    --surface-2: 355 18% 11%;
+    --surface-3: 355 16% 13%;
 
     /* Glass morphism tokens — crimson-tinted to echo scoreboard panels */
     --glass-bg: 355 25% 8% / 0.70;
@@ -92,6 +104,7 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', sans-serif;
+    line-height: 1.6;
     /* Layered: mowed-grass diagonal stripes over hero gradient */
     background:
       repeating-linear-gradient(
@@ -107,10 +120,11 @@
     overflow-x: hidden;
   }
 
-  h1, h2, h3, h4 {
+  h1, h2, h3, h4, h5, h6 {
     font-family: 'Rajdhani', sans-serif;
     font-weight: 700;
     letter-spacing: 0.02em;
+    line-height: 1.15;
   }
 
   /* Prevent iOS zoom on inputs — must be >= 16px */
@@ -133,6 +147,29 @@
     border: 1px solid hsl(var(--glass-border));
     box-shadow: var(--glass-shadow);
     border-radius: var(--radius);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .glass-card:hover {
+    border-color: hsl(38 60% 55% / 0.28);
+  }
+
+  /* Elevated glass card — for modals, hero cards */
+  .glass-card-elevated {
+    background: hsl(var(--surface-2) / 0.85);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid hsl(38 60% 55% / 0.25);
+    box-shadow: 0 16px 48px hsl(140 60% 2% / 0.8), 0 4px 16px hsl(355 25% 8% / 0.6);
+    border-radius: var(--radius-lg);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  /* Sunken card — for inner-card use */
+  .glass-card-sunken {
+    background: hsl(140 30% 5% / 0.6);
+    border: 1px solid hsl(38 30% 18% / 0.5);
+    border-radius: var(--radius-sm);
   }
 
   /* Glowing border effect */
@@ -175,35 +212,81 @@
     transition: all 0.2s ease;
   }
 
-  /* Status badges */
+  /* Status badges — refined pill shape */
   .badge-active {
     background: hsl(142 70% 45% / 0.2);
     color: hsl(142 70% 60%);
     border: 1px solid hsl(142 70% 45% / 0.4);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 2px 10px;
+    border-radius: 9999px;
   }
 
   .badge-pending {
     background: hsl(38 95% 55% / 0.2);
     color: hsl(38 95% 70%);
     border: 1px solid hsl(38 95% 55% / 0.4);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 2px 10px;
+    border-radius: 9999px;
   }
 
   .badge-rejected {
     background: hsl(0 75% 55% / 0.2);
     color: hsl(0 75% 70%);
     border: 1px solid hsl(0 75% 55% / 0.4);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 2px 10px;
+    border-radius: 9999px;
   }
 
   .badge-verified {
     background: hsl(38 75% 52% / 0.15);
     color: hsl(38 75% 70%);
     border: 1px solid hsl(38 75% 52% / 0.3);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 2px 10px;
+    border-radius: 9999px;
   }
 
   .badge-draft {
     background: hsl(140 30% 18% / 0.4);
     color: hsl(140 15% 60%);
     border: 1px solid hsl(140 30% 25% / 0.4);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 2px 10px;
+    border-radius: 9999px;
+  }
+
+  /* Skeleton loading utility */
+  .skeleton {
+    background: hsl(140 30% 14% / 0.6);
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Typography utilities */
+  .stat-number {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .section-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: hsl(140 15% 50%);
   }
 
   /* Animated gradient text */
@@ -289,6 +372,26 @@
     background: linear-gradient(90deg, transparent 0%, hsl(355 80% 55% / 0.08) 50%, transparent 100%);
     background-size: 200% 100%;
     animation: shimmer 2s linear infinite;
+  }
+
+  /* Slide-up entrance animation */
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.35s ease-out both;
+  }
+
+  /* Count-in animation for stat numbers */
+  @keyframes count-in {
+    0%   { opacity: 0; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  .animate-count-in {
+    animation: count-in 0.25s ease-out both;
   }
 
   /* Step indicator */

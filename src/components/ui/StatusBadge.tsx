@@ -8,31 +8,31 @@ type StatusType =
   | 'verified' | 'rejected' | 'needs_manual_review'
   | 'super_admin' | 'admin' | 'counter_staff';
 
-const statusConfig: Record<StatusType, { label: string; className: string }> = {
+const statusConfig: Record<StatusType, { label: string; className: string; isLive?: boolean }> = {
   // Ticket status
-  active: { label: 'Active', className: 'badge-active' },
-  used: { label: 'Checked In', className: 'badge-verified' },
-  blocked: { label: 'Blocked', className: 'badge-rejected' },
+  active:                { label: 'Active',          className: 'badge-active' },
+  used:                  { label: 'Checked In',       className: 'badge-verified' },
+  blocked:               { label: 'Blocked',          className: 'badge-rejected' },
   // Payment status
-  unpaid: { label: 'Unpaid', className: 'badge-rejected' },
-  pending_verification: { label: 'Pending', className: 'badge-pending' },
-  paid_verified: { label: 'Paid ✓', className: 'badge-active' },
-  paid_rejected: { label: 'Rejected', className: 'badge-rejected' },
-  paid_manual_verified: { label: 'Manual Verified', className: 'badge-verified' },
+  unpaid:                { label: 'Unpaid',           className: 'badge-rejected' },
+  pending_verification:  { label: 'Pending',          className: 'badge-pending' },
+  paid_verified:         { label: 'Paid ✓',           className: 'badge-active' },
+  paid_rejected:         { label: 'Rejected',         className: 'badge-rejected' },
+  paid_manual_verified:  { label: 'Manual Verified',  className: 'badge-verified' },
   // Match status
-  draft: { label: 'Draft', className: 'badge-draft' },
-  registrations_open: { label: 'Open', className: 'badge-active' },
-  registrations_closed: { label: 'Closed', className: 'badge-pending' },
-  live: { label: '🔴 Live', className: 'badge-active' },
-  ended: { label: 'Ended', className: 'badge-draft' },
+  draft:                 { label: 'Draft',            className: 'badge-draft' },
+  registrations_open:    { label: 'Open',             className: 'badge-active' },
+  registrations_closed:  { label: 'Closed',           className: 'badge-pending' },
+  live:                  { label: 'Live',             className: 'badge-active', isLive: true },
+  ended:                 { label: 'Ended',            className: 'badge-draft' },
   // AI verdict
-  verified: { label: 'Verified', className: 'badge-active' },
-  rejected: { label: 'Rejected', className: 'badge-rejected' },
-  needs_manual_review: { label: 'Manual Review', className: 'badge-pending' },
+  verified:              { label: 'Verified',         className: 'badge-active' },
+  rejected:              { label: 'Rejected',         className: 'badge-rejected' },
+  needs_manual_review:   { label: 'Manual Review',    className: 'badge-pending' },
   // Admin roles
-  super_admin: { label: 'Super Admin', className: 'badge-verified' },
-  admin: { label: 'Admin', className: 'badge-active' },
-  counter_staff: { label: 'Counter Staff', className: 'badge-pending' },
+  super_admin:           { label: 'Super Admin',      className: 'badge-verified' },
+  admin:                 { label: 'Admin',            className: 'badge-active' },
+  counter_staff:         { label: 'Counter Staff',    className: 'badge-pending' },
 };
 
 interface StatusBadgeProps {
@@ -41,9 +41,18 @@ interface StatusBadgeProps {
 }
 
 export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
-  const config = statusConfig[status as StatusType] ?? { label: status, className: 'badge-draft' };
+  const config = statusConfig[status as StatusType] ?? { label: status, className: 'badge-draft', isLive: false };
   return (
-    <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium font-display', config.className, className)}>
+    <span
+      className={cn(
+        'inline-flex items-center font-display font-semibold',
+        config.className,
+        className,
+      )}
+    >
+      {config.isLive && (
+        <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse mr-1.5 inline-block shrink-0" />
+      )}
       {config.label}
     </span>
   );
