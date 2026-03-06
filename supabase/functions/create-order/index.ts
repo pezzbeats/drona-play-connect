@@ -41,8 +41,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { match_id, purchaser_full_name, purchaser_email, seating_type, seats_count, payment_method, pricing_snapshot, created_source, admin_id } = body;
-    const purchaser_mobile = body.purchaser_mobile?.toString().replace(/\D/g, "").slice(-10);
+    const { match_id, purchaser_full_name, purchaser_mobile, purchaser_email, seating_type, seats_count, payment_method, pricing_snapshot, created_source, admin_id } = body;
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const hmacSecret = Deno.env.get("LOVABLE_API_KEY") || "fallback-secret";

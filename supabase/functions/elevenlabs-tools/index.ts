@@ -26,7 +26,7 @@ serve(async (req) => {
     switch (tool) {
       case "lookup_ticket": {
         // Check ticket/order status by mobile number
-        const mobile = params.mobile?.toString().trim();
+        const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
         if (!mobile) {
           result = { success: false, message: "Mobile number nahi mila. Kripya apna mobile number batayein." };
           break;
