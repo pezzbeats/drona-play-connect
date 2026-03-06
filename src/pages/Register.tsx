@@ -442,7 +442,15 @@ export default function RegisterPage() {
           pricing_snapshot: priceQuote,
         }
       });
-      if (error) throw error;
+      // Supabase SDK wraps non-200 in FunctionsHttpError with generic "non-2xx" message.
+      // Our function now always returns 200 — check data.success instead.
+      if (error) {
+        // Still handle network-level errors
+        throw new Error(error.message || 'Network error calling create-order');
+      }
+      if (!data?.success) {
+        throw new Error(data?.error || 'Order creation failed');
+      }
       setOrderId(data.order_id);
       if (method === 'pay_at_hotel') {
         setTickets(data.tickets || []);

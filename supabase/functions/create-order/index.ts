@@ -6,6 +6,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function ok(data: Record<string, unknown>) {
+  return new Response(JSON.stringify({ success: true, ...data }), {
+    status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+function fail(error: string, code = "ERROR") {
+  return new Response(JSON.stringify({ success: false, error, code }), {
+    status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 async function generateSignedQR(matchId: string, mobile: string, seatIndex: number, secret: string): Promise<string> {
   const ts = Date.now();
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -43,6 +54,13 @@ serve(async (req) => {
     const body = await req.json();
     const { match_id, purchaser_full_name, purchaser_mobile, purchaser_email, seating_type, seats_count, payment_method, pricing_snapshot, created_source, admin_id } = body;
 
+    // Basic validation
+    if (!match_id) return fail("match_id is required", "VALIDATION_ERROR");
+    if (!purchaser_full_name) return fail("purchaser_full_name is required", "VALIDATION_ERROR");
+    if (!purchaser_mobile) return fail("purchaser_mobile is required", "VALIDATION_ERROR");
+    if (!payment_method) return fail("payment_method is required", "VALIDATION_ERROR");
+    if (!seats_count || seats_count < 1) return fail("seats_count must be at least 1", "VALIDATION_ERROR");
+
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const hmacSecret = Deno.env.get("LOVABLE_API_KEY") || "fallback-secret";
 
@@ -52,16 +70,21 @@ serve(async (req) => {
       const limitKey = `order:${purchaser_mobile}`;
       const allowed = await checkRateLimit(supabase, limitKey, 5, 600_000);
       if (!allowed) {
-        return new Response(
-          JSON.stringify({ error: "Too many orders. Please wait before trying again.", code: "RATE_LIMITED", retryable: true }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return fail("Too many orders. Please wait before trying again.", "RATE_LIMITED");
       }
     }
 
     // Get match + event
-    const { data: match } = await supabase.from("matches").select("*, events(id)").eq("id", match_id).single();
-    if (!match) throw new Error("Match not found");
+    const { data: match, error: matchError } = await supabase
+      .from("matches")
+      .select("*, events(id)")
+      .eq("id", match_id)
+      .single();
+
+    if (matchError || !match) {
+      console.error("Match lookup error:", matchError);
+      return fail(`Match not found: ${matchError?.message || "unknown error"}`, "MATCH_NOT_FOUND");
+    }
 
     const canGenerate = payment_method === "pay_at_hotel" || payment_method === "cash" || payment_method === "card";
 
@@ -82,27 +105,32 @@ serve(async (req) => {
       created_by_admin_id: admin_id || null,
     }).select().single();
 
-    if (orderError) throw new Error(orderError.message);
+    if (orderError) {
+      console.error("Order insert error:", orderError);
+      return fail(`Failed to create order: ${orderError.message}`, "ORDER_INSERT_ERROR");
+    }
 
     // Generate HMAC-signed tickets only if pay_at_hotel / cash / card
     let tickets: any[] = [];
     if (canGenerate) {
       for (let i = 0; i < seats_count; i++) {
         const qrText = await generateSignedQR(match_id, purchaser_mobile, i, hmacSecret);
-        const { data: ticket } = await supabase.from("tickets").insert({
+        const { data: ticket, error: ticketError } = await supabase.from("tickets").insert({
           match_id, event_id: match.event_id, order_id: order.id,
           seat_index: i, qr_text: qrText, status: "active",
         }).select().single();
+        if (ticketError) {
+          console.error("Ticket insert error:", ticketError);
+          // Don't fail the whole order — log and continue
+        }
         if (ticket) tickets.push(ticket);
       }
     }
 
-    return new Response(JSON.stringify({ order_id: order.id, tickets }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return ok({ order_id: order.id, tickets });
+
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message, code: "INTERNAL_ERROR", retryable: false }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("create-order unhandled error:", e);
+    return fail(e.message || "An unexpected error occurred", "INTERNAL_ERROR");
   }
 });
