@@ -100,7 +100,7 @@ export default function IndexPage() {
     icon: FEATURE_ICONS[n - 1],
     emoji: FEATURE_EMOJIS[n - 1],
     label: get(`feature_${n}_label`, ['Live Stadium Screening', 'Fun Guess Game', 'Premium Food & Beverages', 'Live Leaderboard'][n - 1]),
-    desc: get(`feature_${n}_desc`, ['Experience the electrifying atmosphere on the big screen', 'Make predictions for entertainment & exciting rewards', 'Unlimited hospitality services throughout the event', 'Compete with fellow guests in friendly challenges'][n - 1]),
+    desc: get(`feature_${n}_desc`, ['Experience the electrifying atmosphere on the big screen', 'Make predictions for entertainment & exciting rewards', 'Premium food & beverage service throughout the event', 'Compete with fellow guests in friendly challenges'][n - 1]),
   }));
 
   const trustItems = [1, 2, 3, 4].map((n, i) => ({
