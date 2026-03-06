@@ -243,8 +243,13 @@ export default function TicketPage() {
                   {/* Bottom strip */}
                   <div className="pt-3 border-t border-border/30 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <img src={hotelLogo} alt="Hotel Drona Palace" className="w-7 h-7 rounded-full object-cover border border-border/40" />
-                      <span className="text-xs text-muted-foreground">T20 Fan Night · Hotel Drona Palace</span>
+                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full bg-[hsl(38_60%_10%)] shadow-[0_0_10px_hsl(38_75%_52%/0.6)]" style={{border:'1px solid hsl(38 75% 52% / 0.5)'}}>
+                        <img src={hotelLogo} alt="Hotel Drona Palace" className="w-5 h-5 object-contain drop-shadow-[0_0_4px_hsl(38_75%_52%/0.8)]" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-secondary leading-tight">Hotel Drona Palace</p>
+                        <p className="text-[10px] text-muted-foreground leading-tight">A Unit of SR Leisure Inn</p>
+                      </div>
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {new Date(ticket.issued_at).toLocaleDateString('en-IN')}
