@@ -7,7 +7,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { LandingFooter } from '@/components/ui/LandingFooter';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
-  Loader2, MapPin, Calendar, Trophy, Star, ChevronRight,
+  MapPin, Calendar, Trophy, Star, ChevronRight,
   Clock, ShieldCheck, BadgeCheck, QrCode, Tv2, Utensils, Target,
   Phone, Mail,
 } from 'lucide-react';
@@ -46,6 +46,68 @@ const MATCH_TYPE_LABELS: Record<string, string> = {
   final: 'Grand Final',
   other: 'Special Match',
 };
+
+/** Skeleton shown while match data is loading — mirrors real section height to prevent layout shift */
+const MatchSectionSkeleton = () => (
+  <div className="mb-6 animate-pulse space-y-4">
+    {/* Banner placeholder */}
+    <div className="h-52 rounded-2xl skeleton" />
+
+    {/* Match card skeleton */}
+    <div className="glass-card p-6 space-y-4">
+      <div className="flex justify-center gap-2">
+        <div className="h-5 w-36 skeleton rounded-full" />
+        <div className="h-5 w-24 skeleton rounded-full" />
+      </div>
+      <div className="space-y-2 flex flex-col items-center">
+        <div className="h-8 w-3/4 skeleton rounded-lg" />
+        <div className="h-4 w-1/3 skeleton rounded" />
+      </div>
+      <div className="pt-3 border-t border-border/40 space-y-3">
+        <div className="flex justify-center gap-3">
+          <div className="w-8 h-8 skeleton rounded-lg flex-shrink-0" />
+          <div className="h-4 w-48 skeleton rounded" />
+        </div>
+        <div className="flex justify-center gap-3">
+          <div className="w-8 h-8 skeleton rounded-lg flex-shrink-0" />
+          <div className="h-4 w-56 skeleton rounded" />
+        </div>
+      </div>
+    </div>
+
+    {/* Features grid skeleton (2×2) */}
+    <div className="grid grid-cols-2 gap-3.5">
+      {[0, 1, 2, 3].map(i => (
+        <div key={i} className="glass-card p-4 space-y-2.5">
+          <div className="w-8 h-8 skeleton rounded-lg" />
+          <div className="h-4 w-3/4 skeleton rounded" />
+          <div className="h-3 w-full skeleton rounded" />
+          <div className="h-3 w-2/3 skeleton rounded" />
+        </div>
+      ))}
+    </div>
+
+    {/* Pricing card skeleton */}
+    <div className="glass-card p-5 space-y-3">
+      <div className="h-5 w-32 skeleton rounded" />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl p-4 skeleton h-24" />
+        <div className="rounded-xl p-4 skeleton h-24" />
+      </div>
+      <div className="h-3 w-48 skeleton rounded mx-auto" />
+    </div>
+
+    {/* Trust strip skeleton */}
+    <div className="glass-card p-5 space-y-3">
+      <div className="h-4 w-24 skeleton rounded mx-auto" />
+      <div className="flex flex-wrap justify-center gap-x-6 gap-y-3">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="h-4 w-40 skeleton rounded" />
+        ))}
+      </div>
+    </div>
+  </div>
+);
 
 export default function IndexPage() {
   const { get, loading: configLoading } = useSiteConfig();
@@ -86,15 +148,6 @@ export default function IndexPage() {
     }
     setLoading(false);
   };
-
-  if (loading || configLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative">
-        <BackgroundOrbs />
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   const features = [1, 2, 3, 4].map(n => ({
     icon: FEATURE_ICONS[n - 1],
@@ -191,7 +244,9 @@ export default function IndexPage() {
           </div>
         </div>
 
-        {match ? (
+        {(loading || configLoading) ? (
+          <MatchSectionSkeleton />
+        ) : match ? (
           <>
             {/* ─── BANNER ─── */}
             {bannerUrl && (
