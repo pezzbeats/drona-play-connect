@@ -196,7 +196,7 @@ export default function IndexPage() {
               style={{ animationDelay: '0.08s', borderColor: 'hsl(355 80% 55% / 0.35)' } as React.CSSProperties}
             >
               {/* Status + type badges */}
-              <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-success/15 border border-success/30 rounded-full px-3 py-1">
                   <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
                   <span className="text-xs font-bold text-success uppercase tracking-wider">Registrations Open</span>
@@ -208,22 +208,22 @@ export default function IndexPage() {
                 </div>
               </div>
 
-              <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-1 leading-tight">
+              <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-1 leading-tight text-center">
                 {match.name}
               </h2>
               {match.opponent && (
-                <p className="text-muted-foreground text-sm mb-4 font-medium">vs {match.opponent}</p>
+                <p className="text-muted-foreground text-sm mb-4 font-medium text-center">vs {match.opponent}</p>
               )}
 
               <div className="space-y-3 pt-3 border-t border-border/40">
-                <div className="flex items-center gap-3 text-sm">
+                <div className="flex items-center justify-center gap-3 text-sm">
                   <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
                     <MapPin className="h-4 w-4 text-primary" />
                   </div>
                   <span className="text-foreground/80 font-medium">{match.venue}</span>
                 </div>
                 {match.start_time && (
-                  <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center justify-center gap-3 text-sm">
                     <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
                       <Calendar className="h-4 w-4 text-primary" />
                     </div>
