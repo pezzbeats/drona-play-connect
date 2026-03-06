@@ -240,8 +240,8 @@ serve(async (req) => {
           result = {
             success: true,
             already_registered: false,
-            match_name: activeMatch.name,
-            message: `Is mobile number se ${activeMatch.name} ke liye koi registration nahi hai. Aap abhi register kar sakte hain website par jakar.`
+            match_name: activeMatchCR.name,
+            message: `Is mobile number se ${activeMatchCR.name} ke liye koi registration nahi hai. Aap abhi register kar sakte hain website par jakar.`
           };
         }
         break;
