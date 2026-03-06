@@ -2,6 +2,323 @@
 @tailwind components;
 @tailwind utilities;
 
+/* T20 Fan Night — Cricket Ground Design System */
+
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* Deep cricket green base */
+    --background: 140 55% 4%;
+    --foreground: 60 20% 96%;
+
+    --card: 140 45% 7%;
+    --card-foreground: 60 20% 96%;
+
+    --popover: 140 50% 5%;
+    --popover-foreground: 60 20% 96%;
+
+    /* Cricket crimson primary */
+    --primary: 355 80% 55%;
+    --primary-foreground: 0 0% 98%;
+
+    /* Gold/bronze secondary */
+    --secondary: 38 75% 52%;
+    --secondary-foreground: 140 55% 4%;
+
+    --muted: 140 30% 12%;
+    --muted-foreground: 140 15% 50%;
+
+    --accent: 355 70% 65%;
+    --accent-foreground: 0 0% 98%;
+
+    /* Amber warning */
+    --warning: 38 95% 55%;
+    --warning-foreground: 140 55% 4%;
+
+    /* Green success */
+    --success: 142 70% 45%;
+    --success-foreground: 60 20% 96%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 60 20% 96%;
+
+    --border: 140 30% 16%;
+    --input: 140 30% 14%;
+    --ring: 355 80% 55%;
+
+    --radius: 0.75rem;
+
+    /* Glass morphism tokens */
+    --glass-bg: 140 45% 8% / 0.65;
+    --glass-border: 355 40% 60% / 0.12;
+    --glass-shadow: 0 8px 32px hsl(140 60% 2% / 0.7);
+    --glass-blur: blur(16px);
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(140 55% 4%), hsl(145 50% 7%), hsl(140 55% 4%));
+    --gradient-primary: linear-gradient(135deg, hsl(355 80% 55%), hsl(38 75% 52%));
+    --gradient-accent: linear-gradient(135deg, hsl(38 75% 52%), hsl(355 80% 55%));
+    --gradient-success: linear-gradient(135deg, hsl(142 70% 45%), hsl(140 60% 55%));
+    --gradient-warning: linear-gradient(135deg, hsl(38 95% 55%), hsl(20 90% 55%));
+
+    /* Glows */
+    --glow-primary: 0 0 20px hsl(355 80% 55% / 0.45);
+    --glow-gold: 0 0 20px hsl(38 75% 52% / 0.35);
+    --glow-success: 0 0 15px hsl(142 70% 45% / 0.4);
+    --glow-warning: 0 0 15px hsl(38 95% 55% / 0.4);
+
+    /* Sidebar */
+    --sidebar-background: 140 60% 3%;
+    --sidebar-foreground: 140 15% 75%;
+    --sidebar-primary: 355 80% 55%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 140 30% 10%;
+    --sidebar-accent-foreground: 60 20% 96%;
+    --sidebar-border: 140 30% 12%;
+    --sidebar-ring: 355 80% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    background: var(--gradient-hero);
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+}
+
+@layer components {
+  /* Glassmorphism card */
+  .glass-card {
+    background: hsl(var(--glass-bg));
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid hsl(var(--glass-border));
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius);
+  }
+
+  /* Glowing border effect */
+  .glass-card-glow {
+    @apply glass-card;
+    box-shadow: var(--glass-shadow), var(--glow-primary);
+  }
+
+  /* Primary gradient button */
+  .btn-gradient {
+    background: var(--gradient-primary);
+    color: hsl(var(--primary-foreground));
+    border: none;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    transition: all 0.2s ease;
+  }
+
+  .btn-gradient:hover {
+    box-shadow: var(--glow-primary);
+    transform: translateY(-1px);
+  }
+
+  /* Accent gradient button */
+  .btn-accent-gradient {
+    background: var(--gradient-accent);
+    color: hsl(var(--primary-foreground));
+    border: none;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    transition: all 0.2s ease;
+  }
+
+  /* Status badges */
+  .badge-active {
+    background: hsl(142 70% 45% / 0.2);
+    color: hsl(142 70% 60%);
+    border: 1px solid hsl(142 70% 45% / 0.4);
+  }
+
+  .badge-pending {
+    background: hsl(38 95% 55% / 0.2);
+    color: hsl(38 95% 70%);
+    border: 1px solid hsl(38 95% 55% / 0.4);
+  }
+
+  .badge-rejected {
+    background: hsl(0 75% 55% / 0.2);
+    color: hsl(0 75% 70%);
+    border: 1px solid hsl(0 75% 55% / 0.4);
+  }
+
+  .badge-verified {
+    background: hsl(38 75% 52% / 0.15);
+    color: hsl(38 75% 70%);
+    border: 1px solid hsl(38 75% 52% / 0.3);
+  }
+
+  .badge-draft {
+    background: hsl(140 30% 18% / 0.4);
+    color: hsl(140 15% 60%);
+    border: 1px solid hsl(140 30% 25% / 0.4);
+  }
+
+  /* Animated gradient text */
+  .gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text-accent {
+    background: var(--gradient-accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Input glassmorphism */
+  .glass-input {
+    background: hsl(140 35% 9% / 0.8);
+    border: 1px solid hsl(140 30% 22%);
+    color: hsl(60 20% 96%);
+    backdrop-filter: blur(8px);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .glass-input:focus {
+    border-color: hsl(355 80% 55% / 0.6);
+    box-shadow: 0 0 0 2px hsl(355 80% 55% / 0.15);
+    outline: none;
+  }
+
+  .glass-input::placeholder {
+    color: hsl(140 15% 40%);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(140 30% 20%);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(355 80% 55% / 0.5);
+  }
+
+  /* Animated background orbs */
+  .bg-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+    animation: orb-float 8s ease-in-out infinite;
+  }
+
+  @keyframes orb-float {
+    0%, 100% { transform: translateY(0px) scale(1); opacity: 0.4; }
+    50% { transform: translateY(-20px) scale(1.05); opacity: 0.6; }
+  }
+
+  /* Cricket pitch stripe animation */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, transparent 0%, hsl(355 80% 55% / 0.08) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* Step indicator */
+  .step-active {
+    background: var(--gradient-primary);
+    box-shadow: var(--glow-primary);
+  }
+
+  .step-completed {
+    background: hsl(142 70% 45%);
+    box-shadow: var(--glow-success);
+  }
+
+  .step-inactive {
+    background: hsl(140 30% 16%);
+    color: hsl(140 15% 45%);
+  }
+
+  /* QR container */
+  .qr-container {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    display: inline-block;
+    box-shadow: var(--glow-gold);
+  }
+
+  /* Seat pass card */
+  .seat-pass {
+    background: linear-gradient(135deg, hsl(140 50% 6%), hsl(145 40% 9%));
+    border: 1px solid hsl(355 80% 55% / 0.3);
+    box-shadow: var(--glow-primary), var(--glass-shadow);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .seat-pass::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-primary);
+  }
+
+  /* Disclaimer bar */
+  .disclaimer-bar {
+    background: hsl(38 95% 55% / 0.1);
+    border: 1px solid hsl(38 95% 55% / 0.3);
+    color: hsl(38 95% 70%);
+  }
+}
+
+/* Print styles for tickets */
+@media print {
+  body {
+    background: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .seat-pass {
+    break-inside: avoid;
+    background: white !important;
+    color: black !important;
+    border: 2px solid #000 !important;
+    box-shadow: none !important;
+  }
+}
+
 /* T20 Fan Night — Deep Space Glassmorphism Design System */
 
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
