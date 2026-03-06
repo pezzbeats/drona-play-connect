@@ -7,6 +7,7 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
   CheckCircle2, ChevronRight, CreditCard, Smartphone, Users, MapPin,
   Upload, Loader2, AlertCircle, Star, Info
@@ -29,8 +30,7 @@ interface PriceQuote {
   seating_type: string;
 }
 
-const PAYEE_VPA = 'paytmqr5oka4x@ptys';
-const PAYEE_NAME = 'Hotel Drona Palace';
+// VPA / payee name are now loaded from site_config via useSiteConfig hook
 
 const steps = ['Your Details', 'Seats & Price', 'Payment', 'Your Tickets'];
 
@@ -70,6 +70,7 @@ function StepBar({ step }: { step: number }) {
 
 export default function RegisterPage() {
   const { toast } = useToast();
+  const { get: getConfig } = useSiteConfig();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
@@ -227,8 +228,10 @@ export default function RegisterPage() {
     setVerifyLoading(false);
   };
 
+  const payeeVpa = getConfig('payment_vpa', 'paytmqr5oka4x@ptys');
+  const payeeName = getConfig('payment_payee_name', 'Hotel Drona Palace');
   const upiQRValue = priceQuote && activeMatch
-    ? `upi://pay?pa=${PAYEE_VPA}&pn=${encodeURIComponent(PAYEE_NAME)}&am=${priceQuote.total}&cu=INR&tn=${encodeURIComponent(`${fullName}_${seatsCount}_${mobile}`)}`
+    ? `upi://pay?pa=${payeeVpa}&pn=${encodeURIComponent(payeeName)}&am=${priceQuote.total}&cu=INR&tn=${encodeURIComponent(`${fullName}_${seatsCount}_${mobile}`)}`
     : '';
 
   if (matchLoading) {
@@ -268,7 +271,7 @@ export default function RegisterPage() {
 
       {/* Disclaimer bar */}
       <div className="disclaimer-bar text-center text-xs py-2 px-4 relative z-10">
-        🎯 Fun Guess Game only — entertainment. No betting. Event fees are for hospitality only.
+        {getConfig('disclaimer_bar_text', '🎯 Fun Guess Game only — entertainment. No betting. Event fees are for hospitality only.')}
       </div>
 
       <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
@@ -276,9 +279,9 @@ export default function RegisterPage() {
         <div className="text-center mb-5">
           <div className="flex items-center justify-center gap-2 mb-1">
             <span className="text-3xl">🏏</span>
-            <h1 className="font-display text-3xl font-bold gradient-text">T20 Fan Night</h1>
+            <h1 className="font-display text-3xl font-bold gradient-text">{getConfig('register_header_title', 'T20 Fan Night')}</h1>
           </div>
-          <p className="text-muted-foreground text-sm text-center">Hotel Drona Palace</p>
+          <p className="text-muted-foreground text-sm text-center">{getConfig('register_header_venue', 'Hotel Drona Palace')}</p>
         </div>
 
         {/* Match Banner */}
@@ -543,7 +546,7 @@ export default function RegisterPage() {
                     <div className="qr-container mx-auto w-fit" style={{ padding: 16 }}>
                       <QRCodeSVG value={upiQRValue} size={200} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">UPI: {PAYEE_VPA}</p>
+                    <p className="text-xs text-muted-foreground mt-2">UPI: {payeeVpa}</p>
                     <p className="text-xs text-muted-foreground">Remark: <span className="text-primary">{fullName}_{seatsCount}_{mobile}</span></p>
                   </div>
 
