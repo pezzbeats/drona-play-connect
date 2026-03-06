@@ -1,117 +1,72 @@
 
-## Assessment of Current Schema
+## Analysis of current state
 
-### Already in place (✅ do NOT re-do):
-- Partial unique index on `is_active_for_registration = true` — single active match enforced at DB level ✅
-- `UNIQUE(match_id, purchaser_mobile)` on orders — one order per mobile per match ✅  
-- `seats_count > 0` and `total_amount >= 0` CHECK constraints on orders ✅
-- `qr_text UNIQUE` on tickets ✅
-- All cascade/restrict FK references correctly set ✅
-- Performance indexes on `orders(purchaser_mobile)`, `orders(match_id, payment_status)`, `tickets(order_id/qr_text/match_id)`, `game_access(mobile, match_id)`, `payment_proofs(order_id/extracted_txn_id)` ✅
-- Enums all properly typed ✅
-- RLS enabled on all tables ✅
-- Realtime enabled on live state tables ✅
+**Already done (don't re-do):**
+- SHA-256 file hash duplicate detection ✅
+- TXN ID duplicate detection (only checks `ai_verdict = 'verified'` rows) ✅
+- AI extraction of amount, TXN ID, VPA, date ✅
+- Amount mismatch → `needs_manual_review`, not auto-verify ✅
+- Manual verify/reject buttons in `AdminOrders.tsx` (no reason required) — needs hardening
+- `admin_activity` logging on manual actions ✅
 
-### Missing / needs hardening (the actual work):
-
-**1. Missing indexes:**
-- `deliveries(over_id, delivery_no)` — for delivery ordering queries in record-delivery function
-- `deliveries(match_id, innings_no)` — for score recomputation
-- `prediction_windows(match_id, status)` — for open window lookups from live page
-- `predictions(window_id, mobile)` — already has UNIQUE so index exists, but `predictions(match_id, mobile)` for leaderboard lookups is missing
-- `leaderboard(match_id, total_points DESC)` — for leaderboard ordering
-- `over_control(match_id, innings_no, status)` — for finding active over quickly
-
-**2. Missing amount constraints:**
-- `payment_collections.amount >= 0`
-- `order_seat_pricing.price_applied >= 0`
-- `deliveries.runs_off_bat >= 0`, `extras_runs >= 0`
-
-**3. Missing UNIQUE constraint:**
-- `deliveries(over_id, delivery_no)` — prevent duplicate delivery numbers in same over
-
-**4. RLS gaps:**
-- `orders` SELECT policy is `true` (anyone can read all orders including other people's). Should limit public reads to own mobile, but since there's no auth for customers this needs a workaround: the edge functions use service role so they bypass RLS. The public SELECT on orders is acceptable for this use case (QR scanning, ticket lookup by mobile). Leave as-is — it's intentional for the gate workflow.
-- `tickets` INSERT policy: `"Tickets insertable by service"` uses `current_setting('request.jwt.claim.role', true)` which doesn't work correctly for edge functions using service role key. Should use `auth.role() = 'service_role'` instead. Actually the correct check for service role bypass is to just allow it via authenticated OR leave as open-insert since tickets are only created by the create-order edge function (which has service role). The current policy pattern IS the existing one from migration 2. Since it already exists with the correct shape, leave it.
-- `leaderboard` has `INSERT WITH CHECK (true)` — publicly insertable. This is intentional (edge function inserts via service role, but the open policy is acceptable since leaderboard is not sensitive).
-
-**5. Secure RPC functions** (the main ask of the prompt):
-
-The prompt asks for these RPCs:
-- `set_active_match(match_id)` — atomically deactivate all then activate one
-- `compute_pricing_quote(...)` — currently done in edge function; creating a DB RPC is reasonable as an additional path but edge functions already do this securely. We'll create the RPC for completeness.
-- `create_order_and_tickets(...)` — currently in edge function. Too complex for a DB function (needs random UUID for QR). Skip — edge function is the right layer.
-- `mark_ticket_checkin(ticket_id, admin_id)` — safe update with audit
-- `generate_gameplay_pin(ticket_id, match_id, mobile, admin_id)` — generate + hash PIN
-- `resolve_delivery(...)` — too complex, done in edge function. Skip.
-
-**6. `set_active_match` RPC**: The partial unique index already prevents two active matches, but a safe RPC makes the toggle atomic and callable from the frontend. Currently the `set-match-active` edge function does this but it's better hardened as an RPC too.
-
-**7. `mark_ticket_checkin` RPC**: Atomically update ticket to `used`, log check-in time and admin.
-
-**8. `compute_pricing_quote` RPC** (SECURITY DEFINER): Takes `p_mobile`, `p_match_id`, `p_seats_count`, returns JSONB with seat breakdown. This replaces the edge function path or complements it.
+**Gaps to fill:**
+1. **Amount + mobile within 30-min window check** — not implemented
+2. **TXN ID duplicate check only covers `verified` proofs** — should also block `needs_manual_review` pending ones (same TXN ID uploaded twice)
+3. **Admin override requires a reason** — currently buttons fire immediately with no reason prompt
+4. **Audit trail** on `payment_proofs` — no `admin_override_reason`, `overridden_by`, `overridden_at` columns
+5. **Ticket generation gate** — `verify-payment-proof` generates tickets; `create-order` also generates for `pay_at_hotel`. This is correct behavior but the ticket-gen path in `verify-payment-proof` doesn't check existing tickets correctly (uses `tickets(id)` join on order2 but this could fail)
+6. **PDF support** — AI extraction is gated on `file.type.startsWith("image/")` — PDFs are silently queued as `needs_manual_review` without even trying extraction
+7. **Confidence field** — no confidence score stored, low-confidence cases have no signal
+8. **View proof image from admin** — admin can't see the uploaded screenshot inline; no signed URL
 
 ---
 
 ## Plan
 
-### Single new migration file doing:
+### Part 1 — DB migration
+New columns on `payment_proofs`:
+- `overridden_by_admin_id uuid`
+- `overridden_at timestamptz`
+- `override_reason text`
+- `ai_confidence text` (high/medium/low/none — stored as text)
+- `fraud_flags jsonb DEFAULT '[]'` — array of flag strings set by backend
 
-**Part A — Additional indexes:**
-```sql
-CREATE INDEX idx_deliveries_over_order ON deliveries(over_id, delivery_no);
-CREATE INDEX idx_deliveries_match_innings ON deliveries(match_id, innings_no);
-CREATE INDEX idx_prediction_windows_match_status ON prediction_windows(match_id, status);
-CREATE INDEX idx_predictions_match_mobile ON predictions(match_id, mobile);
-CREATE INDEX idx_leaderboard_match_points ON leaderboard(match_id, total_points DESC);
-CREATE INDEX idx_over_control_match_innings_status ON over_control(match_id, innings_no, status);
-```
+No new tables needed. Audit of who changed what is captured in both `payment_proofs.overridden_by_admin_id` + the existing `admin_activity` table.
 
-**Part B — Missing value constraints:**
-```sql
-ALTER TABLE payment_collections ADD CONSTRAINT chk_amount_nonneg CHECK (amount >= 0);
-ALTER TABLE order_seat_pricing ADD CONSTRAINT chk_price_nonneg CHECK (price_applied >= 0);
-ALTER TABLE deliveries ADD CONSTRAINT chk_runs_nonneg CHECK (runs_off_bat >= 0 AND extras_runs >= 0);
-```
+### Part 2 — `verify-payment-proof` edge function hardening
+Add the missing fraud/duplicate checks in order:
 
-**Part C — Unique constraint on deliveries:**
-```sql
-ALTER TABLE deliveries ADD CONSTRAINT uq_delivery_in_over UNIQUE (over_id, delivery_no);
-```
+1. **File hash dupe** (already done — keep)
+2. **TXN ID dupe — expanded**: check ALL proofs with same `extracted_txn_id` (not just `ai_verdict = 'verified'`) to catch re-upload of the same receipt in `needs_manual_review` state
+3. **NEW: Amount + mobile within 30-min window**: if another proof exists for the same `purchaser_mobile` and same `extracted_amount` submitted within last 30 minutes for a different order → add `"amount_mobile_window"` to `fraud_flags` and force `needs_manual_review`
+4. **VPA mismatch** → if extracted VPA doesn't contain the expected payee prefix, add `"vpa_mismatch"` to fraud_flags
+5. **Improve ticket generation safety**: wrap in check `tickets.count === 0` using a separate count query rather than joining (the current join approach can fail if the select with `tickets(id)` returns stale data)
+6. **Store ai_confidence**: map from extracted data quality — `high` if all 4 fields extracted + status=success, `medium` if 3 fields, `low` if 2 or fewer, `none` if extraction failed
 
-**Part D — RPC: `set_active_match(p_match_id uuid)`**
-SECURITY DEFINER. Deactivates all matches, then activates the given one. Wrapped in a transaction automatically by PG function. This is the safe atomic toggle.
+### Part 3 — `AdminOrders.tsx` — require reason for admin overrides
+Replace the direct `handleManualVerify` call with an inline reason dialog:
 
-**Part E — RPC: `mark_ticket_checkin(p_ticket_id uuid, p_admin_id uuid)`**
-SECURITY DEFINER. Sets `tickets.status = 'used'`, `checked_in_at = now()`, `checked_in_by_admin_id = p_admin_id`. Returns the updated ticket. Validates ticket exists and is `active`.
+- When admin clicks **Manual Verify** or **Reject**, open a small inline form asking for a reason (required, min 5 chars, textarea)
+- On submit: write `override_reason`, `overridden_by_admin_id = user.id`, `overridden_at = now()` to the latest `payment_proof` row for that order AND log to `admin_activity` with meta `{ reason }`
+- Also generate tickets on manual verify if none exist yet (currently missing — manual verify updates order status but never generates tickets)
 
-**Part F — RPC: `compute_pricing_quote(p_mobile text, p_match_id uuid, p_seats_count int)`**
-SECURITY DEFINER. Replicates the pricing-quote edge function logic in SQL. Returns JSONB with `{ seats: [...], total, is_returning, loyalty_seat_cap }`. This is a pure-read function, callable from the frontend without invoking an edge function.
+### Part 4 — `AdminOrders.tsx` — view proof image inline
+Add a "View Proof" link in the expanded proof panel that generates a signed URL for the file in `payment-proofs` storage bucket and opens it in a new tab.
 
-**Part G — RPC: `get_order_with_tickets(p_mobile text, p_match_id uuid)`**
-SECURITY DEFINER. Returns order + tickets for a given mobile/match combination. Safe lookup without exposing full orders table pattern.
+---
 
-### No UI changes needed
-All changes are purely database-side. The existing edge functions continue to work — these RPCs add a hardened alternative path and enforce constraints at the DB layer.
+## Files changed
 
-### Files changed
-- **New:** `supabase/migrations/[timestamp]_schema_hardening.sql`
-- **No frontend changes**
-
-### What this achieves vs the prompt's full ask:
-| Objective | Status |
+| File | Change |
 |---|---|
-| One active match enforced | ✅ Already partial unique index + new `set_active_match` RPC |
-| Cascade/restrict FKs | ✅ Already in Phase 1 migration |
-| RLS for public/admin | ✅ Already in place; public orders/tickets readable intentionally |
-| Performance indexes | ✅ Adding 6 missing indexes |
-| Value constraints | ✅ Adding 3 CHECK constraints |
-| Unique ticket QR | ✅ Already exists |
-| One order per mobile | ✅ Already exists |
-| `set_active_match` RPC | ✅ New |
-| `compute_pricing_quote` RPC | ✅ New |
-| `mark_ticket_checkin` RPC | ✅ New |
-| `get_order_with_tickets` RPC | ✅ New (bonus) |
-| `create_order_and_tickets` RPC | ⏭️ Skip — edge function is right layer (needs random QR gen) |
-| `generate_gameplay_pin` RPC | ⏭️ Skip — edge function has crypto.subtle (not available in PG functions) |
-| `resolve_delivery` RPC | ⏭️ Skip — complex score logic better in edge function |
+| `supabase/migrations/[new].sql` | Add 5 columns to `payment_proofs` |
+| `supabase/functions/verify-payment-proof/index.ts` | Full rewrite with enhanced fraud checks, ai_confidence, improved TXN dupe logic, safe ticket gen |
+| `src/pages/admin/AdminOrders.tsx` | Reason dialog for overrides, ticket gen on manual verify, view proof signed URL |
+
+---
+
+## Technical detail for non-technical readers
+
+- **What changes for users**: Nothing. The registration flow is identical. Behind the scenes, more fraud signals are captured.
+- **What changes for admins**: The "Manual Verify" and "Reject" buttons now require typing a brief reason before confirming (like a confirmation step). Admins will also see a "View Proof" button to open the payment screenshot. The fraud flags column shows why AI flagged a payment.
+- **New fraud checks**: If the same amount from the same mobile is uploaded within 30 minutes for two different orders, the system flags it for manual review instead of auto-verifying. If the same transaction ID is recycled, it's blocked immediately.
