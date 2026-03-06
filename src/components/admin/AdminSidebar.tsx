@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', to: '/admin/dashboard' },
   { icon: Trophy, label: 'Matches', to: '/admin/matches' },
+  { icon: Users, label: 'Teams & Players', to: '/admin/teams' },
   { icon: ShoppingBag, label: 'Orders', to: '/admin/orders' },
   { icon: ScanLine, label: 'Gate Validate', to: '/admin/validate' },
   { icon: BookOpen, label: 'Manual Booking', to: '/admin/manual-booking' },

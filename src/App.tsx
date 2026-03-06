@@ -21,6 +21,7 @@ import AdminOrders from "./pages/admin/AdminOrders";
 import AdminValidate from "./pages/admin/AdminValidate";
 import AdminManualBooking from "./pages/admin/AdminManualBooking";
 import AdminControl from "./pages/admin/AdminControl";
+import AdminTeams from "./pages/admin/AdminTeams";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="validate" element={<AdminValidate />} />
               <Route path="manual-booking" element={<AdminManualBooking />} />
               <Route path="control" element={<AdminControl />} />
+              <Route path="teams" element={<AdminTeams />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
