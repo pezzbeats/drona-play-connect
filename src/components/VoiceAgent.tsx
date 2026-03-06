@@ -34,10 +34,10 @@ export function VoiceAgent() {
   }, [conversation]);
 
   return (
-    <div className="fixed bottom-5 right-5 z-[99999] flex flex-col items-end gap-2">
-      {/* Idle nudge label */}
+    <div className="fixed bottom-5 right-5 z-[99999] flex items-center gap-2">
+      {/* Idle nudge label — inline to the left of the button, never above page buttons */}
       {!isConnected && !isConnecting && (
-        <p className="text-base font-display font-bold tracking-wide pr-1 animate-fade-in"
+        <p className="text-sm font-display font-bold tracking-wide animate-fade-in pointer-events-none"
           style={{ color: 'hsl(var(--primary))', textShadow: '0 0 12px hsl(var(--primary) / 0.8), 0 0 24px hsl(var(--primary) / 0.5)' }}>
           Need Help? 🎙️
         </p>
@@ -63,7 +63,7 @@ export function VoiceAgent() {
         disabled={isConnecting}
         aria-label={isConnected ? "End voice conversation" : "Start voice conversation"}
         className={cn(
-          "relative flex items-center justify-center w-14 h-14 rounded-full shadow-glass transition-all duration-300",
+          "relative flex items-center justify-center w-14 h-14 rounded-full shadow-glass transition-all duration-300 flex-shrink-0",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           "disabled:opacity-60 disabled:cursor-not-allowed",
           isConnected
