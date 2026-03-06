@@ -81,11 +81,19 @@ function RazorpayBadges() {
 
 // ─── Pre-payment confirmation summary ────────────────────────────────────────
 function PrePaymentSummary({
-  match, fullName, mobile, seatsCount, seatingType, total, onConfirm, onBack, loading
+  match, fullName, mobile, seatsCount, seatingType, total, onConfirm, onBack, loading,
+  eligibilityStatus, priceQuote,
 }: {
   match: Match; fullName: string; mobile: string; seatsCount: number;
   seatingType: string; total: number; onConfirm: () => void; onBack: () => void; loading: boolean;
+  eligibilityStatus?: 'idle' | 'checking' | 'eligible' | 'standard';
+  priceQuote?: { seats: Array<{ seat_index: number; price: number; reason: string }>; total: number } | null;
 }) {
+  const reasonLabel = (reason: string) => {
+    if (reason === 'semifinal_attendee' || reason === 'loyal_base') return '⭐ Special rate';
+    return 'Standard rate';
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Header */}
@@ -97,6 +105,23 @@ function PrePaymentSummary({
         <h3 className="font-display text-xl font-bold text-foreground">Confirm Your Order</h3>
         <p className="text-xs text-muted-foreground mt-1">Review your booking before proceeding to payment</p>
       </div>
+
+      {/* Eligibility banner */}
+      {eligibilityStatus === 'eligible' && (
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-success/10 border border-success/30">
+          <Star className="h-4 w-4 text-success flex-shrink-0" />
+          <div>
+            <p className="text-xs font-bold text-success">Semifinal Attendee Discount Applied</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Your eligible seats are priced at the special ₹949 rate.</p>
+          </div>
+        </div>
+      )}
+      {eligibilityStatus === 'standard' && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-muted/20 border border-border/30">
+          <Info className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+          <p className="text-xs text-muted-foreground">Standard pricing — ₹999/seat</p>
+        </div>
+      )}
 
       {/* Order summary card */}
       <GlassCard className="p-5 space-y-3">
@@ -112,7 +137,6 @@ function PrePaymentSummary({
           { label: 'Venue', value: match.venue },
           { label: 'Name', value: fullName },
           { label: 'Mobile', value: mobile },
-          { label: 'Seats', value: `${seatsCount} × ${seatingType}` },
           { label: 'Payment via', value: '⚡ Razorpay' },
         ].map(row => (
           <div key={row.label} className="flex items-center justify-between text-sm">
@@ -120,6 +144,30 @@ function PrePaymentSummary({
             <span className="font-medium text-foreground">{row.value}</span>
           </div>
         ))}
+
+        {/* Per-seat breakdown */}
+        <div className="pt-1">
+          <p className="text-xs text-muted-foreground mb-2">Seats ({seatingType})</p>
+          <div className="space-y-1.5">
+            {priceQuote?.seats.map((seat) => (
+              <div key={seat.seat_index} className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  Seat {seat.seat_index + 1}
+                  {(seat.reason === 'semifinal_attendee' || seat.reason === 'loyal_base') && (
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-success/15 text-success border border-success/20 font-semibold">
+                      ⭐ Special
+                    </span>
+                  )}
+                </span>
+                <span className="font-semibold text-foreground">₹{seat.price}</span>
+              </div>
+            )) ?? (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">{seatsCount} × {seatingType}</span>
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="pt-3 border-t border-border/50 flex items-center justify-between">
           <span className="font-display font-bold text-foreground">Total Payable</span>
@@ -760,6 +808,8 @@ export default function RegisterPage() {
                   onConfirm={handleRazorpayPayment}
                   onBack={() => setPaymentState('select_method')}
                   loading={razorpayLoading}
+                  eligibilityStatus={eligibilityStatus}
+                  priceQuote={priceQuote}
                 />
               </GlassCard>
             )}
@@ -841,11 +891,28 @@ export default function RegisterPage() {
                 </div>
 
                 {/* Total amount — prominent */}
-                <div className="text-center mb-5 py-3 rounded-xl bg-primary/5 border border-primary/20">
+                <div className="text-center mb-3 py-3 rounded-xl bg-primary/5 border border-primary/20">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Amount</p>
                   <p className="font-display text-4xl font-bold gradient-text">₹{priceQuote?.total}</p>
                   <p className="text-xs text-muted-foreground mt-1">{seatsCount} seat{seatsCount > 1 ? 's' : ''} · {seatingType}</p>
                 </div>
+
+                {/* Eligibility badge below total */}
+                {eligibilityStatus === 'eligible' && (
+                  <div className="flex items-center gap-2.5 px-4 py-3 mb-5 rounded-xl bg-success/10 border border-success/30">
+                    <Star className="h-4 w-4 text-success flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-success">⭐ Semifinal Attendee Discount Applied</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Eligible seats at the special ₹949 rate.</p>
+                    </div>
+                  </div>
+                )}
+                {eligibilityStatus === 'standard' && (
+                  <div className="flex items-center gap-2 px-4 py-2.5 mb-5 rounded-xl bg-muted/20 border border-border/30">
+                    <Info className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs text-muted-foreground">Standard pricing — ₹999/seat</p>
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <Label className="text-foreground block text-center text-sm">Choose Payment Method</Label>
