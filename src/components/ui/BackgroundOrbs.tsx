@@ -52,5 +52,17 @@ export const BackgroundOrbs = ({ variant = 'default' }: BackgroundOrbsProps) => 
         animationDelay: '9s',
       }}
     />
+    {/* Fifth orb — very subtle deep-green outfield wash, top-left */}
+    <div
+      className="bg-orb w-[22rem] h-[22rem]"
+      style={{
+        background: 'radial-gradient(circle, hsl(140 55% 18%) 0%, transparent 70%)',
+        opacity: 0.10,
+        top: '20%',
+        left: '-10%',
+        animationDelay: '4.5s',
+        animationDuration: '11s',
+      }}
+    />
   </div>
 );
