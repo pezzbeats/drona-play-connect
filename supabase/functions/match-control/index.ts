@@ -74,8 +74,8 @@ serve(async (req) => {
         updateData.current_innings = 2;
       }
 
-      // ── Innings/break/end transitions: clear player IDs + lock open windows ─
-      if (["innings2", "break", "ended"].includes(phase)) {
+      // ── Innings/break/end/super_over transitions: clear player IDs + lock open windows ─
+      if (["innings2", "break", "ended", "super_over"].includes(phase)) {
         updateData.current_striker_id = null;
         updateData.current_non_striker_id = null;
         updateData.current_bowler_id = null;

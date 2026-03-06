@@ -111,10 +111,9 @@ serve(async (req) => {
     let needs_new_batsman = false;
 
     if (liveState) {
-      const inningsKey = (innings_no || 1) === 1 ? "innings1" : "innings2";
+      const isSuperOver = (innings_no || 1) >= 3;
+      const inningsKey = (innings_no || 1) === 1 ? "innings1" : (innings_no === 2 ? "innings2" : null);
       const totalRuns = (runs_off_bat || 0) + (extras_runs || 0);
-      const newScore = (liveState[`${inningsKey}_score`] || 0) + totalRuns;
-      const newWickets = (liveState[`${inningsKey}_wickets`] || 0) + (is_wicket ? 1 : 0);
 
       // New legal ball count after this delivery
       const newLegalBalls = isIllegal ? legalBallCount : legalBallCount + 1;
@@ -130,7 +129,6 @@ serve(async (req) => {
       const completedOversCount = completedOvers?.length || 0;
 
       // Overs display: completed full overs + partial balls in current over
-      // e.g. 2 completed overs + 3 balls = 2.3
       const partialBalls = newLegalBalls % 6;
       const oversDisplay = completedOversCount + (partialBalls > 0 ? partialBalls / 10 : 0);
 
@@ -147,12 +145,52 @@ serve(async (req) => {
 
       // ── Build update payload ────────────────────────────────────────────────
       const updateData: any = {
-        [`${inningsKey}_score`]: newScore,
-        [`${inningsKey}_wickets`]: newWickets,
-        [`${inningsKey}_overs`]: oversDisplay,
         last_delivery_summary: summary,
         updated_at: new Date().toISOString(),
       };
+
+      if (isSuperOver) {
+        // Super over: update dedicated super_over_* fields
+        updateData.super_over_score = (liveState.super_over_score || 0) + totalRuns;
+        updateData.super_over_wickets = (liveState.super_over_wickets || 0) + (is_wicket ? 1 : 0);
+        updateData.super_over_overs = oversDisplay;
+
+        // Also update super_over_rounds team score in real-time
+        const { data: currentRound } = await supabase
+          .from("super_over_rounds")
+          .select("*")
+          .eq("match_id", match_id)
+          .order("round_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (currentRound) {
+          const isInningsA = innings_no === currentRound.innings_a_no;
+          const isInningsB = innings_no === currentRound.innings_b_no;
+          if (isInningsA) {
+            await supabase
+              .from("super_over_rounds")
+              .update({
+                team_a_score: updateData.super_over_score,
+                team_a_wickets: updateData.super_over_wickets,
+              })
+              .eq("id", currentRound.id);
+          } else if (isInningsB) {
+            await supabase
+              .from("super_over_rounds")
+              .update({
+                team_b_score: updateData.super_over_score,
+                team_b_wickets: updateData.super_over_wickets,
+              })
+              .eq("id", currentRound.id);
+          }
+        }
+      } else if (inningsKey) {
+        // Regular innings
+        updateData[`${inningsKey}_score`] = (liveState[`${inningsKey}_score`] || 0) + totalRuns;
+        updateData[`${inningsKey}_wickets`] = (liveState[`${inningsKey}_wickets`] || 0) + (is_wicket ? 1 : 0);
+        updateData[`${inningsKey}_overs`] = oversDisplay;
+      }
 
       // ── Wicket: clear the out batsman ───────────────────────────────────────
       if (is_wicket && out_player_id) {

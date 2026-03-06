@@ -13,18 +13,19 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
 import {
   Loader2, Zap, Trophy, Users, ScanLine, CheckCircle, AlertCircle,
-  Wifi, WifiOff, Loader, ShieldAlert, ShieldOff, Lock, Unlock, AlertTriangle,
-  UserPlus, RefreshCw, RotateCcw, ArrowLeftRight, Swords, ChevronDown, ChevronUp,
-  Eye, History, List, Settings2, Shield, Play, Pause, Square,
+  Wifi, WifiOff, Loader, ShieldAlert, Lock, Unlock, AlertTriangle,
+  UserPlus, RefreshCw, ArrowLeftRight, Swords, ChevronDown, ChevronUp,
+  List, Play, Square, Flag, Shield,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type TabId = 'command' | 'roster' | 'overs' | 'prediction';
+type TabId = 'command' | 'roster' | 'overs' | 'prediction' | 'super_over';
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+const BASE_TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'command',    label: 'Command',    icon: Zap },
   { id: 'roster',     label: 'Roster',     icon: Users },
   { id: 'overs',      label: 'Overs',      icon: List },
@@ -38,6 +39,7 @@ function PhaseBadge({ phase }: { phase: string }) {
     innings1: 'bg-success/20 text-success border border-success/40',
     break: 'bg-warning/20 text-warning border border-warning/40',
     innings2: 'bg-primary/20 text-primary border border-primary/40',
+    super_over: 'bg-warning/20 text-warning border border-warning/40',
     ended: 'bg-muted text-muted-foreground',
   };
   return (
@@ -114,6 +116,10 @@ export default function AdminControl() {
   const [correctionMode, setCorrectionMode] = useState(false);
   const [voidingDelivery, setVoidingDelivery] = useState<string | null>(null);
 
+  // Super Over state
+  const [superOverRounds, setSuperOverRounds] = useState<any[]>([]);
+  const [soConfirmDialog, setSoConfirmDialog] = useState<{ action: string; label: string; body: any } | null>(null);
+
   // Delivery form state
   const [delivery, setDelivery] = useState({
     striker_id: '', non_striker_id: '', bowler_id: '',
@@ -137,7 +143,7 @@ export default function AdminControl() {
     if (!matchData) { setLoading(false); return; }
     setMatch(matchData);
 
-    const [stateRes, overRes, allOversRes, windowRes, ordersRes, ticketsRes, flagsRes, rosterRes] = await Promise.all([
+    const [stateRes, overRes, allOversRes, windowRes, ordersRes, ticketsRes, flagsRes, rosterRes, roundsRes] = await Promise.all([
       supabase.from('match_live_state').select('*').eq('match_id', matchData.id).single(),
       supabase.from('over_control').select('*').eq('match_id', matchData.id).eq('status', 'active').limit(1).maybeSingle(),
       supabase.from('over_control').select('*, players(name)').eq('match_id', matchData.id).order('innings_no').order('over_no'),
@@ -146,6 +152,7 @@ export default function AdminControl() {
       supabase.from('tickets').select('id, status').eq('match_id', matchData.id),
       supabase.from('match_flags').select('*').eq('match_id', matchData.id).maybeSingle(),
       supabase.from('match_roster').select('*, teams(*)').eq('match_id', matchData.id),
+      supabase.from('super_over_rounds').select('*, team_a:teams!super_over_rounds_team_a_id_fkey(name,short_code), team_b:teams!super_over_rounds_team_b_id_fkey(name,short_code), winner:teams!super_over_rounds_winner_team_id_fkey(name,short_code)').eq('match_id', matchData.id).order('round_number'),
     ]);
 
     setLiveState(stateRes.data);
@@ -153,6 +160,7 @@ export default function AdminControl() {
     setAllOvers(allOversRes.data || []);
     setActiveWindow(windowRes.data);
     setMatchFlags(flagsRes.data);
+    setSuperOverRounds(roundsRes.data || []);
 
     // Fetch teams from roster
     const rosterTeams = (rosterRes.data || []).map((r: any) => r.teams).filter(Boolean);
@@ -227,6 +235,11 @@ export default function AdminControl() {
         event: '*' as const, schema: 'public', table: 'match_flags',
         filter: `match_id=eq.${match.id}`,
         callback: (payload: any) => { if (payload.new) setMatchFlags(payload.new); },
+      },
+      {
+        event: '*' as const, schema: 'public', table: 'super_over_rounds',
+        filter: `match_id=eq.${match.id}`,
+        callback: () => fetchAll(),
       },
     ];
   }, [match?.id, fetchAll, activeOver]);
@@ -472,6 +485,17 @@ export default function AdminControl() {
   ];
 
   const currentInningsKey = (liveState?.current_innings || 1) === 1 ? 'innings1' : 'innings2';
+
+  // Show super over tab when: already in super_over phase, OR match tied after innings2, OR ended with super over rounds
+  const scoresAreTied = liveState && liveState.innings1_score === liveState.innings2_score && (
+    ['innings2', 'ended', 'super_over'].includes(liveState.phase)
+  );
+  const showSuperOverTab = liveState?.super_over_active || scoresAreTied || superOverRounds.length > 0;
+
+  const TABS = [
+    ...BASE_TABS,
+    ...(showSuperOverTab ? [{ id: 'super_over' as TabId, label: '⚡ Super Over', icon: Swords }] : []),
+  ];
 
   if (loading) return (
     <div className="flex justify-center items-center h-64">
@@ -726,7 +750,7 @@ export default function AdminControl() {
                         onClick={() => setCorrectionMode(c => !c)}
                         className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all ${correctionMode ? 'border-warning/60 bg-warning/10 text-warning' : 'border-border text-muted-foreground hover:border-warning/40'}`}
                       >
-                        <RotateCcw className="h-3 w-3" /> Correction
+                        <RefreshCw className="h-3 w-3" /> Correction
                       </button>
                     </div>
                   </div>
@@ -748,7 +772,7 @@ export default function AdminControl() {
                         loading={!!voidingDelivery}
                         onClick={handleVoidLastDelivery}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" /> Void Last Delivery
+                        <RefreshCw className="h-3.5 w-3.5" /> Void Last Delivery
                       </GlassButton>
                     </div>
                   )}
@@ -1205,6 +1229,20 @@ export default function AdminControl() {
             </GlassCard>
           </>
         )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* TAB: SUPER OVER                                                    */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'super_over' && (
+          <SuperOverTab
+            liveState={liveState}
+            rounds={superOverRounds}
+            teams={teams}
+            match={match}
+            actionLoading={actionLoading}
+            onAction={(body: any, loadKey: string) => callFunction('super-over-control', body, loadKey)}
+          />
+        )}
       </div>
 
       {/* Confirmation dialog */}
@@ -1217,6 +1255,30 @@ export default function AdminControl() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={executeConfirmed}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Super Over confirm dialog */}
+      <AlertDialog open={!!soConfirmDialog} onOpenChange={open => !open && setSoConfirmDialog(null)}>
+        <AlertDialogContent className="glass-card-elevated border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display gradient-text flex items-center gap-2">
+              <Swords className="h-5 w-5 text-warning" /> Super Over
+            </AlertDialogTitle>
+            <AlertDialogDescription>{soConfirmDialog?.label}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (soConfirmDialog) callFunction('super-over-control', soConfirmDialog.body, soConfirmDialog.action);
+                setSoConfirmDialog(null);
+              }}
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
+            >
+              Confirm
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1343,6 +1405,294 @@ function LeaderboardMini({ matchId }: { matchId: string }) {
           <span className="text-xs text-muted-foreground">{e.correct_predictions}/{e.total_predictions}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Super Over Tab Component ──────────────────────────────────────────────────
+function SuperOverTab({ liveState, rounds, teams, match, actionLoading, onAction }: any) {
+  const [soTeamA, setSoTeamA] = useState('');
+  const [soTeamB, setSoTeamB] = useState('');
+  const [historyOpen, setHistoryOpen] = useState<Record<number, boolean>>({});
+  const { toast } = useToast();
+
+  const currentRound = rounds.length > 0 ? rounds[rounds.length - 1] : null;
+  const isActive = liveState?.super_over_active;
+  const isTied = liveState?.innings1_score === liveState?.innings2_score &&
+    ['innings2', 'ended', 'super_over'].includes(liveState?.phase);
+
+  const callSO = (action: string, extra: any = {}, loadKey?: string) => {
+    onAction({ action, match_id: match.id, ...extra }, loadKey || action);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* ── Tie detection / activation ── */}
+      {!isActive && isTied && liveState?.phase !== 'super_over' && (
+        <GlassCard className="p-4 border border-warning/50 bg-warning/5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+            <h2 className="font-display text-sm font-bold text-warning">Match Tied!</h2>
+          </div>
+          <div className="flex justify-center gap-6 mb-4 text-sm">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-0.5">Innings 1</p>
+              <p className="font-display text-2xl font-bold text-foreground">
+                {liveState?.innings1_score}/{liveState?.innings1_wickets}
+              </p>
+            </div>
+            <div className="text-center self-center text-muted-foreground font-bold">vs</div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-0.5">Innings 2</p>
+              <p className="font-display text-2xl font-bold text-foreground">
+                {liveState?.innings2_score}/{liveState?.innings2_wickets}
+              </p>
+            </div>
+          </div>
+          <GlassButton
+            variant="primary"
+            size="md"
+            className="w-full border-warning/50"
+            loading={actionLoading === 'activate'}
+            onClick={() => callSO('activate', {}, 'activate')}
+          >
+            <Swords className="h-4 w-4" /> Activate Super Over
+          </GlassButton>
+        </GlassCard>
+      )}
+
+      {/* ── Active round panel ── */}
+      {isActive && currentRound && (
+        <GlassCard className="p-4 border border-warning/40">
+          {/* Round header */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Swords className="h-4 w-4 text-warning" />
+              <h2 className="font-display text-sm font-bold text-warning">
+                Super Over — Round {currentRound.round_number}
+              </h2>
+            </div>
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide ${
+              currentRound.status === 'pending' ? 'bg-muted text-muted-foreground' :
+              currentRound.status === 'innings_a' ? 'bg-warning/20 text-warning border border-warning/40' :
+              currentRound.status === 'innings_b' ? 'bg-primary/20 text-primary border border-primary/40' :
+              'bg-success/20 text-success border border-success/40'
+            }`}>
+              {currentRound.status.replace('_', ' ')}
+            </span>
+          </div>
+
+          {/* Score comparison */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-card/50 rounded-lg p-3 text-center border border-border/30">
+              <p className="text-xs text-muted-foreground mb-1">{currentRound.team_a?.name || 'Team A'} (Innings A)</p>
+              <p className="font-display text-xl font-bold text-foreground">
+                {currentRound.team_a_score}/{currentRound.team_a_wickets}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Inn #{currentRound.innings_a_no}</p>
+            </div>
+            <div className="bg-card/50 rounded-lg p-3 text-center border border-border/30">
+              <p className="text-xs text-muted-foreground mb-1">{currentRound.team_b?.name || 'Team B'} (Innings B)</p>
+              <p className="font-display text-xl font-bold text-foreground">
+                {currentRound.status === 'innings_b' || currentRound.status === 'complete'
+                  ? `${currentRound.team_b_score}/${currentRound.team_b_wickets}`
+                  : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Inn #{currentRound.innings_b_no}</p>
+            </div>
+          </div>
+
+          {/* Live super over score */}
+          {(currentRound.status === 'innings_a' || currentRound.status === 'innings_b') && (
+            <div className="mb-3 text-center bg-warning/5 border border-warning/20 rounded-lg p-3">
+              <p className="text-xs text-warning font-semibold mb-1">⚡ Live Super Over</p>
+              <p className="font-display text-2xl font-bold text-foreground">
+                {liveState?.super_over_score}/{liveState?.super_over_wickets}
+              </p>
+              <p className="text-xs text-muted-foreground">{Number(liveState?.super_over_overs).toFixed(1)} overs</p>
+            </div>
+          )}
+
+          {/* Team assignment for innings start */}
+          {currentRound.status === 'pending' && (
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Team A (batting first)</p>
+                <Select value={soTeamA} onValueChange={setSoTeamA}>
+                  <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Team B (chasing)</p>
+                <Select value={soTeamB} onValueChange={setSoTeamB}>
+                  <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            {(currentRound.status === 'pending') && (
+              <GlassButton
+                variant="primary" size="sm"
+                loading={actionLoading === 'start_innings'}
+                onClick={() => callSO('start_innings', {
+                  innings_type: 'a',
+                  batting_team_id: soTeamA || null,
+                  bowling_team_id: soTeamB || null,
+                }, 'start_innings')}
+                className="col-span-2"
+              >
+                <Play className="h-3.5 w-3.5" /> Start Innings A
+              </GlassButton>
+            )}
+            {(currentRound.status === 'innings_a') && (
+              <GlassButton
+                variant="ghost" size="sm"
+                loading={actionLoading === 'complete_innings'}
+                onClick={() => callSO('complete_innings', { innings_type: 'a' }, 'complete_innings')}
+                className="col-span-2"
+              >
+                <Square className="h-3.5 w-3.5" /> Complete Innings A
+              </GlassButton>
+            )}
+            {(currentRound.status === 'innings_b') && (
+              <>
+                <GlassButton
+                  variant="primary" size="sm"
+                  loading={actionLoading === 'start_innings_b'}
+                  onClick={() => callSO('start_innings', {
+                    innings_type: 'b',
+                    batting_team_id: soTeamB || liveState?.bowling_team_id,
+                    bowling_team_id: soTeamA || liveState?.batting_team_id,
+                  }, 'start_innings_b')}
+                >
+                  <Play className="h-3.5 w-3.5" /> Start Inn B
+                </GlassButton>
+                <GlassButton
+                  variant="ghost" size="sm"
+                  loading={actionLoading === 'complete_innings'}
+                  onClick={() => callSO('complete_innings', { innings_type: 'b' }, 'complete_innings')}
+                >
+                  <Square className="h-3.5 w-3.5" /> Complete Inn B
+                </GlassButton>
+              </>
+            )}
+          </div>
+
+          {/* Round tied → add new round or finalize */}
+          {currentRound.status === 'complete' && currentRound.is_tied && (
+            <div className="mt-3 border-t border-warning/30 pt-3 space-y-2">
+              <p className="text-xs text-warning font-semibold text-center">⚡ Round {currentRound.round_number} Tied Again!</p>
+              <div className="grid grid-cols-2 gap-2">
+                <GlassButton
+                  variant="primary" size="sm"
+                  loading={actionLoading === 'add_round'}
+                  onClick={() => callSO('add_round', {}, 'add_round')}
+                >
+                  <Swords className="h-3.5 w-3.5" /> Round {currentRound.round_number + 1}
+                </GlassButton>
+                <GlassButton
+                  variant="danger" size="sm"
+                  loading={actionLoading === 'finalize'}
+                  onClick={() => callSO('finalize', {}, 'finalize')}
+                >
+                  <Flag className="h-3.5 w-3.5" /> Finalize
+                </GlassButton>
+              </div>
+            </div>
+          )}
+
+          {/* Round complete with winner → finalize */}
+          {currentRound.status === 'complete' && !currentRound.is_tied && (
+            <div className="mt-3 border-t border-success/30 pt-3 space-y-2">
+              <p className="text-xs text-success font-semibold text-center">
+                🏆 {currentRound.winner?.name || 'Winner'} won Round {currentRound.round_number}!
+              </p>
+              <GlassButton
+                variant="success" size="sm" className="w-full"
+                loading={actionLoading === 'finalize'}
+                onClick={() => callSO('finalize', {}, 'finalize')}
+              >
+                <Flag className="h-3.5 w-3.5" /> Finalize Match
+              </GlassButton>
+            </div>
+          )}
+        </GlassCard>
+      )}
+
+      {/* ── Round history ── */}
+      {rounds.length > 0 && (
+        <GlassCard className="p-4">
+          <h2 className="font-display text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+            📋 Super Over History
+          </h2>
+          <div className="space-y-2">
+            {rounds.map((r: any) => (
+              <Collapsible
+                key={r.id}
+                open={historyOpen[r.round_number]}
+                onOpenChange={v => setHistoryOpen(h => ({ ...h, [r.round_number]: v }))}
+              >
+                <CollapsibleTrigger asChild>
+                  <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors text-left">
+                    <span className="text-xs font-bold text-warning">Round {r.round_number}</span>
+                    <span className="flex-1 text-xs text-muted-foreground">
+                      {r.team_a?.short_code} {r.team_a_score}/{r.team_a_wickets} vs {r.team_b?.short_code} {r.team_b_score}/{r.team_b_wickets}
+                    </span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      r.is_tied ? 'bg-warning/20 text-warning' :
+                      r.winner_team_id ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {r.is_tied ? 'Tied' : r.winner ? `${r.winner.short_code} won` : r.status}
+                    </span>
+                    {historyOpen[r.round_number] ? <ChevronUp className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-3 py-2 text-xs text-muted-foreground space-y-1 border-t border-border/30 mt-1">
+                    <div className="flex justify-between">
+                      <span>{r.team_a?.name}: <strong className="text-foreground">{r.team_a_score}/{r.team_a_wickets}</strong></span>
+                      <span>Innings #{r.innings_a_no}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{r.team_b?.name}: <strong className="text-foreground">{r.team_b_score}/{r.team_b_wickets}</strong></span>
+                      <span>Innings #{r.innings_b_no}</span>
+                    </div>
+                    <div className="pt-1 font-semibold">
+                      {r.is_tied ? '⚡ Tied' : r.winner ? `🏆 ${r.winner.name} won` : `Status: ${r.status}`}
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Manual finalize fallback */}
+      {isActive && (
+        <GlassCard className="p-4 border border-destructive/30">
+          <h2 className="font-display text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-destructive" /> Emergency Finalize
+          </h2>
+          <p className="text-xs text-muted-foreground mb-3">Force-end the match. Only use when no innings is active.</p>
+          <GlassButton
+            variant="danger" size="sm" className="w-full"
+            loading={actionLoading === 'finalize'}
+            onClick={() => callSO('finalize', {}, 'finalize')}
+          >
+            <Flag className="h-3.5 w-3.5" /> Finalize Match
+          </GlassButton>
+        </GlassCard>
+      )}
     </div>
   );
 }

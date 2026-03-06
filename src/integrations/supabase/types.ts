@@ -439,6 +439,12 @@ export type Database = {
           last_delivery_summary: string | null
           match_id: string
           phase: Database["public"]["Enums"]["match_phase_enum"]
+          super_over_active: boolean
+          super_over_innings: number
+          super_over_overs: number
+          super_over_round: number
+          super_over_score: number
+          super_over_wickets: number
           target_runs: number | null
           updated_at: string
         }
@@ -459,6 +465,12 @@ export type Database = {
           last_delivery_summary?: string | null
           match_id: string
           phase?: Database["public"]["Enums"]["match_phase_enum"]
+          super_over_active?: boolean
+          super_over_innings?: number
+          super_over_overs?: number
+          super_over_round?: number
+          super_over_score?: number
+          super_over_wickets?: number
           target_runs?: number | null
           updated_at?: string
         }
@@ -479,6 +491,12 @@ export type Database = {
           last_delivery_summary?: string | null
           match_id?: string
           phase?: Database["public"]["Enums"]["match_phase_enum"]
+          super_over_active?: boolean
+          super_over_innings?: number
+          super_over_overs?: number
+          super_over_round?: number
+          super_over_score?: number
+          super_over_wickets?: number
           target_runs?: number | null
           updated_at?: string
         }
@@ -1212,6 +1230,95 @@ export type Database = {
         }
         Relationships: []
       }
+      super_over_rounds: {
+        Row: {
+          activated_by_admin_id: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          innings_a_no: number
+          innings_b_no: number
+          is_tied: boolean
+          match_id: string
+          round_number: number
+          status: string
+          team_a_id: string | null
+          team_a_score: number
+          team_a_wickets: number
+          team_b_id: string | null
+          team_b_score: number
+          team_b_wickets: number
+          winner_team_id: string | null
+        }
+        Insert: {
+          activated_by_admin_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          innings_a_no: number
+          innings_b_no: number
+          is_tied?: boolean
+          match_id: string
+          round_number?: number
+          status?: string
+          team_a_id?: string | null
+          team_a_score?: number
+          team_a_wickets?: number
+          team_b_id?: string | null
+          team_b_score?: number
+          team_b_wickets?: number
+          winner_team_id?: string | null
+        }
+        Update: {
+          activated_by_admin_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          innings_a_no?: number
+          innings_b_no?: number
+          is_tied?: boolean
+          match_id?: string
+          round_number?: number
+          status?: string
+          team_a_id?: string | null
+          team_a_score?: number
+          team_a_wickets?: number
+          team_b_id?: string | null
+          team_b_score?: number
+          team_b_wickets?: number
+          winner_team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "super_over_rounds_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "super_over_rounds_team_a_id_fkey"
+            columns: ["team_a_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "super_over_rounds_team_b_id_fkey"
+            columns: ["team_b_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "super_over_rounds_winner_team_id_fkey"
+            columns: ["winner_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           color: string | null
@@ -1369,7 +1476,13 @@ export type Database = {
       collection_method_enum: "cash" | "upi" | "card"
       created_source_enum: "self_register" | "manual_booking"
       extras_type_enum: "none" | "wide" | "no_ball" | "bye" | "leg_bye"
-      match_phase_enum: "pre" | "innings1" | "break" | "innings2" | "ended"
+      match_phase_enum:
+        | "pre"
+        | "innings1"
+        | "break"
+        | "innings2"
+        | "ended"
+        | "super_over"
       match_status_enum:
         | "draft"
         | "registrations_open"
@@ -1545,7 +1658,14 @@ export const Constants = {
       collection_method_enum: ["cash", "upi", "card"],
       created_source_enum: ["self_register", "manual_booking"],
       extras_type_enum: ["none", "wide", "no_ball", "bye", "leg_bye"],
-      match_phase_enum: ["pre", "innings1", "break", "innings2", "ended"],
+      match_phase_enum: [
+        "pre",
+        "innings1",
+        "break",
+        "innings2",
+        "ended",
+        "super_over",
+      ],
       match_status_enum: [
         "draft",
         "registrations_open",
