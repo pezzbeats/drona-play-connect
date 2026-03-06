@@ -39,7 +39,7 @@ export function VoiceAgent() {
       {!isConnected && !isConnecting && (
         <p className="text-base font-display font-bold tracking-wide pr-1 animate-fade-in"
           style={{ color: 'hsl(var(--primary))', textShadow: '0 0 12px hsl(var(--primary) / 0.8), 0 0 24px hsl(var(--primary) / 0.5)' }}>
-          Confused? Talk to us live 🎙️
+          Need Help? 🎙️
         </p>
       )}
       {/* Status label */}
