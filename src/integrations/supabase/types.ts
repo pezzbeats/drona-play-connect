@@ -1170,6 +1170,30 @@ export type Database = {
         }
         Relationships: []
       }
+      semifinal_eligibility: {
+        Row: {
+          id: string
+          match_label: string | null
+          mobile: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          id?: string
+          match_label?: string | null
+          mobile: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          id?: string
+          match_label?: string | null
+          mobile?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       site_config: {
         Row: {
           key: string
