@@ -59,6 +59,7 @@ const App = () => (
       <VoiceAgent />
       <BrowserRouter>
         <AuthProvider>
+          <VoiceAgentGuard />
           <Routes>
             {/* Public */}
             <Route path="/" element={<Index />} />
