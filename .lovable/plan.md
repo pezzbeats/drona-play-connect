@@ -1,103 +1,53 @@
 
-## Root Cause Analysis
+## Root Cause — Found
 
-The screenshot shows the skeleton permanently stuck — the page never transitions from loading state to real content. The data, RLS policies, and network are all fine. There are **two separate bugs** causing this:
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-### Bug 1 — `useSiteConfig` can get permanently stuck at `loading: true`
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-In `src/hooks/useSiteConfig.ts`, the `fetch` function is defined **inside the hook body** but referenced inside a `useEffect`. If `site_config` returns an empty array (no rows) or if `data` is null/falsy, this code path runs:
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-```ts
-const { data } = await supabase.from('site_config').select('key, value');
-if (data) {          // ← if data is null or an empty array [], this is falsy
-  ...
-  setLoading(false); // ← setLoading(false) is INSIDE this if block
-}
-setLoading(false);   // ← this DOES exist... but wait:
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-Actually the `setLoading(false)` is after the if block. BUT: **there is no `try/catch`**. If the network request throws (mobile data, DNS issue, timeout), the `fetch` function throws, and `setLoading(false)` is **never called**. `loading` stays `true` forever → skeleton never resolves.
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-### Bug 2 — `fetchData` in `Index.tsx` also has no error handling / no `finally`
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-Same problem in `Index.tsx` lines 123–150: `setLoading(false)` is only called at the very end of the happy path. A network error, a Supabase exception, or a timeout will leave `loading = true` permanently.
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
-```ts
-const fetchData = async () => {
-  setLoading(true);
-  const { data: matchData, error: matchError } = await supabase...  // throws? stuck forever
-  ...
-  setLoading(false);  // never reached if exception thrown
-};
-```
+## Changes
 
-### Bug 3 — Module-level `cache` variable in `useSiteConfig` persists across hot reloads
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
 
-The `let cache: ConfigMap | null = null` at module level means if the site_config fetch ever succeeds, `loading` is initialised to `false` — but if it fails silently once, `cache` stays `null` and every new mount will try to fetch again. On mobile with poor connectivity, the first fetch might simply time out.
-
----
-
-## The Fix
-
-**`src/hooks/useSiteConfig.ts`** — wrap fetch in try/catch + always call setLoading(false):
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
 
 ```ts
-const fetch = async () => {
-  setLoading(true);
-  try {
-    const { data, error } = await supabase.from('site_config').select('key, value');
-    if (error) throw error;
-    if (data) {
-      const map: ConfigMap = {};
-      data.forEach(row => { map[row.key] = row.value; });
-      cache = map;
-      setConfig(map);
-    }
-  } catch (e) {
-    console.error('[useSiteConfig] fetch failed:', e);
-    // Don't crash — fallbacks will be used from the get() calls
-  } finally {
-    setLoading(false);  // ← ALWAYS unblock
-  }
-};
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
 ```
 
-**`src/pages/Index.tsx`** — wrap `fetchData` in try/catch + use `finally` for `setLoading(false)`:
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
-```ts
-const fetchData = async () => {
-  setLoading(true);
-  try {
-    const { data: matchData, error: matchError } = await supabase...
-    if (matchError) console.error('[Index] match fetch error:', matchError);
-    if (matchData) {
-      setMatch(matchData);
-      // ...banner + pricing fetches (also wrapped)...
-    }
-  } catch (e) {
-    console.error('[Index] fetchData error:', e);
-  } finally {
-    setLoading(false);  // ← ALWAYS unblock, show content or coming-soon
-  }
-};
-```
+## Why this is the correct fix
 
-Additionally add a **timeout safety net** — if both fetches somehow hang beyond 8 seconds, force `loading = false`:
-
-```ts
-useEffect(() => {
-  const timeout = setTimeout(() => setLoading(false), 8000);
-  fetchData().finally(() => clearTimeout(timeout));
-}, []);
-```
-
----
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
 ## Files Changed
-
 | File | Change |
 |---|---|
-| `src/hooks/useSiteConfig.ts` | Add `try/catch/finally` so `setLoading(false)` is always called |
-| `src/pages/Index.tsx` | Add `try/catch/finally` to `fetchData`, add 8s timeout safety net |
-
-Two-line root cause summary: both async fetches lack `finally` blocks, so any network hiccup (especially on mobile) silently leaves `loading = true` forever, keeping the skeleton permanently stuck on screen.
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
