@@ -24,12 +24,41 @@ serve(async (req) => {
 
     // Get active match
     const { data: match } = await supabase.from("matches").select("id").eq("is_active_for_registration", true).single();
-    if (!match) throw new Error("No active match");
+    if (!match) {
+      // Try to find any match with active game access for this mobile
+      const { data: access } = await supabase
+        .from("game_access")
+        .select("*, matches(id)")
+        .eq("mobile", mobile)
+        .eq("pin_hash", pinHash)
+        .eq("is_active", true)
+        .limit(1)
+        .single();
 
-    const { data: access } = await supabase.from("game_access").select("*").eq("mobile", mobile).eq("match_id", match.id).eq("pin_hash", pinHash).eq("is_active", true).single();
+      if (access) {
+        return new Response(JSON.stringify({ valid: true, match_id: (access as any).matches?.id || access.match_id }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw new Error("No active match");
+    }
 
-    return new Response(JSON.stringify({ valid: !!access }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { data: access } = await supabase
+      .from("game_access")
+      .select("*")
+      .eq("mobile", mobile)
+      .eq("match_id", match.id)
+      .eq("pin_hash", pinHash)
+      .eq("is_active", true)
+      .single();
+
+    return new Response(
+      JSON.stringify({ valid: !!access, match_id: match.id }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (e: any) {
-    return new Response(JSON.stringify({ valid: false, error: e.message }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ valid: false, error: e.message }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
