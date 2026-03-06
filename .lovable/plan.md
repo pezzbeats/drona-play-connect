@@ -1,108 +1,138 @@
 
-## Analysis of Current State
+## Analysis
 
-**`AdminMatches.tsx`** — list page:
-- "New Match" dialog: basic fields only, no clone option
-- Activate toggle exists but no confirmation guard — one accidental tap deactivates a live match
-- No registration toggle separate from the "Active" toggle (they're conflated)
-- No preview link per match
+**What exists today:**
+- `AdminDashboard.tsx` — 6 basic stat tiles (total orders, paid, unpaid, pending, check-ins today, total seats). No charts, no revenue breakdown by payment method, no occupancy meter, no prediction stats, no CSV export, no per-match filtering.
+- `AdminOrders.tsx` — raw order list with filters. No aggregated analytics.
+- `AdminLeaderboard.tsx` — per-match leaderboard. Has CSV export but only for leaderboard data.
 
-**`AdminMatchDetail.tsx`** — detail page (opened from Edit button):
-- Has match info, pricing, and asset sections — all functional
-- Pricing section exists but has no visual price-tier cards
-- No "Clone from previous match" button
-- No "Preview Registration Page" link
-- Status dropdown includes `registrations_open/closed` but it's buried in a plain Select — no dedicated toggle
-- Asset thumbnails are small (w-12 h-12) and hard to verify at a glance
+**What needs building:**
+A dedicated `/admin/analytics` page that aggregates across existing tables (`orders`, `tickets`, `payment_collections`, `predictions`, `prediction_windows`) and presents operational charts and exportable summaries.
 
-**`Register.tsx`** — public page:
-- Reads from the `is_active_for_registration` flag on `matches` table
-- Supports `match_id` in the URL query already? No — it always reads the active match. We can add a `?preview=<matchId>` mode.
+No schema changes are needed — all data is available in existing tables.
 
 ---
 
 ## Plan
 
-### Changes: `AdminMatchDetail.tsx` (primary target — most features land here)
+### New file: `src/pages/admin/AdminAnalytics.tsx`
 
-**1. Clone from previous match**
-- Add a "Clone from" button in the header area → opens a small popover/dialog listing all other matches
-- On select: fetches that match's `match_pricing_rules`, `match_assets`, and `match_scoring_config`, then fills the current page's forms. Does NOT save automatically — admin still clicks "Save Changes" / "Save Pricing" to commit.
+One page, match-selector at the top, then 6 sections:
 
-**2. Visual pricing tiers**
-- Replace the flat input grid with two side-by-side pricing cards:
-  - Left card: "New Customer" (blue tint) — price input + badge showing savings vs. returning
-  - Right card: "Returning / Loyal" (green tint) — price input + loyalty link selector
-- Shows a live "savings badge": "₹50 off for returning fans" calculated from the two values
-- Loyalty link select (already exists) stays below, but now shown contextually inside the Returning card with a visual indicator
+**1. Match selector** — dropdown of all matches; loads all data for that match on change. Also shows an "All Matches" option for aggregate view.
 
-**3. Larger asset previews + drag-to-replace UX**
-- Asset grid cells: increase preview image to `w-full h-24 object-cover` (instead of w-12 h-12)
-- Add a "Replace" button on hover overlay for already-uploaded assets
-- Add a "Remove" button (sets file to empty / deletes the asset row)
+**2. Ticket Sales Summary** — 3 key cards:
+- Total Registrations (order count)
+- Total Seats Sold
+- Conversion rate: paid/total %
 
-**4. Registration toggle + status quick-actions (dedicated section)**
-- Add a "Registration Controls" card with:
-  - **Status quick-toggle row**: button-group for `draft | registrations_open | registrations_closed` (highlights current)
-  - **Active for Registration switch**: styled Switch component with confirmation dialog when turning ON (warns if another match is active) — calls `set-match-active` edge function
-  - Shows current state prominently
+**3. Paid vs Unpaid Breakdown** — horizontal stacked bar (Recharts `BarChart`) showing:
+- `paid_verified` | `paid_manual_verified` | `pending_verification` | `unpaid` | `paid_rejected`
+- Also a donut/pie chart (Recharts `PieChart`) as a visual summary
 
-**5. Preview Registration Page button**
-- Add a "Preview Registration Page" button that navigates to `/register?preview=<matchId>` in a new tab
-- In `Register.tsx`: read `?preview=<matchId>` query param — if present AND user is coming from admin (we can check `document.referrer` or just always allow it for the demo), fetch that specific match instead of the active one, show a "PREVIEW MODE" banner at the top
+**4. Revenue Summary by Payment Method** — cards:
+- Revenue from `upi_qr` orders (sum of `total_amount` where `payment_method = 'upi_qr'` and paid)
+- Revenue from `pay_at_hotel` (sum where `payment_method = 'pay_at_hotel'` and paid)
+- Total verified revenue
+- Uses `orders.total_amount` for paid orders
 
-### Changes: `AdminMatches.tsx`
+**5. Live Occupancy Meter** — a progress bar showing `checked_in / total_seats_sold`. Fetches `tickets` count with `checked_in_at IS NOT NULL` for the selected match vs total tickets.
 
-**6. Safety confirmation for Activate toggle**
-- Wrap the Activate button in an `AlertDialog` confirmation: "Are you sure? This will deactivate any currently active match and open registration for [match name]."
-- Add a clone icon button next to Edit — clicking it navigates to create-new-match flow but pre-fills the form via URL params `?clone=<matchId>`
+**6. Prediction Participation Stats** — 3 cards:
+- Total prediction windows for the match
+- Total predictions submitted
+- Participation rate: unique mobiles who predicted / unique mobiles who have tickets
+- Small bar chart: predictions per window (top 5 windows by participation)
+
+**7. Export CSV** — single "Export Report" button that generates a multi-section CSV:
+```
+T20 Fan Night Analytics — [Match Name]
+DISCLAIMER: For entertainment only. No gambling or wagering.
+
+TICKET SALES
+...
+
+REVENUE BY PAYMENT METHOD
+...
+
+CHECK-IN STATS
+...
+
+PREDICTION STATS
+...
+```
+
+### Routing + Sidebar
+
+Add `{ icon: BarChart2, label: 'Analytics', to: '/admin/analytics' }` to `AdminSidebar.tsx` navItems.
+Add `<Route path="analytics" element={<AdminAnalytics />} />` in `App.tsx`.
+
+---
+
+## Data fetching strategy
+
+All done client-side from the Supabase JS client — no new edge functions needed:
+
+```typescript
+// Orders for match
+const { data: orders } = await supabase
+  .from('orders')
+  .select('id, payment_status, payment_method, total_amount, seats_count, created_at')
+  .eq('match_id', selectedMatchId);
+
+// Tickets check-in count
+const { count: checkedIn } = await supabase
+  .from('tickets')
+  .select('*', { count: 'exact', head: true })
+  .eq('match_id', selectedMatchId)
+  .not('checked_in_at', 'is', null);
+
+const { count: totalTickets } = await supabase
+  .from('tickets')
+  .select('*', { count: 'exact', head: true })
+  .eq('match_id', selectedMatchId);
+
+// Prediction windows
+const { data: windows } = await supabase
+  .from('prediction_windows')
+  .select('id, question, status')
+  .eq('match_id', selectedMatchId);
+
+// Predictions (count per window)
+const { data: predictions } = await supabase
+  .from('predictions')
+  .select('id, window_id, mobile')
+  .eq('match_id', selectedMatchId);
+```
 
 ---
 
 ## Files changed
 
-| File | What changes |
+| File | Change |
 |---|---|
-| `src/pages/admin/AdminMatchDetail.tsx` | Clone dialog, visual pricing cards, larger assets, registration controls card, preview button |
-| `src/pages/admin/AdminMatches.tsx` | AlertDialog confirmation on activate toggle |
-| `src/pages/Register.tsx` | Read `?preview=<matchId>` param, show PREVIEW banner |
+| `src/pages/admin/AdminAnalytics.tsx` | New page — all analytics sections |
+| `src/components/admin/AdminSidebar.tsx` | Add Analytics nav entry |
+| `src/App.tsx` | Add `/admin/analytics` route |
 
-No DB schema changes needed — all within existing tables.
+No DB migrations needed.
 
 ---
 
-## Detail: Clone logic
-```typescript
-const handleClone = async (sourceMatchId: string) => {
-  const [pricingRes, configRes] = await Promise.all([
-    supabase.from('match_pricing_rules').select('*').eq('match_id', sourceMatchId).single(),
-    supabase.from('match_scoring_config').select('*').eq('match_id', sourceMatchId).maybeSingle(),
-  ]);
-  // Pre-fill pricingForm from pricingRes.data (don't save yet)
-  // Pre-fill scoringConfig from configRes.data
-  toast({ title: 'Settings cloned — review and save to apply' });
-};
-```
-Assets are NOT cloned (they need to be re-uploaded per match — file paths are match-scoped).
+## Layout sketch
 
-## Detail: Preview mode in Register.tsx
-```typescript
-const previewMatchId = new URLSearchParams(window.location.search).get('preview');
-// if previewMatchId exists, fetch that specific match + show banner
-```
-No auth check — preview is read-only so safe to expose. Shows a yellow "⚠️ PREVIEW MODE — Not live" sticky banner.
-
-## Detail: Registration Controls card layout
-```
-┌─────────────────────────────────────────────────┐
-│ Registration Controls                            │
-│                                                  │
-│ Status:  [Draft] [Open ✓] [Closed]              │
-│          (button-group, one active)              │
-│                                                  │
-│ Active for registration:  ●──── ON              │
-│  [Only one match can be active at a time]        │
-│                                                  │
-│ [👁 Preview Registration Page ↗]                │
-└─────────────────────────────────────────────────┘
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Analytics & Reports        [Match selector ▾]  [Export CSV]  │
+├──────────────────────────────────────────────────────────────┤
+│ [Total Regs]  [Seats Sold]  [Paid %]  [Revenue Total]        │
+├──────────────────────────────────────────────────────────────┤
+│  Payment Status Breakdown           Occupancy Meter          │
+│  ████▓▓▓░░░░  (stacked bar)        ████████░░ 68% checked in│
+├──────────────────────────────────────────────────────────────┤
+│  Revenue by Method                  Prediction Participation  │
+│  UPI QR: ₹24,500                    Windows: 12              │
+│  Pay at Hotel: ₹8,200               Predictions: 345         │
+│  Total: ₹32,700                     Participation: 74%       │
+└──────────────────────────────────────────────────────────────┘
 ```
