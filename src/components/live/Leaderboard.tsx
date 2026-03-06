@@ -8,8 +8,10 @@ interface LeaderboardEntry {
   mobile: string;
   player_name: string | null;
   total_points: number;
+  points_adjustment: number;
   correct_predictions: number;
   total_predictions: number;
+  rank_position: number | null;
 }
 
 interface LeaderboardProps {
@@ -24,15 +26,14 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
   const fetchLeaderboard = useCallback(async () => {
     const { data } = await supabase
       .from('leaderboard')
-      .select('mobile, player_name, total_points, correct_predictions, total_predictions')
+      .select('mobile, player_name, total_points, points_adjustment, correct_predictions, total_predictions, rank_position')
       .eq('match_id', matchId)
-      .order('total_points', { ascending: false })
+      .order('rank_position', { ascending: true, nullsFirst: false })
       .limit(20);
 
-    if (data) setEntries(data);
+    if (data) setEntries(data as LeaderboardEntry[]);
   }, [matchId]);
 
-  // Debounce to prevent burst fetches after a window resolve (N players scored at once)
   const debouncedFetch = useCallback(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchLeaderboard(), 200);
@@ -74,12 +75,14 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
     );
   }
 
-  const myRank = mobile ? entries.findIndex(e => e.mobile === mobile) + 1 : -1;
-  const myEntry = mobile ? entries.find(e => e.mobile === mobile) : null;
+  // Find "my" position using rank_position or fallback index
+  const myIdx = mobile ? entries.findIndex(e => e.mobile === mobile) : -1;
+  const myEntry = myIdx >= 0 ? entries[myIdx] : null;
+  const myRank = myEntry?.rank_position ?? (myIdx >= 0 ? myIdx + 1 : -1);
 
   return (
     <div className="space-y-3">
-      {/* My rank card if not in top 10 visible area */}
+      {/* My rank card if outside top 10 visible */}
       {myEntry && myRank > 10 && (
         <GlassCard className="p-3 border border-primary/30">
           <div className="flex items-center justify-between">
@@ -89,7 +92,16 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
                 {myEntry.player_name || 'You'}
               </span>
             </div>
-            <span className="text-primary font-bold text-sm">{myEntry.total_points} pts</span>
+            <div className="flex items-center gap-2">
+              {myEntry.total_predictions > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {((myEntry.correct_predictions / myEntry.total_predictions) * 100).toFixed(0)}% acc
+                </span>
+              )}
+              <span className="text-primary font-bold text-sm">
+                {(myEntry.total_points + (myEntry.points_adjustment || 0))} pts
+              </span>
+            </div>
           </div>
         </GlassCard>
       )}
@@ -102,8 +114,13 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
         </div>
         <div className="divide-y divide-border/30">
           {entries.map((entry, i) => {
-            const rank = i + 1;
+            const rank = entry.rank_position ?? (i + 1);
             const isMe = mobile && entry.mobile === mobile;
+            const totalPts = (entry.total_points || 0) + (entry.points_adjustment || 0);
+            const acc = entry.total_predictions > 0
+              ? ((entry.correct_predictions / entry.total_predictions) * 100).toFixed(0) + '%'
+              : null;
+
             return (
               <div
                 key={entry.mobile}
@@ -117,12 +134,13 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
                     {entry.player_name || entry.mobile.slice(-4).padStart(10, '•')}
                     {isMe && <span className="ml-1 text-xs">(you)</span>}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {entry.correct_predictions}/{entry.total_predictions} correct
-                  </p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{entry.correct_predictions}/{entry.total_predictions} correct</span>
+                    {acc && <span className="text-primary/70">{acc}</span>}
+                  </div>
                 </div>
                 <span className={`font-bold text-sm flex-shrink-0 ${isMe ? 'text-primary' : 'text-foreground'}`}>
-                  {entry.total_points}
+                  {totalPts}
                 </span>
               </div>
             );
