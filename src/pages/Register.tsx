@@ -11,7 +11,7 @@ import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
   CheckCircle2, ChevronRight, CreditCard, Smartphone, Users, MapPin,
   Upload, Loader2, AlertCircle, Star, Info, Zap, Shield, RefreshCw,
-  Phone, Mail, ArrowRight, XCircle, Clock
+  Phone, Mail, ArrowRight, XCircle, Clock, ArrowLeft
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
@@ -529,6 +529,10 @@ export default function RegisterPage() {
       </div>
 
       <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
+        {/* Back to Home */}
+        <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mb-4">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Home
+        </Link>
         {/* Header */}
         <div className="text-center mb-5">
           <div className="flex flex-col items-center mb-3 gap-1.5">

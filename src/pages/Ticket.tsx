@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
-import { Loader2, Printer, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, Printer, Share2, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
 
@@ -133,6 +133,9 @@ export default function TicketPage() {
       <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
         {/* Header */}
         <div className="text-center mb-6 no-print">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mb-3">
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Home
+          </Link>
           <h1 className="font-display text-3xl font-bold gradient-text">Your Tickets</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {match?.name}{match?.opponent ? ` vs ${match.opponent}` : ''} · {match?.venue}

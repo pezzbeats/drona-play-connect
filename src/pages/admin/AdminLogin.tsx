@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -7,7 +7,7 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import hotelLogo from '@/assets/hotel-logo.png';
 
 export default function AdminLoginPage() {
@@ -38,6 +38,10 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative">
       <BackgroundOrbs variant="admin" />
+      {/* Back to Home */}
+      <Link to="/" className="absolute top-4 left-4 z-20 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
+        <ArrowLeft className="h-3.5 w-3.5" /> Home
+      </Link>
       <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="mx-auto mb-3 w-20 h-20 flex items-center justify-center rounded-full bg-[hsl(38_60%_12%)] shadow-[0_0_28px_hsl(38_75%_52%/0.7),0_0_56px_hsl(38_75%_52%/0.3)]" style={{border:'2px solid hsl(38 75% 52% / 0.6)'}}>
