@@ -29,6 +29,10 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminActivity from "./pages/admin/AdminActivity";
 import AdminHealth from "./pages/admin/AdminHealth";
 import AdminRoles from "./pages/admin/AdminRoles";
+import PrivacyPolicyPage from "./pages/PrivacyPolicy";
+import RefundPolicyPage from "./pages/RefundPolicy";
+import EventParticipationTermsPage from "./pages/EventParticipationTerms";
+import DisclaimerPolicyPage from "./pages/DisclaimerPolicy";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +51,10 @@ const App = () => (
             <Route path="/play" element={<PlayPage />} />
             <Route path="/live" element={<LivePage />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/refund-policy" element={<RefundPolicyPage />} />
+            <Route path="/event-terms" element={<EventParticipationTermsPage />} />
+            <Route path="/disclaimer" element={<DisclaimerPolicyPage />} />
 
             {/* Admin Auth */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
