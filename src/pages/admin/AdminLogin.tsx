@@ -48,11 +48,11 @@ export default function AdminLoginPage() {
         </div>
 
         <GlassCard className="p-6" glow>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <Label className="text-foreground mb-1.5 block">Email</Label>
+              <Label className="text-foreground mb-2 block text-sm font-semibold">Email</Label>
               <Input
-                className="glass-input"
+                className="glass-input h-14 text-base"
                 type="email"
                 placeholder="admin@t20fannight.com"
                 value={email}
@@ -61,10 +61,10 @@ export default function AdminLoginPage() {
               />
             </div>
             <div>
-              <Label className="text-foreground mb-1.5 block">Password</Label>
+              <Label className="text-foreground mb-2 block text-sm font-semibold">Password</Label>
               <div className="relative">
                 <Input
-                  className="glass-input pr-10"
+                  className="glass-input h-14 text-base pr-12"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
@@ -73,10 +73,10 @@ export default function AdminLoginPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground touch-target flex items-center justify-center"
                   onClick={() => setShowPassword(s => !s)}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>

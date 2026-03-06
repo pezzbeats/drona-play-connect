@@ -221,6 +221,12 @@
     background-clip: text;
   }
 
+  /* Touch-target utility */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
   /* Input glassmorphism */
   .glass-input {
     background: hsl(355 20% 9% / 0.8);
@@ -228,6 +234,8 @@
     color: hsl(60 20% 96%);
     backdrop-filter: blur(8px);
     font-size: 16px; /* prevent iOS zoom */
+    min-height: 48px;
+    border-radius: var(--radius);
     transition: border-color 0.2s, box-shadow 0.2s;
   }
 
