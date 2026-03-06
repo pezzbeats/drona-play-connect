@@ -138,26 +138,39 @@ export default function LivePage() {
         </div>
       </div>
 
-      {/* Fixed bottom tab bar */}
+      {/* Fixed bottom tab bar — iOS-style with top border indicator */}
       <div
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/50 bg-[hsl(var(--background)/0.92)] backdrop-blur-xl"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="flex max-w-lg mx-auto">
+        <div className="flex max-w-lg mx-auto relative">
           {tabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-semibold transition-all ${
+              className={`flex-1 flex flex-col items-center justify-center gap-1 pt-1 pb-3 text-xs font-semibold transition-colors relative ${
                 activeTab === tab.key
                   ? 'text-primary'
-                  : 'text-muted-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <div className={`p-1.5 rounded-lg transition-all ${activeTab === tab.key ? 'bg-primary/15' : ''}`}>
+              {/* iOS-style top border indicator */}
+              <span
+                className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 rounded-b-full transition-all duration-300"
+                style={{
+                  width: activeTab === tab.key ? '40%' : '0%',
+                  background: 'linear-gradient(90deg, hsl(355 80% 55%), hsl(38 75% 52%))',
+                  opacity: activeTab === tab.key ? 1 : 0,
+                }}
+              />
+              <div className={`p-1.5 rounded-xl transition-all duration-200 ${
+                activeTab === tab.key ? 'bg-primary/15 scale-110' : 'scale-100'
+              }`}>
                 {tab.icon}
               </div>
-              <span>{tab.label}</span>
+              <span className={`transition-all duration-200 ${activeTab === tab.key ? 'font-bold' : 'font-medium'}`}>
+                {tab.label}
+              </span>
             </button>
           ))}
         </div>
