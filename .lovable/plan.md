@@ -1,63 +1,74 @@
 
-## Root Cause
 
-There are **two compounding bugs** causing the Register button to disappear:
+## Current problem
 
-### Bug 1: `.single()` silently kills the match (primary cause)
-
-In `fetchData()` (line 68):
-```ts
-.single()  // ❌ throws PGRST116 error if anything goes wrong
+Lines 90–97 in `Index.tsx` bail out of rendering the whole page:
+```tsx
+if (loading || configLoading) {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
 ```
-Supabase's `.single()` returns an **error** if the row count isn't exactly 1 (including transient network hiccups, brief DB lag, etc.). This error is silently swallowed by `catch { }` on line 84, leaving `match = null`. The fix is `.maybeSingle()` — which returns `{ data: null, error: null }` on zero results instead of throwing.
+This causes:
+1. Full blank screen → content pop-in (layout shift)
+2. The register CTA is invisible during load
 
-### Bug 2: CTA button lives entirely inside the match-truthy branch (secondary cause)
+## Fix: inline skeleton instead of full-page spinner
 
-The "Reserve Your Seats Now" button and "View Your Passes" link are only rendered when `match !== null` (lines 313–326). So when Bug 1 fires, the button disappears even though a real active match exists in the database. This is a UX resilience failure — the CTA should never vanish silently.
+Remove the early return entirely. Keep the hero, CTA, footer always rendered. Replace only the **match card section** with a skeleton placeholder while loading.
 
-Database confirms the match IS there and active:
-- `India vs New Zealand - T20 World Cup Final`, `is_active_for_registration: true`
-- Pricing rule exists (₹999 new, ₹949 returning)
-- RLS policies are correct (public SELECT allowed)
-
----
-
-## Fix
-
-**File: `src/pages/Index.tsx`** — two targeted changes:
-
-### Change 1 — Replace `.single()` with `.maybeSingle()` + expose errors (line 68)
-```ts
-// Before:
-.single();
-
-// After:
-.maybeSingle();
-```
-Also add `const { data: matchData, error: matchError } = ...` and log the error so it's visible in the console for future debugging instead of being silently swallowed.
-
-### Change 2 — Move the CTA outside the match branch (lines 313–326)
-The "Reserve Your Seats Now" button and "View Your Passes" link should **always render** when the page loads — they should not be conditional on `match !== null`.
-
-Move the CTA block to just below the `{match ? ... : ...}` block so it renders regardless:
+### What renders during load vs after
 
 ```text
-Page layout after fix:
-├── Hero section (always)
-├── {match ? (
-│     Banner, Match Card, Features, Pricing, Trust Strip
-│   ) : (
-│     Coming Soon card
-│   )}
-├── ─── Reserve Your Seats Now ─── ← ALWAYS VISIBLE (moved here)
-├── Legal Disclaimer
-├── Business Trust Block
-└── Footer
+DURING LOAD (loading === true)          AFTER LOAD
+────────────────────────────────        ────────────────────────────────
+Hero (always)                           Hero (always)
+┌──────────────────────────┐            ┌──────────────────────────┐
+│ ░░░░░░░░  skeleton       │            │  Match card (real data)  │
+│ ░░░░░░░░░░░░░░           │      →     │  Features grid           │
+│ ░░░░░░                   │            │  Pricing card            │
+│ ░░░░ ░░░░ ░░░░ ░░░░     │            │  Trust strip             │
+└──────────────────────────┘            └──────────────────────────┘
+CTA button (always)                     CTA button (always)
+Footer (always)                         Footer (always)
 ```
 
-This way even if the match fetch fails, users still see the register button and can complete their booking.
+### Changes
 
-### Files to modify
+**`src/pages/Index.tsx`** only:
+
+1. **Remove** the `if (loading || configLoading) { return ... }` early bail-out (lines 90–97)
+
+2. **Add** a `MatchSectionSkeleton` inline component at the top of the file that mirrors the height/structure of the real match section:
+   - Banner placeholder: `h-52` pulse div (same height as real banner)
+   - Match card skeleton: `p-6` glass card with shimmer lines for title, venue, date
+   - 2×2 features grid: four small skeleton cards
+   - Pricing card: skeleton with two columns
+
+3. **Replace** `{match ? (...) : (...)}` block with:
+   ```tsx
+   {(loading || configLoading) ? (
+     <MatchSectionSkeleton />
+   ) : match ? (
+     // real match content
+   ) : (
+     // coming soon card
+   )}
+   ```
+
+4. Use the existing `skeleton` CSS class (already defined in `index.css`) for the shimmer effect — consistent with `SkeletonCard` component already in the project.
+
+### Why this is better
+- Zero layout shift — page height stays stable during load
+- CTA button is immediately visible and tappable even before data loads
+- Hero section renders instantly (no waiting for DB)
+- Reuses existing `skeleton` CSS class for visual consistency
+
+### Files changed
 | File | Change |
 |---|---|
-| `src/pages/Index.tsx` | `.single()` → `.maybeSingle()`, move CTA outside match branch, add error logging |
+| `src/pages/Index.tsx` | Remove full-page spinner, add inline `MatchSectionSkeleton`, wire into render logic |
+
