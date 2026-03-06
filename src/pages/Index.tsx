@@ -5,6 +5,7 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { LandingFooter } from '@/components/ui/LandingFooter';
+import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
   Loader2, MapPin, Calendar, Trophy, Star, ChevronRight,
   Clock, ShieldCheck, BadgeCheck, QrCode, Tv2, Utensils, Target,
@@ -26,39 +27,16 @@ interface PricingRule {
   rule_type: string;
 }
 
-const FEATURES = [
-  {
-    icon: <Tv2 className="h-8 w-8 text-primary" />,
-    emoji: '🏏',
-    label: 'Live Stadium Screening',
-    desc: 'Experience the electrifying atmosphere on the big screen',
-  },
-  {
-    icon: <Target className="h-8 w-8 text-secondary" />,
-    emoji: '🎯',
-    label: 'Fun Guess Game',
-    desc: 'Make predictions for entertainment & exciting rewards',
-  },
-  {
-    icon: <Utensils className="h-8 w-8 text-primary" />,
-    emoji: '🍽️',
-    label: 'Premium Food & Beverages',
-    desc: 'Unlimited hospitality services throughout the event',
-  },
-  {
-    icon: <Trophy className="h-8 w-8 text-secondary" />,
-    emoji: '🏆',
-    label: 'Live Leaderboard',
-    desc: 'Compete with fellow guests in friendly challenges',
-  },
+const FEATURE_ICONS = [
+  <Tv2 className="h-8 w-8 text-primary" />,
+  <Target className="h-8 w-8 text-secondary" />,
+  <Utensils className="h-8 w-8 text-primary" />,
+  <Trophy className="h-8 w-8 text-secondary" />,
 ];
 
-const TRUST_ITEMS = [
-  { icon: ShieldCheck, label: 'Safe & professionally managed' },
-  { icon: BadgeCheck, label: 'Organised hospitality experience' },
-  { icon: QrCode, label: 'Secure entry & digital passes' },
-  { icon: Star, label: 'Premium venue & arrangements' },
-];
+const FEATURE_EMOJIS = ['🏏', '🎯', '🍽️', '🏆'];
+
+const TRUST_ICONS = [ShieldCheck, BadgeCheck, QrCode, Star];
 
 const MATCH_TYPE_LABELS: Record<string, string> = {
   group: 'Group Stage',
@@ -68,6 +46,7 @@ const MATCH_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function IndexPage() {
+  const { get, loading: configLoading } = useSiteConfig();
   const [match, setMatch] = useState<ActiveMatch | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [pricing, setPricing] = useState<PricingRule | null>(null);
@@ -106,7 +85,7 @@ export default function IndexPage() {
     setLoading(false);
   };
 
-  if (loading) {
+  if (loading || configLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center relative">
         <BackgroundOrbs />
@@ -114,6 +93,18 @@ export default function IndexPage() {
       </div>
     );
   }
+
+  const features = [1, 2, 3, 4].map(n => ({
+    icon: FEATURE_ICONS[n - 1],
+    emoji: FEATURE_EMOJIS[n - 1],
+    label: get(`feature_${n}_label`, ['Live Stadium Screening', 'Fun Guess Game', 'Premium Food & Beverages', 'Live Leaderboard'][n - 1]),
+    desc: get(`feature_${n}_desc`, ['Experience the electrifying atmosphere on the big screen', 'Make predictions for entertainment & exciting rewards', 'Unlimited hospitality services throughout the event', 'Compete with fellow guests in friendly challenges'][n - 1]),
+  }));
+
+  const trustItems = [1, 2, 3, 4].map((n, i) => ({
+    icon: TRUST_ICONS[i],
+    label: get(`trust_${n}_label`, ['Safe & professionally managed', 'Organised hospitality experience', 'Secure entry & digital passes', 'Premium venue & arrangements'][i]),
+  }));
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -149,7 +140,7 @@ export default function IndexPage() {
 
       {/* Top disclaimer bar */}
       <div className="disclaimer-bar text-center text-xs py-2.5 px-4 relative z-10 font-medium">
-        🎯 Fun Guess Game only — for entertainment. No betting, no wagering. All event fees are strictly for hospitality services.
+        {get('disclaimer_bar_text', '🎯 Fun Guess Game only — for entertainment. No betting, no wagering. All event fees are strictly for hospitality services.')}
       </div>
 
       <div className="relative z-10 max-w-2xl mx-auto px-4 py-10">
@@ -172,17 +163,17 @@ export default function IndexPage() {
           </div>
 
           <h1 className="font-display text-6xl md:text-7xl font-bold gradient-text mb-3 leading-none tracking-wide">
-            T20 Fan Night
+            {get('hero_title', 'T20 Fan Night')}
           </h1>
 
           <p className="text-foreground/80 font-display text-xl font-semibold tracking-wide mb-4">
-            An Exclusive Cricket Celebration Experience
+            {get('hero_subtitle', 'An Exclusive Cricket Celebration Experience')}
           </p>
 
           {/* Venue badge chip */}
           <div className="inline-flex items-center gap-2 glass-card px-4 py-2 rounded-full border border-secondary/30 text-secondary text-sm font-semibold">
             <MapPin className="h-3.5 w-3.5" />
-            Hosted at Hotel Drona Palace, Kashipur
+            {get('hero_venue_badge', 'Hosted at Hotel Drona Palace, Kashipur')}
           </div>
         </div>
 
@@ -256,7 +247,7 @@ export default function IndexPage() {
                 </h3>
               </div>
               <div className="grid grid-cols-2 gap-3.5">
-                {FEATURES.map((f, i) => (
+                {features.map((f, i) => (
                   <GlassCard
                     key={f.label}
                     className="p-4 cursor-default transition-transform duration-200 hover:scale-[1.03] hover:border-primary/30 animate-slide-up"
@@ -325,7 +316,7 @@ export default function IndexPage() {
               <GlassCard className="p-5">
                 <p className="section-title text-center mb-4">Why Attend?</p>
                 <div className="flex flex-wrap justify-center gap-x-6 gap-y-3">
-                  {TRUST_ITEMS.map(({ icon: Icon, label }) => (
+                  {trustItems.map(({ icon: Icon, label }) => (
                     <div key={label} className="flex items-center gap-2 text-sm text-foreground/75">
                       <Icon className="h-4 w-4 text-success flex-shrink-0" />
                       <span className="font-medium">{label}</span>
@@ -344,7 +335,7 @@ export default function IndexPage() {
               The next T20 Fan Night is being planned. Stay tuned — registrations will open soon!
             </p>
             <div className="grid grid-cols-2 gap-3 mb-6">
-              {FEATURES.map((f, i) => (
+              {features.map((f, i) => (
                 <div
                   key={f.label}
                   className="glass-card-sunken border border-border/30 rounded-xl p-3.5 animate-slide-up"
@@ -365,12 +356,9 @@ export default function IndexPage() {
 
         {/* ─── LEGAL DISCLAIMER ─── */}
         <div className="mb-6 disclaimer-bar rounded-xl p-5 text-xs animate-slide-up" style={{ animationDelay: '0.33s' } as React.CSSProperties}>
-          <p className="font-bold text-sm mb-2">🎯 Fun Guess Game — Legal Disclaimer</p>
+          <p className="font-bold text-sm mb-2">{get('legal_disclaimer_title', '🎯 Fun Guess Game — Legal Disclaimer')}</p>
           <p className="leading-relaxed">
-            This event includes a recreational fun prediction activity. It is{' '}
-            <strong>not gambling, betting, or wagering</strong>. No money is staked or won.
-            All payments are strictly for hospitality services including venue access, food, and beverages.
-            Participation in the fun game is voluntary and for entertainment purposes only.
+            {get('legal_disclaimer_body', 'This event includes a recreational fun prediction activity. It is not gambling, betting, or wagering. No money is staked or won. All payments are strictly for hospitality services including venue access, food, and beverages. Participation in the fun game is voluntary and for entertainment purposes only.')}
           </p>
         </div>
 
