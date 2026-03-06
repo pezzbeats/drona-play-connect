@@ -117,36 +117,40 @@ export default function IndexPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchData();
+    const timeout = setTimeout(() => setLoading(false), 8000);
+    fetchData().finally(() => clearTimeout(timeout));
   }, []);
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: matchData, error: matchError } = await supabase
-      .from('matches')
-      .select('id, name, opponent, venue, start_time, status, match_type')
-      .eq('is_active_for_registration', true)
-      .maybeSingle();
+    try {
+      const { data: matchData, error: matchError } = await supabase
+        .from('matches')
+        .select('id, name, opponent, venue, start_time, status, match_type')
+        .eq('is_active_for_registration', true)
+        .maybeSingle();
 
-    if (matchError) {
-      console.error('[Index] Error fetching active match:', matchError);
-    }
+      if (matchError) console.error('[Index] Error fetching active match:', matchError);
 
-    if (matchData) {
-      setMatch(matchData);
+      if (matchData) {
+        setMatch(matchData);
 
-      const [bannerRes, pricingRes] = await Promise.all([
-        supabase.from('match_assets').select('file_path').eq('match_id', matchData.id).eq('asset_type', 'banner_image').maybeSingle(),
-        supabase.from('match_pricing_rules').select('base_price_new, base_price_returning, rule_type').eq('match_id', matchData.id).limit(1).maybeSingle(),
-      ]);
+        const [bannerRes, pricingRes] = await Promise.all([
+          supabase.from('match_assets').select('file_path').eq('match_id', matchData.id).eq('asset_type', 'banner_image').maybeSingle(),
+          supabase.from('match_pricing_rules').select('base_price_new, base_price_returning, rule_type').eq('match_id', matchData.id).limit(1).maybeSingle(),
+        ]);
 
-      if (bannerRes.data?.file_path) {
-        const { data: url } = supabase.storage.from('match-assets').getPublicUrl(bannerRes.data.file_path);
-        setBannerUrl(url?.publicUrl || null);
+        if (bannerRes.data?.file_path) {
+          const { data: url } = supabase.storage.from('match-assets').getPublicUrl(bannerRes.data.file_path);
+          setBannerUrl(url?.publicUrl || null);
+        }
+        if (pricingRes.data) setPricing(pricingRes.data);
       }
-      if (pricingRes.data) setPricing(pricingRes.data);
+    } catch (e) {
+      console.error('[Index] fetchData error:', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const features = [1, 2, 3, 4].map(n => ({

@@ -17,14 +17,20 @@ export function useSiteConfig(): UseSiteConfigResult {
 
   const fetch = async () => {
     setLoading(true);
-    const { data } = await supabase.from('site_config').select('key, value');
-    if (data) {
-      const map: ConfigMap = {};
-      data.forEach(row => { map[row.key] = row.value; });
-      cache = map;
-      setConfig(map);
+    try {
+      const { data, error } = await supabase.from('site_config').select('key, value');
+      if (error) throw error;
+      if (data) {
+        const map: ConfigMap = {};
+        data.forEach(row => { map[row.key] = row.value; });
+        cache = map;
+        setConfig(map);
+      }
+    } catch (e) {
+      console.error('[useSiteConfig] fetch failed:', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
