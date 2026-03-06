@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.resolve-prediction-window]
 verify_jwt = false
+
+[functions.reissue-qr]
+verify_jwt = false

@@ -22,6 +22,23 @@ function computeAiConfidence(fields: { amount: any; txnId: any; vpa: any; date: 
   return "low";
 }
 
+async function generateSignedQR(matchId: string, mobile: string, seatIndex: number, secret: string): Promise<string> {
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const payload = `T20FN-${matchId.slice(0, 8)}-${mobile}-S${seatIndex + 1}-${ts}-${rand}`;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  const sigHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 16).toUpperCase();
+  return `${payload}-SIG:${sigHex}`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -38,6 +55,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const hmacSecret = LOVABLE_API_KEY || "fallback-secret";
 
     // --- Step 1: Compute file hash ---
     const buffer = await file.arrayBuffer();
@@ -57,7 +75,7 @@ serve(async (req) => {
       );
     }
 
-    // --- Step 3: Get order details (need mobile for window check) ---
+    // --- Step 3: Get order details ---
     const { data: order } = await supabase
       .from("orders")
       .select("total_amount, purchaser_mobile, match_id, event_id, seats_count")
@@ -164,7 +182,6 @@ serve(async (req) => {
               .limit(1)
               .maybeSingle();
 
-            // Check if that proof's order shares the same purchaser_mobile
             if (windowDup) {
               const { data: windowOrder } = await supabase
                 .from("orders")
@@ -183,7 +200,6 @@ serve(async (req) => {
             aiVerdict = "rejected";
             aiReason = "Payment screenshot shows FAILED status";
           } else if (fraudFlags.length > 0) {
-            // Fraud signals present → always manual review
             aiVerdict = "needs_manual_review";
             aiReason = `Fraud signals detected: ${fraudFlags.join(", ")}. Manual review required.`;
           } else if (
@@ -209,14 +225,14 @@ serve(async (req) => {
               : `Status: ${parsedStatus}. Manual review required.`;
           }
         }
-      } catch (e) {
+      } catch (_e) {
         aiVerdict = "needs_manual_review";
         aiReason = "AI extraction failed. Manual review required.";
         aiConfidence = "none";
       }
     }
 
-    // --- Step 10: Save proof record with all fraud/audit fields ---
+    // --- Step 10: Save proof record ---
     await supabase.from("payment_proofs").insert({
       order_id: orderId,
       uploaded_by: uploadedBy as any,
@@ -242,7 +258,7 @@ serve(async (req) => {
         } as any)
         .eq("id", orderId);
 
-      // --- Step 12: Generate tickets safely (count check, not join) ---
+      // --- Step 12: Generate HMAC-signed tickets safely ---
       const { count: ticketCount } = await supabase
         .from("tickets")
         .select("id", { count: "exact", head: true })
@@ -250,8 +266,7 @@ serve(async (req) => {
 
       if ((ticketCount ?? 0) === 0) {
         for (let i = 0; i < order.seats_count; i++) {
-          const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
-          const qrText = `T20FN-${order.match_id.slice(0, 8)}-${order.purchaser_mobile}-S${i + 1}-${Date.now()}-${rand}`;
+          const qrText = await generateSignedQR(order.match_id, order.purchaser_mobile, i, hmacSecret);
           await supabase.from("tickets").insert({
             match_id: order.match_id,
             event_id: order.event_id,

@@ -1022,6 +1022,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_scan_log: {
+        Row: {
+          id: string
+          ip_address: string | null
+          match_id: string | null
+          outcome: string
+          qr_text_hash: string
+          scanned_at: string
+          scanned_by_admin_id: string | null
+          ticket_id: string | null
+        }
+        Insert: {
+          id?: string
+          ip_address?: string | null
+          match_id?: string | null
+          outcome: string
+          qr_text_hash: string
+          scanned_at?: string
+          scanned_by_admin_id?: string | null
+          ticket_id?: string | null
+        }
+        Update: {
+          id?: string
+          ip_address?: string | null
+          match_id?: string | null
+          outcome?: string
+          qr_text_hash?: string
+          scanned_at?: string
+          scanned_by_admin_id?: string | null
+          ticket_id?: string | null
+        }
+        Relationships: []
+      }
       tickets: {
         Row: {
           blocked_reason: string | null
