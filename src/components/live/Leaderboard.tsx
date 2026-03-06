@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { Trophy, Medal, Star } from 'lucide-react';
+import { Trophy, Medal, Star, TrendingUp } from 'lucide-react';
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 
@@ -23,6 +23,9 @@ interface LeaderboardProps {
 export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [improvedMobiles, setImprovedMobiles] = useState<Set<string>>(new Set());
+  const prevRanksRef = useRef<Map<string, number>>(new Map());
+  const flashTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchLeaderboard = useCallback(async () => {
@@ -33,7 +36,45 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
       .order('rank_position', { ascending: true, nullsFirst: false })
       .limit(20);
 
-    if (data) setEntries(data as LeaderboardEntry[]);
+    if (data) {
+      const newEntries = data as LeaderboardEntry[];
+
+      // Compare ranks to detect improvements
+      const improved = new Set<string>();
+      newEntries.forEach(entry => {
+        const newRank = entry.rank_position ?? 999;
+        const prevRank = prevRanksRef.current.get(entry.mobile);
+        if (prevRank !== undefined && newRank < prevRank) {
+          improved.add(entry.mobile);
+        }
+      });
+
+      // Update prev ranks map
+      const newRanksMap = new Map<string, number>();
+      newEntries.forEach(e => newRanksMap.set(e.mobile, e.rank_position ?? 999));
+      prevRanksRef.current = newRanksMap;
+
+      // Flash improved rows then clear after 1.6s
+      if (improved.size > 0) {
+        setImprovedMobiles(prev => new Set([...prev, ...improved]));
+        improved.forEach(m => {
+          // Clear any existing timer for this mobile
+          const existing = flashTimersRef.current.get(m);
+          if (existing) clearTimeout(existing);
+          const timer = setTimeout(() => {
+            setImprovedMobiles(prev => {
+              const next = new Set(prev);
+              next.delete(m);
+              return next;
+            });
+            flashTimersRef.current.delete(m);
+          }, 1600);
+          flashTimersRef.current.set(m, timer);
+        });
+      }
+
+      setEntries(newEntries);
+    }
     setLoading(false);
   }, [matchId]);
 
@@ -59,7 +100,10 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
   );
 
   useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
-  useEffect(() => () => clearTimeout(debounceRef.current), []);
+  useEffect(() => () => {
+    clearTimeout(debounceRef.current);
+    flashTimersRef.current.forEach(t => clearTimeout(t));
+  }, []);
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="h-4 w-4 text-secondary" />;
@@ -68,7 +112,8 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
     return <span className="text-xs font-bold text-muted-foreground w-4 text-center tabular-nums">{rank}</span>;
   };
 
-  const getRowBg = (rank: number, isMe: boolean) => {
+  const getRowBg = (rank: number, isMe: boolean, isImproved: boolean) => {
+    if (isImproved) return 'bg-success/20 border-l-2 border-success';
     if (isMe) return 'bg-primary/15 border-l-2 border-primary';
     if (rank === 1) return 'bg-secondary/10';
     if (rank === 2) return 'bg-muted/30';
@@ -79,7 +124,6 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
   if (loading) {
     return (
       <div className="space-y-3">
-        {/* My rank stub */}
         <GlassCard className="p-3 animate-pulse">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -89,7 +133,6 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
             <div className="h-4 w-14 skeleton rounded" />
           </div>
         </GlassCard>
-        {/* Leaderboard rows */}
         <GlassCard className="overflow-hidden">
           <div className="p-3 border-b border-border">
             <div className="h-4 w-40 skeleton rounded" />
@@ -129,7 +172,6 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
 
   return (
     <div className="space-y-3">
-      {/* My rank card if outside top 10 visible */}
       {myEntry && myRank > 10 && (
         <GlassCard className="p-3 border border-primary/30">
           <div className="flex items-center justify-between">
@@ -166,6 +208,7 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
           {entries.map((entry, i) => {
             const rank = entry.rank_position ?? (i + 1);
             const isMe = !!(mobile && entry.mobile === mobile);
+            const isImproved = improvedMobiles.has(entry.mobile);
             const totalPts = (entry.total_points || 0) + (entry.points_adjustment || 0);
             const acc = entry.total_predictions > 0
               ? ((entry.correct_predictions / entry.total_predictions) * 100).toFixed(0) + '%'
@@ -174,23 +217,27 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
             return (
               <div
                 key={entry.mobile}
-                className={`flex items-center gap-3 px-3 py-3.5 transition-colors animate-slide-up ${getRowBg(rank, isMe)}`}
+                className={`flex items-center gap-3 px-3 py-3.5 transition-all duration-500 animate-slide-up ${getRowBg(rank, isMe, isImproved)}`}
                 style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' } as React.CSSProperties}
               >
                 <div className="w-6 flex-shrink-0 flex justify-center">
-                  {getRankIcon(rank)}
+                  {isImproved
+                    ? <TrendingUp className="h-4 w-4 text-success animate-pulse" />
+                    : getRankIcon(rank)
+                  }
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-semibold truncate ${isMe ? 'text-primary' : 'text-foreground'}`}>
+                  <p className={`text-sm font-semibold truncate ${isImproved ? 'text-success' : isMe ? 'text-primary' : 'text-foreground'}`}>
                     {entry.player_name || entry.mobile.slice(-4).padStart(10, '•')}
-                    {isMe && <span className="ml-1.5 text-xs font-bold bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">you</span>}
+                    {isMe && !isImproved && <span className="ml-1.5 text-xs font-bold bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">you</span>}
+                    {isImproved && <span className="ml-1.5 text-xs font-bold bg-success/20 text-success px-1.5 py-0.5 rounded-full">↑ up</span>}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                     <span>{entry.correct_predictions}/{entry.total_predictions} correct</span>
                     {acc && <span className="text-primary/70 font-medium">{acc}</span>}
                   </div>
                 </div>
-                <span className={`font-bold text-sm flex-shrink-0 tabular-nums ${isMe ? 'text-primary' : 'text-foreground'}`}>
+                <span className={`font-bold text-sm flex-shrink-0 tabular-nums ${isImproved ? 'text-success' : isMe ? 'text-primary' : 'text-foreground'}`}>
                   {totalPts} <span className="text-xs font-normal text-muted-foreground">pts</span>
                 </span>
               </div>
