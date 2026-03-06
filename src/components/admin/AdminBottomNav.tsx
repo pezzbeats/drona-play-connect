@@ -4,7 +4,7 @@ import { useAuth, AdminRole } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, ScanLine, ShoppingBag, Radio, MoreHorizontal,
   Trophy, Users, BookOpen, BarChart2, Activity, HeartPulse,
-  ShieldCheck, LogOut, X, Zap, FileText, CreditCard,
+  ShieldCheck, LogOut, X, Zap, FileText, CreditCard, ListChecks,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -35,6 +35,7 @@ const allNavItems: NavItem[] = [
   { icon: Trophy,          label: 'Leaderboard',    to: '/admin/leaderboard',   minRole: 'super_admin' },
   { icon: Activity,        label: 'Activity Log',   to: '/admin/activity',      minRole: 'super_admin' },
   { icon: ShieldCheck,     label: 'Roles',          to: '/admin/roles',         minRole: 'super_admin' },
+  { icon: ListChecks,      label: 'Eligibility',    to: '/admin/eligibility',   minRole: 'super_admin' },
   { icon: FileText,        label: 'Site Content',   to: '/admin/site-config',   minRole: 'operator' },
   { icon: CreditCard,      label: 'Payments',       to: '/admin/payments',      minRole: 'operator' },
 ];

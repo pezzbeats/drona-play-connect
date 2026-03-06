@@ -243,7 +243,6 @@ export default function RegisterPage() {
   const previewMatchId = new URLSearchParams(window.location.search).get('preview');
   const isPreviewMode = !!previewMatchId;
 
-  // Step 1
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
@@ -251,6 +250,10 @@ export default function RegisterPage() {
   const mobileValid = /^\d{10}$/.test(mobile);
   const mobileError = mobile.length > 0 && !mobileValid;
   const nameError = fullName.length > 0 && fullName.trim().length < 2;
+
+  // Eligibility check state
+  const [eligibilityStatus, setEligibilityStatus] = useState<'idle' | 'checking' | 'eligible' | 'standard'>('idle');
+
 
   // Step 2
   const [seatsCount, setSeatsCount] = useState(1);
@@ -280,6 +283,25 @@ export default function RegisterPage() {
     fetchActiveMatch();
     setTimeout(() => nameRef.current?.focus(), 300);
   }, []);
+
+  // Debounced eligibility check when mobile is valid
+  useEffect(() => {
+    if (!mobileValid) {
+      setEligibilityStatus('idle');
+      return;
+    }
+    setEligibilityStatus('checking');
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('semifinal_eligibility')
+        .select('id')
+        .eq('mobile', mobile)
+        .maybeSingle();
+      setEligibilityStatus(data ? 'eligible' : 'standard');
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [mobile, mobileValid]);
+
 
   const fetchActiveMatch = async () => {
     setMatchLoading(true);
@@ -599,6 +621,24 @@ export default function RegisterPage() {
                   inputMode="numeric" type="tel" autoComplete="tel" />
                 {mobileError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Enter a valid 10-digit number</p>}
                 {mobileValid && <p className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Valid mobile number</p>}
+                {/* Eligibility badge */}
+                {eligibilityStatus === 'checking' && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/30 border border-border/40 text-xs text-muted-foreground animate-pulse">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking eligibility…
+                  </div>
+                )}
+                {eligibilityStatus === 'eligible' && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/30 text-xs text-success font-semibold">
+                    <Star className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>Semifinal attendee — you qualify for <strong>₹949/seat</strong> 🎉</span>
+                  </div>
+                )}
+                {eligibilityStatus === 'standard' && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/30 text-xs text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>Standard pricing — <strong className="text-foreground">₹999/seat</strong></span>
+                  </div>
+                )}
               </div>
               <div>
                 <Label className="text-foreground mb-1.5 block text-center">Email (optional)</Label>

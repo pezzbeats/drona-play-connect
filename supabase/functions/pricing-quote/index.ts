@@ -20,10 +20,19 @@ serve(async (req) => {
     const baseReturning = rule?.base_price_returning ?? baseNew;
     const loyaltyFromMatchId = rule?.loyalty_from_match_id;
 
-    // Check returning status and past seat count for loyalty pricing
-    let loyaltySeatCap = 0; // how many seats get the returning rate
+    let loyaltySeatCap = 0;
 
-    if (loyaltyFromMatchId) {
+    // Priority 1: Check semifinal eligibility list (super admin uploaded)
+    const { data: eligibleEntry } = await supabase
+      .from("semifinal_eligibility")
+      .select("id")
+      .eq("mobile", mobile)
+      .maybeSingle();
+
+    if (eligibleEntry) {
+      // Eligible from semifinal upload — all seats get the returning rate
+      loyaltySeatCap = seats_count;
+    } else if (loyaltyFromMatchId) {
       // Loyalty pricing: returning rate applies up to the number of seats from the linked match
       const { data: pastOrders } = await supabase
         .from("orders")
@@ -45,7 +54,7 @@ serve(async (req) => {
         .neq("match_id", match_id);
 
       if (pastOrders && pastOrders.length > 0) {
-        loyaltySeatCap = seats_count; // all seats at returning rate for standard returning
+        loyaltySeatCap = seats_count;
       }
     }
 
@@ -58,7 +67,7 @@ serve(async (req) => {
 
       if (isReturning && i < loyaltySeatCap) {
         price = baseReturning;
-        reason = "loyal_base";
+        reason = eligibleEntry ? "semifinal_attendee" : "loyal_base";
       } else {
         price = baseNew;
         reason = isReturning ? "extra_seat" : "new_customer";
@@ -68,7 +77,14 @@ serve(async (req) => {
 
     const total = seats.reduce((sum, s) => sum + s.price, 0);
     return new Response(
-      JSON.stringify({ seats, total, seating_type, is_returning: isReturning, loyalty_seat_cap: loyaltySeatCap }),
+      JSON.stringify({
+        seats,
+        total,
+        seating_type,
+        is_returning: isReturning,
+        loyalty_seat_cap: loyaltySeatCap,
+        is_semifinal_eligible: !!eligibleEntry,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e: any) {

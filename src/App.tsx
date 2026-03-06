@@ -31,6 +31,7 @@ import AdminHealth from "./pages/admin/AdminHealth";
 import AdminRoles from "./pages/admin/AdminRoles";
 import AdminSiteConfig from "./pages/admin/AdminSiteConfig";
 import AdminPayments from "./pages/admin/AdminPayments";
+import AdminEligibility from "./pages/admin/AdminEligibility";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import RefundPolicyPage from "./pages/RefundPolicy";
 import EventParticipationTermsPage from "./pages/EventParticipationTerms";
@@ -97,6 +98,7 @@ const App = () => (
               <Route path="leaderboard" element={<ProtectedRoute requiredRole="super_admin"><AdminLeaderboard /></ProtectedRoute>} />
               <Route path="activity" element={<ProtectedRoute requiredRole="super_admin"><AdminActivity /></ProtectedRoute>} />
               <Route path="roles" element={<ProtectedRoute requiredRole="super_admin"><AdminRoles /></ProtectedRoute>} />
+              <Route path="eligibility" element={<ProtectedRoute requiredRole="super_admin"><AdminEligibility /></ProtectedRoute>} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
