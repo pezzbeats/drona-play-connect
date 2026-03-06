@@ -1,44 +1,53 @@
 
-## Root Cause — Confirmed
+## Root Cause — Found
 
-ElevenLabs sends tool parameters **flat at the root** of the request body, NOT nested under a `parameters` key:
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-```text
-// What ElevenLabs actually sends:
-{"tool_name": "check_registration", "mobile": "8449710150"}
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-// What the code looks for:
-body.parameters.mobile  → undefined (body.parameters is undefined → falls back to {})
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-The logs prove this:
-- My test curl: `{"tool_name":"check_registration","parameters":{"mobile":"8449710150"}}` → works ✅
-- Real ElevenLabs call: `{"tool_name":"check_registration","mobile":"8449710150"}` → mobile is `undefined` → returns "no registration found" ❌
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-## Fix
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-Update parameter extraction in `elevenlabs-tools/index.ts` to check **all three locations** for each parameter:
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
-1. `body.parameters.mobile` (nested under `parameters`)
-2. `body.params.mobile` (nested under `params`)
-3. `body.mobile` (flat at root — what ElevenLabs actually sends)
+## Changes
 
-Change this single line:
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
 ```ts
 // Before:
-const parameters = body.parameters || body.params || {};
-const params = parameters;
+const [loading, setLoading] = useState(!cache);
 
 // After:
-const params = body.parameters || body.params || body || {};
+const [loading, setLoading] = useState(false);
 ```
 
-By falling back to `body` itself, every field in the root payload becomes accessible — so `params.mobile` will correctly find `body.mobile` when ElevenLabs sends it flat.
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
-Also add `tool_name` to the exclusion-safe extraction by ensuring the `toolName` extraction stays as-is (it reads from `body.tool_name` directly, which is correct).
+## Why this is the correct fix
 
-## File to Change
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
-- `supabase/functions/elevenlabs-tools/index.ts` — lines 22–26: fix params extraction, then redeploy.
-
-This single one-line fix resolves all four tools simultaneously since they all use `params.mobile` or `params.*` for their parameter access.
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |

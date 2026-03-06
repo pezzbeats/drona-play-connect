@@ -20,10 +20,9 @@ serve(async (req) => {
 
     // ElevenLabs may send tool_name or tool
     const toolName = body.tool_name || body.tool || body.name;
-    const parameters = body.parameters || body.params || {};
 
-    // ElevenLabs sends the tool name and parameters
-    const params = parameters;
+    // ElevenLabs sends params either nested under "parameters"/"params" OR flat at root
+    const params = body.parameters || body.params || body;
 
     let result: any;
 
