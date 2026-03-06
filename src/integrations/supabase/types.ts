@@ -1076,7 +1076,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      compute_pricing_quote: {
+        Args: { p_match_id: string; p_mobile: string; p_seats_count: number }
+        Returns: Json
+      }
+      get_order_with_tickets: {
+        Args: { p_match_id: string; p_mobile: string }
+        Returns: Json
+      }
+      mark_ticket_checkin: {
+        Args: { p_admin_id: string; p_ticket_id: string }
+        Returns: Json
+      }
+      set_active_match: { Args: { p_match_id: string }; Returns: undefined }
     }
     Enums: {
       admin_role: "super_admin" | "admin" | "counter_staff"
