@@ -16,14 +16,18 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { tool, parameters } = body;
+    console.log("elevenlabs-tools body:", JSON.stringify(body));
+
+    // ElevenLabs may send tool_name or tool
+    const toolName = body.tool_name || body.tool || body.name;
+    const parameters = body.parameters || body.params || {};
 
     // ElevenLabs sends the tool name and parameters
-    const params = parameters || body;
+    const params = parameters;
 
     let result: any;
 
-    switch (tool) {
+    switch (toolName) {
       case "lookup_ticket": {
         // Check ticket/order status by mobile number
         const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
