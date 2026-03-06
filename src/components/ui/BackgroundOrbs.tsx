@@ -6,33 +6,50 @@ interface BackgroundOrbsProps {
 
 export const BackgroundOrbs = ({ variant = 'default' }: BackgroundOrbsProps) => (
   <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+    {/* Crimson orb — scoreboard red glow, top-right */}
     <div
-      className="bg-orb w-96 h-96 opacity-25"
+      className="bg-orb w-[28rem] h-[28rem]"
       style={{
         background: variant === 'admin'
           ? 'radial-gradient(circle, hsl(38 75% 52%) 0%, transparent 70%)'
-          : 'radial-gradient(circle, hsl(355 80% 55%) 0%, transparent 70%)',
-        top: '-10%',
-        right: '-5%',
+          : 'radial-gradient(circle, hsl(355 85% 58%) 0%, transparent 70%)',
+        opacity: 0.30,
+        top: '-8%',
+        right: '-6%',
         animationDelay: '0s',
       }}
     />
+    {/* Deep green orb — outfield glow, bottom-left */}
     <div
-      className="bg-orb w-80 h-80 opacity-15"
+      className="bg-orb w-80 h-80"
       style={{
-        background: 'radial-gradient(circle, hsl(142 70% 35%) 0%, transparent 70%)',
-        bottom: '10%',
-        left: '-5%',
+        background: 'radial-gradient(circle, hsl(142 65% 30%) 0%, transparent 70%)',
+        opacity: 0.22,
+        bottom: '8%',
+        left: '-6%',
         animationDelay: '3s',
       }}
     />
+    {/* Gold/bronze orb — frame accent, mid-center */}
     <div
-      className="bg-orb w-64 h-64 opacity-10"
+      className="bg-orb w-72 h-72"
       style={{
-        background: 'radial-gradient(circle, hsl(38 75% 52%) 0%, transparent 70%)',
-        top: '50%',
-        left: '40%',
+        background: 'radial-gradient(circle, hsl(38 80% 50%) 0%, transparent 70%)',
+        opacity: 0.14,
+        top: '45%',
+        left: '38%',
         animationDelay: '6s',
+      }}
+    />
+    {/* Subtle second crimson — lower-right depth */}
+    <div
+      className="bg-orb w-64 h-64"
+      style={{
+        background: 'radial-gradient(circle, hsl(355 70% 45%) 0%, transparent 70%)',
+        opacity: 0.12,
+        bottom: '15%',
+        right: '5%',
+        animationDelay: '9s',
       }}
     />
   </div>
