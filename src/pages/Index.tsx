@@ -248,7 +248,7 @@ export default function IndexPage() {
           </div>
         </div>
 
-        {(loading || configLoading) ? (
+        {loading ? (
           <MatchSectionSkeleton />
         ) : match ? (
           <>

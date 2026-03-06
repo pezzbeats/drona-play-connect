@@ -13,7 +13,7 @@ let cache: ConfigMap | null = null;
 
 export function useSiteConfig(): UseSiteConfigResult {
   const [config, setConfig] = useState<ConfigMap>(cache ?? {});
-  const [loading, setLoading] = useState(!cache);
+  const [loading, setLoading] = useState(false);
 
   const fetch = async () => {
     setLoading(true);
