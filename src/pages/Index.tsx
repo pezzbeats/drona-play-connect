@@ -419,12 +419,11 @@ export default function IndexPage() {
               Reserve Your Seats Now <ChevronRight className="h-6 w-6" />
             </button>
           </Link>
-          <p className="text-sm text-center text-muted-foreground">
-            Already booked?{' '}
-            <Link to="/ticket" className="text-primary font-semibold underline underline-offset-2 hover:text-primary/80 transition-colors">
-              View Your Passes
-            </Link>
-          </p>
+          <Link to="/ticket" className="block">
+            <button className="w-full h-12 bg-success text-success-foreground rounded-xl text-base font-display font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_0_20px_hsl(142_70%_45%/0.45)] hover:shadow-[0_0_30px_hsl(142_70%_45%/0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+              Already Booked? View Your Passes <ChevronRight className="h-5 w-5" />
+            </button>
+          </Link>
         </div>
 
         {/* ─── LEGAL DISCLAIMER ─── */}

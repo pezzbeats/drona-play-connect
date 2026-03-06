@@ -1,28 +1,53 @@
 
-## What to Change
+## Root Cause — Found
 
-**File:** `src/pages/Index.tsx`
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-### 1. Move both buttons higher
-Currently the CTA block (lines 415–428) sits at the very bottom — after features, pricing, and trust strip. Move it to right **after the match highlight card** (after line 312), so users see the action options immediately without scrolling.
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-### 2. Convert "View Your Passes" into a proper green button
-Replace the text link with a full-width button styled similarly to the Register button but:
-- Smaller: `h-12 text-base` vs Register's `h-16 text-xl`
-- Solid green using `bg-success` (`hsl(142 70% 45%)`) with white text and a green glow
-- Same rounded-xl shape, ChevronRight icon, hover/active scale transitions
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-```text
-┌─────────────────────────────────────┐
-│  Reserve Your Seats Now  →          │  ← h-16, crimson gradient (unchanged)
-└─────────────────────────────────────┘
-┌─────────────────────────────────────┐
-│  View Your Passes  →                │  ← h-12, green, slightly smaller
-└─────────────────────────────────────┘
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-### Changes
-- **Remove** the CTA block from its current position (lines 415–428)
-- **Insert** the new two-button layout right after the `</GlassCard>` of the match highlight card (~line 312), inside the `match ?` branch
-- Also add an equivalent two-button block in the **no-match "Coming Soon"** branch so it always appears
-- The green button uses: `bg-success text-success-foreground shadow-[0_0_20px_hsl(142_70%_45%/0.5)]` + hover transitions
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
+```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
