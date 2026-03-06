@@ -1,0 +1,22 @@
+project_id = "fkblggtrpyubuglndotz"
+
+[functions.pricing-quote]
+verify_jwt = false
+
+[functions.create-order]
+verify_jwt = false
+
+[functions.set-match-active]
+verify_jwt = true
+
+[functions.admin-checkin]
+verify_jwt = true
+
+[functions.admin-gate-collect]
+verify_jwt = true
+
+[functions.verify-payment-proof]
+verify_jwt = false
+
+[functions.verify-game-pin]
+verify_jwt = false
