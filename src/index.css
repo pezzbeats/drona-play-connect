@@ -438,6 +438,13 @@
     background: var(--gradient-primary);
   }
 
+  /* CTA glow-pulse animation */
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 24px hsl(355 80% 55% / 0.5); }
+    50%       { box-shadow: 0 0 48px hsl(355 80% 55% / 0.85), 0 0 80px hsl(38 75% 52% / 0.3); }
+  }
+  .animate-glow-pulse { animation: glow-pulse 2.4s ease-in-out infinite; }
+
   /* Disclaimer bar */
   .disclaimer-bar {
     background: hsl(38 95% 55% / 0.1);
