@@ -7,7 +7,8 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import hotelLogo from '@/assets/hotel-logo.png';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -39,8 +40,8 @@ export default function AdminLoginPage() {
       <BackgroundOrbs variant="admin" />
       <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-gradient-accent flex items-center justify-center mx-auto mb-4">
-            <Shield className="h-8 w-8 text-primary-foreground" />
+          <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/40 shadow-[0_0_20px_hsl(var(--accent)/0.4)] mx-auto mb-4">
+            <img src={hotelLogo} alt="Hotel Drona Palace" className="w-full h-full object-cover" />
           </div>
           <h1 className="font-display text-3xl font-bold gradient-text-accent">Admin Portal</h1>
           <p className="text-muted-foreground text-sm mt-2">T20 Fan Night Ops Suite</p>

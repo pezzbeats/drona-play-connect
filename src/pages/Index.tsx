@@ -11,6 +11,7 @@ import {
   Clock, ShieldCheck, BadgeCheck, QrCode, Tv2, Utensils, Target,
   Phone, Mail,
 } from 'lucide-react';
+import hotelLogo from '@/assets/hotel-logo.png';
 
 interface ActiveMatch {
   id: string;
@@ -153,6 +154,13 @@ export default function IndexPage() {
             className="absolute inset-x-0 top-0 h-48 pointer-events-none"
             style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 0%, hsl(355 80% 55% / 0.12) 0%, transparent 70%)' }}
           />
+
+          {/* Hotel Logo */}
+          <div className="flex justify-center mb-4">
+            <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-secondary/50 shadow-[0_0_28px_hsl(38_75%_52%/0.5)]">
+              <img src={hotelLogo} alt="Hotel Drona Palace" className="w-full h-full object-cover" />
+            </div>
+          </div>
 
           <div className="flex items-center justify-center gap-4 mb-5">
             <div className="h-px flex-1 max-w-[80px] bg-gradient-to-r from-transparent to-secondary/50" />
