@@ -16,14 +16,18 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { tool, parameters } = body;
+    console.log("elevenlabs-tools body:", JSON.stringify(body));
+
+    // ElevenLabs may send tool_name or tool
+    const toolName = body.tool_name || body.tool || body.name;
+    const parameters = body.parameters || body.params || {};
 
     // ElevenLabs sends the tool name and parameters
-    const params = parameters || body;
+    const params = parameters;
 
     let result: any;
 
-    switch (tool) {
+    switch (toolName) {
       case "lookup_ticket": {
         // Check ticket/order status by mobile number
         const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
@@ -193,7 +197,13 @@ serve(async (req) => {
         // Check if a mobile number is already registered
         const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
 
-        if (!activeMatch) {
+        const { data: activeMatchCR } = await supabase
+          .from("matches")
+          .select("id, name")
+          .eq("is_active_for_registration", true)
+          .maybeSingle();
+
+        if (!activeMatchCR) {
           result = {
             success: false,
             message: "Abhi koi active match nahi hai registration ke liye."
@@ -205,7 +215,7 @@ serve(async (req) => {
           .from("orders")
           .select("id, payment_status, seats_count, purchaser_full_name")
           .eq("purchaser_mobile", mobile)
-          .eq("match_id", activeMatch.id)
+          .eq("match_id", activeMatchCR.id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -230,17 +240,18 @@ serve(async (req) => {
           result = {
             success: true,
             already_registered: false,
-            match_name: activeMatch.name,
-            message: `Is mobile number se ${activeMatch.name} ke liye koi registration nahi hai. Aap abhi register kar sakte hain website par jakar.`
+            match_name: activeMatchCR.name,
+            message: `Is mobile number se ${activeMatchCR.name} ke liye koi registration nahi hai. Aap abhi register kar sakte hain website par jakar.`
           };
         }
         break;
       }
 
       default: {
+        console.error("Unknown tool called:", toolName, "Full body:", JSON.stringify(body));
         result = {
           success: false,
-          message: `Tool "${tool}" nahi mila. Available tools: lookup_ticket, get_match_info, get_pricing, check_registration.`,
+          message: `Tool "${toolName}" nahi mila. Available tools: lookup_ticket, get_match_info, get_pricing, check_registration.`,
           available_tools: ["lookup_ticket", "get_match_info", "get_pricing", "check_registration"]
         };
       }
