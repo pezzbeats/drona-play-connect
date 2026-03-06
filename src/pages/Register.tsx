@@ -718,8 +718,8 @@ export default function RegisterPage() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label className="text-foreground w-full text-center">Mobile Number *</Label>
-                  <span className={`text-xs font-mono ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>{mobile.length}/10</span>
+                  <Label className="text-foreground">Mobile Number *</Label>
+                  <span className={`text-xs font-mono flex-shrink-0 ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>{mobile.length}/10</span>
                 </div>
                 <Input className={`glass-input ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
                   placeholder="10-digit mobile number" value={mobile}
