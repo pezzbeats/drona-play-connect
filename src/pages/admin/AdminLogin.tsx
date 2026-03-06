@@ -40,12 +40,13 @@ export default function AdminLoginPage() {
       <BackgroundOrbs variant="admin" />
       <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/40 shadow-[0_0_20px_hsl(var(--accent)/0.4)] mx-auto mb-4">
-            <img src={hotelLogo} alt="Hotel Drona Palace" className="w-full h-full object-cover" />
+          <div className="mx-auto mb-3 w-20 h-20 flex items-center justify-center rounded-full bg-[hsl(38_60%_12%)] shadow-[0_0_28px_hsl(38_75%_52%/0.7),0_0_56px_hsl(38_75%_52%/0.3)]" style={{border:'2px solid hsl(38 75% 52% / 0.6)'}}>
+            <img src={hotelLogo} alt="Hotel Drona Palace" className="w-14 h-14 object-contain drop-shadow-[0_0_8px_hsl(38_75%_52%/0.8)]" />
           </div>
+          <p className="font-display text-base font-bold text-secondary leading-tight">Hotel Drona Palace</p>
+          <p className="text-xs text-muted-foreground mb-3">A Unit of SR Leisure Inn</p>
           <h1 className="font-display text-3xl font-bold gradient-text-accent">Admin Portal</h1>
-          <p className="text-muted-foreground text-sm mt-2">T20 Fan Night Ops Suite</p>
-          <p className="text-xs text-muted-foreground">Hotel Drona Palace</p>
+          <p className="text-muted-foreground text-sm mt-1">T20 Fan Night Ops Suite</p>
         </div>
 
         <GlassCard className="p-6" glow>

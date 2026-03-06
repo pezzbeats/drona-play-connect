@@ -156,9 +156,13 @@ export default function IndexPage() {
           />
 
           {/* Hotel Logo */}
-          <div className="flex justify-center mb-4">
-            <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-secondary/50 shadow-[0_0_28px_hsl(38_75%_52%/0.5)]">
-              <img src={hotelLogo} alt="Hotel Drona Palace" className="w-full h-full object-cover" />
+          <div className="flex flex-col items-center mb-5 gap-2">
+            <div className="w-24 h-24 flex items-center justify-center rounded-full bg-[hsl(38_60%_10%)] shadow-[0_0_36px_hsl(38_75%_52%/0.75),0_0_72px_hsl(38_75%_52%/0.3)]" style={{border:'2px solid hsl(38 75% 52% / 0.6)'}}>
+              <img src={hotelLogo} alt="Hotel Drona Palace" className="w-16 h-16 object-contain drop-shadow-[0_0_10px_hsl(38_75%_52%/0.9)]" />
+            </div>
+            <div className="text-center">
+              <p className="font-display text-base font-bold text-secondary leading-tight">Hotel Drona Palace</p>
+              <p className="text-xs text-muted-foreground">A Unit of SR Leisure Inn</p>
             </div>
           </div>
 

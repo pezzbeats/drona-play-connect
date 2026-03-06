@@ -531,16 +531,19 @@ export default function RegisterPage() {
       <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
         {/* Header */}
         <div className="text-center mb-5">
-          <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full overflow-hidden border border-secondary/40 shadow-[0_0_12px_hsl(38_75%_52%/0.4)]">
-              <img src={hotelLogo} alt="Hotel Drona Palace" className="w-full h-full object-cover" />
+          <div className="flex flex-col items-center mb-3 gap-1.5">
+            <div className="w-14 h-14 flex items-center justify-center rounded-full bg-[hsl(38_60%_10%)] shadow-[0_0_20px_hsl(38_75%_52%/0.65),0_0_40px_hsl(38_75%_52%/0.25)]" style={{border:'2px solid hsl(38 75% 52% / 0.55)'}}>
+              <img src={hotelLogo} alt="Hotel Drona Palace" className="w-9 h-9 object-contain drop-shadow-[0_0_6px_hsl(38_75%_52%/0.8)]" />
+            </div>
+            <div>
+              <p className="font-display text-sm font-bold text-secondary leading-tight">Hotel Drona Palace</p>
+              <p className="text-xs text-muted-foreground">A Unit of SR Leisure Inn</p>
             </div>
           </div>
           <div className="flex items-center justify-center gap-2 mb-1">
             <span className="text-3xl">🏏</span>
             <h1 className="font-display text-3xl font-bold gradient-text">{getConfig('register_header_title', 'T20 Fan Night')}</h1>
           </div>
-          <p className="text-muted-foreground text-sm text-center">{getConfig('register_header_venue', 'Hotel Drona Palace')}</p>
         </div>
 
         {bannerUrl && (
