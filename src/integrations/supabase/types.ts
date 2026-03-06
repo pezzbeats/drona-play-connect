@@ -783,6 +783,7 @@ export type Database = {
       }
       payment_proofs: {
         Row: {
+          ai_confidence: string | null
           ai_reason: string | null
           ai_verdict: Database["public"]["Enums"]["ai_verdict_enum"]
           created_at: string
@@ -793,11 +794,16 @@ export type Database = {
           extracted_vpa: string | null
           file_path: string
           file_sha256: string
+          fraud_flags: Json
           id: string
           order_id: string
+          overridden_at: string | null
+          overridden_by_admin_id: string | null
+          override_reason: string | null
           uploaded_by: Database["public"]["Enums"]["proof_uploader_enum"]
         }
         Insert: {
+          ai_confidence?: string | null
           ai_reason?: string | null
           ai_verdict?: Database["public"]["Enums"]["ai_verdict_enum"]
           created_at?: string
@@ -808,11 +814,16 @@ export type Database = {
           extracted_vpa?: string | null
           file_path: string
           file_sha256: string
+          fraud_flags?: Json
           id?: string
           order_id: string
+          overridden_at?: string | null
+          overridden_by_admin_id?: string | null
+          override_reason?: string | null
           uploaded_by?: Database["public"]["Enums"]["proof_uploader_enum"]
         }
         Update: {
+          ai_confidence?: string | null
           ai_reason?: string | null
           ai_verdict?: Database["public"]["Enums"]["ai_verdict_enum"]
           created_at?: string
@@ -823,8 +834,12 @@ export type Database = {
           extracted_vpa?: string | null
           file_path?: string
           file_sha256?: string
+          fraud_flags?: Json
           id?: string
           order_id?: string
+          overridden_at?: string | null
+          overridden_by_admin_id?: string | null
+          override_reason?: string | null
           uploaded_by?: Database["public"]["Enums"]["proof_uploader_enum"]
         }
         Relationships: [
