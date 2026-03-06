@@ -1,90 +1,128 @@
 
-## Color Analysis from Reference Image
+## Mobile-First Transformation Plan
 
-The reference image shows a cricket ground with:
-- **Deep forest green** backgrounds (cricket pitch/outfield) — rich, saturated: approx `hsl(140 60% 8%)` to `hsl(145 55% 12%)`
-- **Crimson/coral red** scoreboard panel — vibrant but warm: approx `hsl(355 75% 55%)`
-- **Bronze/gold** frame trim on the scoreboard: approx `hsl(38 65% 50%)`
-- **Bright white** text contrast against dark green
+### Current State Assessment
+- **AdminLayout**: Uses a fixed left sidebar (`w-60` / `w-16`) — completely unusable on phones, pushes content with `ml-60`
+- **Live.tsx**: Tab labels hidden on mobile (`hidden sm:inline`), reasonable but can be improved
+- **Register.tsx**: Already has a step bar and cards, but vertical flow can be tightened
+- **AdminControl.tsx**: 873 lines of dense form-heavy UI, not optimized for mobile touch
+- **AdminValidate.tsx**: 747 lines — the most critical mobile screen, needs biggest lift
+- **AdminDashboard**: `p-6 space-y-6` desktop padding, `grid-cols-2 lg:grid-cols-3` stat grid
+- **Ticket.tsx**: Reasonable but scrolling card stack needs carousel feel on mobile
 
-**New palette strategy:**
-- Background: deep cricket-green (replacing cold navy blue)
-- Primary/CTA: bright cricket crimson-red (replacing electric blue)
-- Secondary accent: gold/bronze trim (replacing cyan)
-- Muted: dark green-tinted surfaces
-- Success stays green (natural cricket association)
-- Warning stays amber
+### Strategy: Two separate concerns
 
----
+**1. Admin area** — needs a full navigation paradigm shift:
+- On mobile: hide the left sidebar entirely, show a **bottom nav bar** with the 4-5 most used items + hamburger drawer for the rest
+- On desktop (md+): keep existing sidebar behavior
+- This is the single biggest UX win for the whole admin side
 
-## Changes Required
-
-### 1. `src/index.css` — All CSS variables + component styles
-
-**:root token changes:**
-```
---background:        140 55% 4%     (deep cricket green-black)
---card:              140 45% 7%     (dark green glass)
---popover:           140 50% 5%     (slightly lighter)
---primary:           355 80% 55%    (cricket crimson)
---primary-foreground: 0 0% 98%     (white)
---secondary:         38 75% 52%     (gold/bronze trim)
---secondary-foreground: 140 55% 4% (dark on gold)
---muted:             140 30% 12%   (green-tinted muted)
---muted-foreground:  140 15% 50%   (greyed green)
---accent:            355 70% 65%   (lighter crimson accent)
---accent-foreground: 0 0% 98%
---border:            140 30% 16%   (green-tinted border)
---input:             140 30% 14%
---ring:              355 80% 55%   (crimson ring)
---glass-bg:          140 45% 8% / 0.65
---glass-border:      355 40% 60% / 0.12  (faint crimson border glow)
-```
-
-**Gradient tokens:**
-```
---gradient-hero:    135deg from deep green to slightly lighter green-black
---gradient-primary: 135deg crimson to gold/orange
---gradient-accent:  135deg from gold to crimson
---glow-primary:     crimson glow
---glow-secondary:   gold glow
-```
-
-**Sidebar:**
-```
---sidebar-background: 140 60% 3%
---sidebar-primary:    355 80% 55%
---sidebar-ring:       355 80% 55%
-```
-
-**Component styles to update:**
-- `.glass-input:focus` — crimson border/ring
-- `.glass-card-glow` — crimson glow
-- `.btn-gradient` — crimson-to-gold gradient
-- `.shimmer` — crimson shimmer tint
-- `.step-active` — crimson gradient
-- `.seat-pass` — green background with crimson border
-- `.seat-pass::before` — crimson-to-gold top strip
-- `.qr-container` — gold glow
-- Scrollbar thumb hover — crimson
-
-### 2. `tailwind.config.ts` — Hardcoded gradient/shadow values
-
-Update `backgroundImage` and `boxShadow` to match new crimson/gold/green palette:
-- `gradient-primary`: crimson → gold
-- `gradient-accent`: gold → crimson
-- `glow-primary`: crimson
-- `glow-cyan` → rename semantically stays as `glow-gold`: gold
-
-**pulse-glow keyframe** — update to crimson color
+**2. Public pages** (Register, Ticket, Play, Live, Index) — already max-w-lg centered, just need polish:
+- Safe-area padding, font sizing, input zoom prevention (`text-[16px]`), better tap targets
 
 ---
 
-## Files Changed
+## Files to Change
 
 | File | Change |
 |---|---|
-| `src/index.css` | Replace all CSS variable values + component style colors |
-| `tailwind.config.ts` | Update hardcoded gradient + glow values, pulse-glow keyframe |
+| `src/components/admin/AdminLayout.tsx` | Mobile bottom nav + hamburger drawer; sidebar only on `md+` |
+| `src/components/admin/AdminSidebar.tsx` | Make it `md+` only (hidden on mobile); extract nav items to shared const |
+| `src/components/admin/AdminBottomNav.tsx` | **New** — mobile bottom tab bar (5 key items) |
+| `src/pages/admin/AdminDashboard.tsx` | Mobile-safe padding, tighter quick-action cards |
+| `src/pages/admin/AdminValidate.tsx` | Larger touch targets, full-screen scan zone feel, sticky result strip |
+| `src/pages/admin/AdminControl.tsx` | Sticky status bar, collapsible sections, larger buttons |
+| `src/pages/admin/AdminOrders.tsx` | Cards instead of table rows on mobile |
+| `src/pages/admin/AdminManualBooking.tsx` | Full-width inputs, proper mobile form flow |
+| `src/pages/Register.tsx` | `text-[16px]` on inputs (prevent zoom), safe-area bottom padding |
+| `src/pages/Play.tsx` | Center-pinned, safe-area aware |
+| `src/pages/Live.tsx` | Bottom-sticky tab bar replacing top tabs, full-height panel |
+| `src/pages/Ticket.tsx` | Swipeable-feel carousel cards, safe-area padding |
+| `src/index.css` | Mobile base: `font-size: 16px` on inputs, safe-area vars, touch-callout none |
 
-Two files only. No component logic changes — purely the design token layer.
+---
+
+## Key Implementation Details
+
+### AdminLayout + Bottom Nav (biggest change)
+
+```
+Mobile (< md):
+┌─────────────────────────────────┐
+│   Page Content (full width)     │
+│   safe-area top padding         │
+│                                 │
+│                                 │
+│                                 │
+├─────────────────────────────────┤
+│  🏠  📋  📷  📚  ☰            │  ← bottom nav bar (56px + safe-area)
+└─────────────────────────────────┘
+
+Desktop (md+):
+┌──────┬──────────────────────────┐
+│Sidebar│   Page Content          │
+│ w-60  │                         │
+└──────┴──────────────────────────┘
+```
+
+`AdminBottomNav.tsx`:
+- 5 slots: Dashboard · Validate (primary, highlighted) · Orders · Control · More (opens Sheet drawer with remaining nav items)
+- Active route highlighted with crimson bg pill
+- Uses `pb-safe` (safe area inset bottom) — via CSS env variable
+- `fixed bottom-0 z-50` 
+
+`AdminLayout.tsx`:
+- On mobile: `ml-0`, `pb-16` (space for bottom nav), no sidebar
+- On desktop `md:ml-60`: sidebar + no bottom nav
+
+### Live.tsx — Bottom Tab Bar
+
+Move the `score / predict / leaderboard` tabs from the top header area to a **sticky bottom bar**. This frees up the full viewport for content and keeps navigation thumb-reachable.
+
+```
+┌─────────────────────────────┐
+│  Match name · mobile · Exit │  ← compact fixed header
+├─────────────────────────────┤
+│                             │
+│     Tab content area        │
+│     (scrollable)            │
+│                             │
+├─────────────────────────────┤
+│  📊 Score  🎯 Guess  🏆 LB  │  ← fixed bottom tabs
+└─────────────────────────────┘
+```
+
+### Input zoom prevention
+
+In `index.css` and all input fields: ensure `font-size: 16px` minimum so iOS Safari doesn't auto-zoom. Add to `.glass-input`:
+```css
+font-size: 16px; /* prevent iOS zoom */
+```
+
+### Safe-area padding
+
+Add to `index.css`:
+```css
+.safe-top    { padding-top:    env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.pb-safe     { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+```
+
+### AdminOrders mobile cards
+
+Current: expandable rows, expand button `<ChevronDown>`. Works on desktop.  
+Mobile: each order renders as a `GlassCard` with status badge, name, amount, and an expand chevron — readable at a glance without horizontal scroll.
+
+### AdminValidate — full-screen scan feel
+
+- Input field takes full width, `text-[16px]`, large `h-14`
+- After scan: result card slides up as a bottom sheet feel (fixed bottom panel on mobile)
+- Checkin button `h-16 text-lg w-full`
+
+---
+
+## Scope Note
+
+**Not changing:** AdminControl's core form logic (873 lines) — it will get mobile padding/sizing fixes but the full delivery form refactor is a separate pass to avoid breaking the complex state machine.
+
+**Not changing:** Any backend, edge functions, database, or business logic.
