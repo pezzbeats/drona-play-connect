@@ -4,9 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, ToggleLeft, ToggleRight, Loader2, Edit, Zap, Trophy } from 'lucide-react';
+import { Plus, ToggleLeft, ToggleRight, Edit, Zap, Trophy } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -74,7 +75,6 @@ export default function AdminMatches() {
       setCreateOpen(false);
       setForm({ name: '', opponent: '', match_type: 'group', venue: 'Hotel Drona Palace', start_time: '', status: 'draft' });
       fetchMatches();
-      // Audit log
       if (user) {
         await supabase.from('admin_activity').insert({ admin_id: user.id, action: 'create_match', entity_type: 'match', meta: { name: form.name } });
       }
@@ -87,7 +87,7 @@ export default function AdminMatches() {
   const handleSetActive = async (matchId: string, currentlyActive: boolean) => {
     setSettingActive(matchId);
     try {
-      const { data, error } = await supabase.functions.invoke('set-match-active', {
+      const { error } = await supabase.functions.invoke('set-match-active', {
         body: { match_id: currentlyActive ? null : matchId }
       });
       if (error) throw error;
@@ -103,15 +103,15 @@ export default function AdminMatches() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="px-4 py-5 space-y-5 max-w-2xl mx-auto md:max-w-none md:p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-bold gradient-text-accent">Matches</h1>
+          <h1 className="font-display text-2xl font-bold gradient-text-accent">Matches</h1>
           <p className="text-muted-foreground text-sm">Manage T20 Fan Night matches</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <GlassButton variant="primary" size="md">
+            <GlassButton variant="primary" size="sm">
               <Plus className="h-4 w-4" /> New Match
             </GlassButton>
           </DialogTrigger>
@@ -170,23 +170,31 @@ export default function AdminMatches() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} lines={2} showHeader />
+          ))}
+        </div>
       ) : matches.length === 0 ? (
-        <GlassCard className="p-8 text-center">
-          <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-foreground font-medium">No matches yet</p>
-          <p className="text-muted-foreground text-sm">Create your first match to get started</p>
+        <GlassCard className="p-10 text-center">
+          <Trophy className="h-12 w-12 text-primary/30 mx-auto mb-3" />
+          <p className="font-display text-lg font-bold text-foreground">No matches yet</p>
+          <p className="text-muted-foreground text-sm mt-1">Create your first match to get started</p>
         </GlassCard>
       ) : (
         <div className="space-y-3">
-          {matches.map(match => (
-            <GlassCard key={match.id} className={`p-4 ${match.is_active_for_registration ? 'border-primary/40 shadow-glow-primary' : ''}`}>
+          {matches.map((match, i) => (
+            <GlassCard
+              key={match.id}
+              className={`p-4 animate-slide-up ${match.is_active_for_registration ? 'border-primary/50 glass-card-glow' : ''}`}
+              style={{ animationDelay: `${i * 0.04}s` } as React.CSSProperties}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-display text-lg font-bold text-foreground">{match.name}</h3>
                     {match.is_active_for_registration && (
-                      <span className="flex items-center gap-1 text-xs text-primary">
+                      <span className="flex items-center gap-1 text-xs text-primary font-semibold">
                         <Zap className="h-3 w-3" /> Active
                       </span>
                     )}
@@ -257,4 +265,3 @@ export default function AdminMatches() {
     </div>
   );
 }
-

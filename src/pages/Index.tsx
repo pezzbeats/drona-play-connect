@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { Loader2, MapPin, Calendar, Trophy, Gamepad2, Utensils, Star, ChevronRight, Clock } from 'lucide-react';
+import { Loader2, MapPin, Calendar, Trophy, Star, ChevronRight, Clock } from 'lucide-react';
 
 interface ActiveMatch {
   id: string;
@@ -116,7 +116,7 @@ export default function IndexPage() {
         }}
       />
 
-      {/* Radial vignette — darker at edges, lighter centre */}
+      {/* Radial vignette */}
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
@@ -129,11 +129,10 @@ export default function IndexPage() {
         🎯 Fun Guess Game only — for entertainment. No betting, no wagering. All event fees are for hospitality only.
       </div>
 
-      <div className="relative z-10 max-w-lg mx-auto px-4 py-8">
+      <div className="relative z-10 max-w-lg mx-auto px-4 py-8 animate-fade-in">
 
         {/* Hero Header */}
         <div className="text-center mb-8">
-          {/* Decorative pitch-line accent above title */}
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-secondary/60" />
             <span className="text-5xl drop-shadow-[0_0_20px_hsl(355_80%_55%/0.6)]">🏏</span>
@@ -142,7 +141,6 @@ export default function IndexPage() {
           <h1 className="font-display text-5xl font-bold gradient-text mb-2 leading-tight tracking-wide">
             T20 Fan Night
           </h1>
-          {/* Gold divider line */}
           <div className="flex items-center justify-center gap-2 my-3">
             <div className="h-px w-16 bg-gradient-to-r from-transparent via-secondary to-transparent opacity-70" />
             <div className="w-1.5 h-1.5 rounded-full bg-secondary opacity-80" />
@@ -156,16 +154,15 @@ export default function IndexPage() {
           <>
             {/* Match Banner */}
             {bannerUrl && (
-              <div className="mb-5 rounded-2xl overflow-hidden"
+              <div className="mb-5 rounded-2xl overflow-hidden animate-slide-up"
                 style={{ boxShadow: '0 0 40px hsl(355 80% 55% / 0.25), 0 0 80px hsl(140 60% 10% / 0.5)' }}>
                 <img src={bannerUrl} alt={match.name} className="w-full h-48 object-cover" />
-                {/* Gradient overlay on banner bottom */}
                 <div className="h-1 bg-gradient-to-r from-primary via-secondary to-primary opacity-80" />
               </div>
             )}
 
             {/* Active Match Card */}
-            <GlassCard className="p-5 mb-5 border border-primary/30" glow>
+            <GlassCard className="p-5 mb-5 border border-primary/30 animate-slide-up" glow style={{ animationDelay: '0.05s' } as React.CSSProperties}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
                 <span className="text-xs font-bold text-success uppercase tracking-wider">Registrations Open</span>
@@ -198,14 +195,18 @@ export default function IndexPage() {
             </GlassCard>
 
             {/* What's Included */}
-            <div className="mb-5">
+            <div className="mb-5 animate-slide-up" style={{ animationDelay: '0.1s' } as React.CSSProperties}>
               <h3 className="font-display text-lg font-bold text-foreground mb-3 text-center tracking-wide">
                 What's Included
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                {FEATURES.map((f) => (
-                  <GlassCard key={f.label} className="p-3 border border-border hover:border-primary/30 transition-colors">
-                    <div className="text-2xl mb-1">{f.icon}</div>
+                {FEATURES.map((f, i) => (
+                  <GlassCard
+                    key={f.label}
+                    className="p-3 hover:border-primary/30 animate-slide-up"
+                    style={{ animationDelay: `${0.12 + i * 0.05}s` } as React.CSSProperties}
+                  >
+                    <div className="text-2xl mb-1.5">{f.icon}</div>
                     <p className="font-display font-bold text-sm text-foreground">{f.label}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{f.desc}</p>
                   </GlassCard>
@@ -215,7 +216,7 @@ export default function IndexPage() {
 
             {/* Pricing Card */}
             {pricing && (
-              <GlassCard className="p-5 mb-5 border border-secondary/20">
+              <GlassCard className="p-5 mb-5 border border-secondary/20 animate-slide-up" style={{ animationDelay: '0.2s' } as React.CSSProperties}>
                 <h3 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">
                   🎫 Ticket Pricing
                 </h3>
@@ -240,36 +241,43 @@ export default function IndexPage() {
             )}
 
             {/* Big CTA */}
-            <Link to="/register" className="block mb-3">
-              <GlassButton variant="primary" size="lg" className="w-full text-lg py-4 animate-pulse-glow">
-                Register Now — Book Your Seat <ChevronRight className="h-5 w-5" />
-              </GlassButton>
-            </Link>
+            <div className="animate-slide-up" style={{ animationDelay: '0.25s' } as React.CSSProperties}>
+              <Link to="/register" className="block mb-3">
+                <GlassButton variant="primary" size="lg" className="w-full text-lg">
+                  Register Now — Book Your Seat <ChevronRight className="h-5 w-5" />
+                </GlassButton>
+              </Link>
 
-            <p className="text-xs text-center text-muted-foreground">
-              Already registered?{' '}
-              <Link to="/ticket" className="text-primary underline">View your tickets</Link>
-            </p>
+              <p className="text-xs text-center text-muted-foreground">
+                Already registered?{' '}
+                <Link to="/ticket" className="text-primary underline">View your tickets</Link>
+              </p>
+            </div>
           </>
         ) : (
           /* No active match — Coming Soon */
-          <GlassCard className="p-8 text-center" glow>
+          <GlassCard className="p-8 text-center animate-slide-up" glow>
             <div className="text-5xl mb-4 drop-shadow-[0_0_16px_hsl(355_80%_55%/0.5)]">🏏</div>
             <h2 className="font-display text-2xl font-bold gradient-text mb-2">Next Event Coming Soon</h2>
             <p className="text-muted-foreground text-sm mb-6">
               The next T20 Fan Night is being planned. Stay tuned — registrations will open soon!
             </p>
             <div className="grid grid-cols-2 gap-3 mb-6">
-              {FEATURES.map((f) => (
-                <div key={f.label} className="bg-muted/20 border border-border rounded-lg p-3">
-                  <div className="text-xl mb-1">{f.icon}</div>
-                  <p className="text-xs font-medium text-foreground">{f.label}</p>
+              {FEATURES.map((f, i) => (
+                <div
+                  key={f.label}
+                  className="glass-card-sunken border border-border/30 rounded-xl p-3 animate-slide-up"
+                  style={{ animationDelay: `${0.1 + i * 0.05}s` } as React.CSSProperties}
+                >
+                  <div className="text-xl mb-1.5">{f.icon}</div>
+                  <p className="text-xs font-semibold text-foreground">{f.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{f.desc}</p>
                 </div>
               ))}
             </div>
             <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm">
               <Clock className="h-4 w-4" />
-              <span>Check back soon</span>
+              <span>Check back soon for the next event</span>
             </div>
           </GlassCard>
         )}

@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight, Loader2 } from 'lucide-react';
+import { SkeletonStatCard } from '@/components/ui/SkeletonCard';
+import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight } from 'lucide-react';
 
 interface Stats {
   totalOrders: number;
@@ -60,9 +61,9 @@ export default function AdminDashboard() {
   ] : [];
 
   const quickActions = [
-    { icon: ScanLine,  label: 'Gate Validate',  desc: 'Scan QR & check-in',         to: '/admin/validate',        variant: 'primary' as const },
-    { icon: BookOpen,  label: 'Manual Booking', desc: 'Book for walk-in guest',      to: '/admin/manual-booking',  variant: 'accent' as const },
-    { icon: Trophy,    label: 'Manage Matches', desc: 'Create & activate matches',   to: '/admin/matches',         variant: 'ghost' as const },
+    { icon: ScanLine,  label: 'Gate Validate',  desc: 'Scan QR & check-in',         to: '/admin/validate' },
+    { icon: BookOpen,  label: 'Manual Booking', desc: 'Book for walk-in guest',      to: '/admin/manual-booking' },
+    { icon: Trophy,    label: 'Manage Matches', desc: 'Create & activate matches',   to: '/admin/matches' },
   ];
 
   return (
@@ -103,17 +104,23 @@ export default function AdminDashboard() {
 
       {/* Stats Grid — 2 cols on mobile, 3 on desktop */}
       {loading ? (
-        <div className="flex items-center justify-center py-10">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonStatCard key={i} />
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {statCards.map(({ icon: Icon, label, value, color, bg }) => (
-            <GlassCard key={label} className="p-4">
+          {statCards.map(({ icon: Icon, label, value, color, bg }, i) => (
+            <GlassCard
+              key={label}
+              className="p-4 animate-slide-up"
+              style={{ animationDelay: `${i * 0.05}s` } as React.CSSProperties}
+            >
               <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center mb-2.5`}>
-                <Icon className={`h-4.5 w-4.5 ${color}`} />
+                <Icon className={`h-4 w-4 ${color}`} />
               </div>
-              <p className={`font-display text-3xl font-bold leading-none ${color}`}>{value}</p>
+              <p className={`stat-number ${color}`}>{value}</p>
               <p className="text-xs text-muted-foreground mt-1.5 leading-tight">{label}</p>
             </GlassCard>
           ))}
@@ -122,11 +129,11 @@ export default function AdminDashboard() {
 
       {/* Quick Actions */}
       <div>
-        <h2 className="font-display text-base font-bold text-foreground mb-3">Quick Actions</h2>
+        <p className="section-title mb-3">Quick Actions</p>
         <div className="space-y-2 sm:grid sm:grid-cols-3 sm:gap-3 sm:space-y-0">
           {quickActions.map(({ icon: Icon, label, desc, to }) => (
             <Link key={to} to={to}>
-              <GlassCard className="p-4 hover:border-primary/40 transition-colors cursor-pointer group active:scale-[0.98]">
+              <GlassCard className="p-4 hover:border-primary/40 cursor-pointer group active:scale-95 transition-transform">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                     <Icon className="h-5 w-5 text-primary" />
@@ -135,7 +142,7 @@ export default function AdminDashboard() {
                     <p className="font-semibold text-foreground text-sm">{label}</p>
                     <p className="text-xs text-muted-foreground leading-tight">{desc}</p>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </GlassCard>
             </Link>
