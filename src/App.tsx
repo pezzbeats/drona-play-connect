@@ -9,7 +9,7 @@ import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { VoiceAgent } from "@/components/VoiceAgent";
 
-const HIDE_VOICE_AGENT_PATHS = ["/register", "/ticket"];
+const HIDE_VOICE_AGENT_PATHS = ["/register", "/ticket", "/play", "/live"];
 
 function VoiceAgentGuard() {
   const location = useLocation();
