@@ -31,7 +31,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mobile, pin, window_id, prediction } = await req.json();
+    const params = await req.json();
+    const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
+    const { pin, window_id, prediction } = params;
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Validate game access session
