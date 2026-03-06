@@ -248,9 +248,10 @@ serve(async (req) => {
       }
 
       default: {
+        console.error("Unknown tool called:", toolName, "Full body:", JSON.stringify(body));
         result = {
           success: false,
-          message: `Tool "${tool}" nahi mila. Available tools: lookup_ticket, get_match_info, get_pricing, check_registration.`,
+          message: `Tool "${toolName}" nahi mila. Available tools: lookup_ticket, get_match_info, get_pricing, check_registration.`,
           available_tools: ["lookup_ticket", "get_match_info", "get_pricing", "check_registration"]
         };
       }
