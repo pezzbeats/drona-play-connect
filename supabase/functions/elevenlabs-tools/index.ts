@@ -140,6 +140,12 @@ serve(async (req) => {
         // Get ticket pricing for the active match
         const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
 
+        const { data: activeMatch } = await supabase
+          .from("matches")
+          .select("id, name")
+          .eq("is_active_for_registration", true)
+          .single();
+
         if (!activeMatch) {
           result = {
             success: false,
