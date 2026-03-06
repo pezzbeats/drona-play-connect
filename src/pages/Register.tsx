@@ -10,15 +10,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
   CheckCircle2, ChevronRight, CreditCard, Smartphone, Users, MapPin,
-  Upload, Loader2, AlertCircle, Star, Info, Zap
+  Upload, Loader2, AlertCircle, Star, Info, Zap, Shield, RefreshCw,
+  Phone, Mail, ArrowRight, XCircle, Clock
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
-// Declare global Razorpay type
 declare global {
-  interface Window {
-    Razorpay: any;
-  }
+  interface Window { Razorpay: any; }
 }
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -33,52 +31,35 @@ function loadRazorpayScript(): Promise<boolean> {
 }
 
 interface Match {
-  id: string;
-  name: string;
-  opponent: string | null;
-  match_type: string;
-  start_time: string | null;
-  venue: string;
-  status: string;
+  id: string; name: string; opponent: string | null;
+  match_type: string; start_time: string | null; venue: string; status: string;
 }
-
 interface PriceQuote {
   seats: Array<{ seat_index: number; price: number; reason: string }>;
-  total: number;
-  seating_type: string;
+  total: number; seating_type: string;
 }
-
-// VPA / payee name are now loaded from site_config via useSiteConfig hook
 
 const steps = ['Your Details', 'Seats & Price', 'Payment', 'Your Tickets'];
 
 function StepBar({ step }: { step: number }) {
   return (
     <div className="mb-6">
-      {/* Progress bar */}
       <div className="relative h-2 bg-muted rounded-full mb-3 overflow-hidden">
         <div
           className="absolute left-0 top-0 h-full rounded-full transition-all duration-500"
-          style={{
-            width: `${(step / (steps.length - 1)) * 100}%`,
-            background: 'var(--gradient-primary)',
-          }}
+          style={{ width: `${(step / (steps.length - 1)) * 100}%`, background: 'var(--gradient-primary)' }}
         />
       </div>
-      {/* Step labels */}
       <div className="flex justify-between">
         {steps.map((s, i) => (
           <div key={i} className="flex flex-col items-center gap-1" style={{ width: `${100 / steps.length}%` }}>
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
               i < step ? 'bg-success text-success-foreground shadow-glow-success' :
-              i === step ? 'step-active text-primary-foreground' :
-              'step-inactive text-muted-foreground'
+              i === step ? 'step-active text-primary-foreground' : 'step-inactive text-muted-foreground'
             }`}>
               {i < step ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
             </div>
-            <span className={`text-xs font-medium text-center leading-tight ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>
-              {s}
-            </span>
+            <span className={`text-xs font-medium text-center leading-tight ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>{s}</span>
           </div>
         ))}
       </div>
@@ -86,6 +67,169 @@ function StepBar({ step }: { step: number }) {
   );
 }
 
+// ─── Payment method icons (emoji-based, clean) ────────────────────────────────
+function RazorpayBadges() {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+      {['💳 Cards', '📱 UPI', '🏦 Netbanking', '👛 Wallets'].map(m => (
+        <span key={m} className="text-xs bg-muted/60 text-muted-foreground px-2 py-0.5 rounded-full border border-border/50">{m}</span>
+      ))}
+    </div>
+  );
+}
+
+// ─── Pre-payment confirmation summary ────────────────────────────────────────
+function PrePaymentSummary({
+  match, fullName, mobile, seatsCount, seatingType, total, onConfirm, onBack, loading
+}: {
+  match: Match; fullName: string; mobile: string; seatsCount: number;
+  seatingType: string; total: number; onConfirm: () => void; onBack: () => void; loading: boolean;
+}) {
+  return (
+    <div className="space-y-4 animate-fade-in">
+      {/* Header */}
+      <div className="text-center">
+        <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 mb-3">
+          <Shield className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs font-semibold text-primary">Secure Online Payment</span>
+        </div>
+        <h3 className="font-display text-xl font-bold text-foreground">Confirm Your Order</h3>
+        <p className="text-xs text-muted-foreground mt-1">Review your booking before proceeding to payment</p>
+      </div>
+
+      {/* Order summary card */}
+      <GlassCard className="p-5 space-y-3">
+        <div className="flex items-center gap-2 pb-3 border-b border-border/50">
+          <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-base">🏟️</div>
+          <div>
+            <p className="font-display font-bold text-foreground text-sm">{match.name}</p>
+            {match.opponent && <p className="text-xs text-muted-foreground">vs {match.opponent}</p>}
+          </div>
+        </div>
+
+        {[
+          { label: 'Venue', value: match.venue },
+          { label: 'Name', value: fullName },
+          { label: 'Mobile', value: mobile },
+          { label: 'Seats', value: `${seatsCount} × ${seatingType}` },
+          { label: 'Payment via', value: '⚡ Razorpay' },
+        ].map(row => (
+          <div key={row.label} className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className="font-medium text-foreground">{row.value}</span>
+          </div>
+        ))}
+
+        <div className="pt-3 border-t border-border/50 flex items-center justify-between">
+          <span className="font-display font-bold text-foreground">Total Payable</span>
+          <span className="font-display text-2xl font-bold gradient-text">₹{total}</span>
+        </div>
+      </GlassCard>
+
+      {/* Trust note */}
+      <div className="rounded-xl bg-success/5 border border-success/20 px-4 py-3 text-xs text-muted-foreground text-center leading-relaxed">
+        ✅ Your passes will be generated <strong className="text-foreground">automatically</strong> after successful payment verification — no screenshot upload required.
+      </div>
+
+      {/* Actions */}
+      <GlassButton variant="primary" size="lg" className="w-full" loading={loading} onClick={onConfirm}>
+        <Zap className="h-4 w-4" /> Pay ₹{total} via Razorpay
+      </GlassButton>
+      <GlassButton variant="ghost" size="md" className="w-full" onClick={onBack}>← Back</GlassButton>
+
+      {/* Support footer */}
+      <div className="text-center space-y-1 pt-1">
+        <p className="text-xs text-muted-foreground">Need help? Contact us</p>
+        <div className="flex items-center justify-center gap-4 text-xs">
+          <a href="tel:7217016170" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
+            <Phone className="h-3 w-3" /> 7217016170
+          </a>
+          <a href="mailto:dronapalace@gmail.com" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
+            <Mail className="h-3 w-3" /> dronapalace@gmail.com
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Payment generating / processing state ────────────────────────────────────
+function PaymentProcessing() {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 gap-4 animate-fade-in">
+      <div className="relative">
+        <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="font-display text-lg font-bold text-foreground">Confirming Payment</p>
+        <p className="text-sm text-muted-foreground mt-1">Verifying with Razorpay…</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Payment failure / cancel state ──────────────────────────────────────────
+function PaymentFailed({
+  reason, onRetryRazorpay, onSwitchMethod, loading
+}: {
+  reason: 'failed' | 'cancelled' | 'pending';
+  onRetryRazorpay: () => void;
+  onSwitchMethod: () => void;
+  loading: boolean;
+}) {
+  const config = {
+    failed:    { icon: <XCircle className="h-10 w-10 text-destructive" />, title: 'Payment Not Completed', desc: 'Your payment could not be processed. Your booking is saved — you can retry safely.' },
+    cancelled: { icon: <XCircle className="h-10 w-10 text-muted-foreground" />, title: 'Payment Cancelled', desc: 'You closed the payment window. Your booking is reserved — complete payment when ready.' },
+    pending:   { icon: <Clock className="h-10 w-10 text-warning" />, title: "Confirming Your Payment", desc: "This can take a moment. If you already paid, your passes will appear automatically once confirmed." },
+  }[reason];
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex flex-col items-center gap-3 py-4 text-center">
+        {config.icon}
+        <div>
+          <p className="font-display text-lg font-bold text-foreground">{config.title}</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">{config.desc}</p>
+        </div>
+      </div>
+
+      {/* Primary: Retry */}
+      <GlassButton variant="primary" size="lg" className="w-full" loading={loading} onClick={onRetryRazorpay}>
+        <RefreshCw className="h-4 w-4" /> Retry Razorpay Payment
+      </GlassButton>
+
+      {/* Secondary options */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={onSwitchMethod}
+          className="rounded-xl border border-border bg-muted/20 py-3 px-3 text-xs font-semibold text-foreground hover:bg-muted/40 transition-all text-center"
+        >
+          <Smartphone className="h-4 w-4 mx-auto mb-1 text-success" />
+          Pay via UPI QR
+        </button>
+        <button
+          onClick={onSwitchMethod}
+          className="rounded-xl border border-border bg-muted/20 py-3 px-3 text-xs font-semibold text-foreground hover:bg-muted/40 transition-all text-center"
+        >
+          <CreditCard className="h-4 w-4 mx-auto mb-1 text-warning" />
+          Pay at Hotel
+        </button>
+      </div>
+
+      {/* Support */}
+      <div className="text-center text-xs text-muted-foreground pt-1">
+        Already paid?{' '}
+        <a href="tel:7217016170" className="text-primary underline underline-offset-2">Call 7217016170</a>
+        {' '}or{' '}
+        <a href="mailto:dronapalace@gmail.com" className="text-primary underline underline-offset-2">email us</a>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function RegisterPage() {
   const { toast } = useToast();
   const { get: getConfig } = useSiteConfig();
@@ -95,7 +239,6 @@ export default function RegisterPage() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [matchLoading, setMatchLoading] = useState(true);
 
-  // Preview mode
   const previewMatchId = new URLSearchParams(window.location.search).get('preview');
   const isPreviewMode = !!previewMatchId;
 
@@ -104,8 +247,6 @@ export default function RegisterPage() {
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
-
-  // Inline validation
   const mobileValid = /^\d{10}$/.test(mobile);
   const mobileError = mobile.length > 0 && !mobileValid;
   const nameError = fullName.length > 0 && fullName.trim().length < 2;
@@ -116,11 +257,15 @@ export default function RegisterPage() {
   const [priceQuote, setPriceQuote] = useState<PriceQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
-  // Step 3
-  const [paymentMethod, setPaymentMethod] = useState<'pay_at_hotel' | 'upi_qr' | 'razorpay'>('upi_qr');
+  // Step 3 — payment state machine
+  type PaymentState = 'select_method' | 'razorpay_summary' | 'razorpay_processing' | 'razorpay_failed' | 'razorpay_cancelled' | 'razorpay_pending' | 'upi_qr';
+  const [paymentState, setPaymentState] = useState<PaymentState>('select_method');
+  const [paymentMethod, setPaymentMethod] = useState<'pay_at_hotel' | 'upi_qr' | 'razorpay'>('razorpay');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [razorpayOrderId, setRazorpayOrderId] = useState<string | null>(null);
   const [razorpayKeyId, setRazorpayKeyId] = useState<string | null>(null);
+  const [razorpayAmount, setRazorpayAmount] = useState<number>(0);
+  const [razorpayCurrency, setRazorpayCurrency] = useState('INR');
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyResult, setVerifyResult] = useState<any>(null);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
@@ -128,17 +273,16 @@ export default function RegisterPage() {
 
   // Step 4
   const [tickets, setTickets] = useState<any[]>([]);
+  const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
   useEffect(() => {
     fetchActiveMatch();
-    // autoFocus on first field
     setTimeout(() => nameRef.current?.focus(), 300);
   }, []);
 
   const fetchActiveMatch = async () => {
     setMatchLoading(true);
     let data: any = null;
-
     if (isPreviewMode && previewMatchId) {
       const res = await supabase.from('matches').select('*').eq('id', previewMatchId).single();
       data = res.data;
@@ -146,15 +290,9 @@ export default function RegisterPage() {
       const res = await supabase.from('matches').select('*').eq('is_active_for_registration', true).single();
       data = res.data;
     }
-
     if (data) {
       setActiveMatch(data);
-      const { data: assets } = await supabase
-        .from('match_assets')
-        .select('*')
-        .eq('match_id', data.id)
-        .eq('asset_type', 'banner_image')
-        .single();
+      const { data: assets } = await supabase.from('match_assets').select('*').eq('match_id', data.id).eq('asset_type', 'banner_image').single();
       if (assets?.file_path) {
         const { data: url } = supabase.storage.from('match-assets').getPublicUrl(assets.file_path);
         setBannerUrl(url?.publicUrl || null);
@@ -231,6 +369,8 @@ export default function RegisterPage() {
     const loaded = await loadRazorpayScript();
     if (!loaded) throw new Error('Payment gateway failed to load. Please try again.');
 
+    setPaymentState('razorpay_processing');
+
     const options = {
       key: keyId,
       amount,
@@ -238,14 +378,9 @@ export default function RegisterPage() {
       name: getConfig('register_header_venue', 'Hotel Drona Palace'),
       description: `T20 Fan Night — ${activeMatch?.name}`,
       order_id: rzpOrderId,
-      prefill: {
-        name: fullName,
-        contact: `+91${mobile}`,
-        email: email || undefined,
-      },
+      prefill: { name: fullName, contact: `+91${mobile}`, email: email || undefined },
       theme: { color: '#e8423c' },
       handler: async (response: any) => {
-        // Verify on backend
         try {
           const { data: verifyData, error: verifyErr } = await supabase.functions.invoke('razorpay-verify-payment', {
             body: {
@@ -256,22 +391,22 @@ export default function RegisterPage() {
             }
           });
           if (verifyErr || !verifyData?.verified) {
-            toast({ variant: 'destructive', title: '⚠️ Verification Failed', description: 'Payment received but verification failed. Contact support.' });
+            setPaymentState('razorpay_failed');
             setRazorpayLoading(false);
             return;
           }
           setTickets(verifyData.tickets || []);
+          setPaymentVerifiedAt(new Date().toISOString());
           setStep(3);
-          toast({ title: '✅ Payment Successful!', description: 'Your passes are ready.' });
+          toast({ title: '✅ Payment Confirmed!', description: 'Your passes are ready.' });
         } catch (e: any) {
-          toast({ variant: 'destructive', title: 'Verification error', description: e.message });
+          setPaymentState('razorpay_failed');
           setRazorpayLoading(false);
         }
       },
       modal: {
         ondismiss: () => {
-          // Keep orderId and razorpayOrderId so user can retry
-          toast({ variant: 'destructive', title: 'Payment cancelled', description: 'Tap "Retry Payment" below to try again.' });
+          setPaymentState('razorpay_cancelled');
           setRazorpayLoading(false);
         }
       }
@@ -284,27 +419,20 @@ export default function RegisterPage() {
     if (!activeMatch || !priceQuote) return;
     setRazorpayLoading(true);
     try {
-      // 1. Create internal order (only if not already created)
       let currentOrderId = orderId;
       if (!currentOrderId) {
         currentOrderId = await handleCreateOrder('razorpay');
-        if (!currentOrderId) return;
+        if (!currentOrderId) { setRazorpayLoading(false); return; }
       }
 
-      // 2. Create Razorpay order (only if not already created)
       let currentRzpOrderId = razorpayOrderId;
       let keyId = razorpayKeyId;
-      let amount = priceQuote.total * 100;
-      let currency = 'INR';
+      let amount = razorpayAmount || priceQuote.total * 100;
+      let currency = razorpayCurrency;
 
       if (!currentRzpOrderId) {
         const { data: rzpData, error: rzpErr } = await supabase.functions.invoke('razorpay-create-order', {
-          body: {
-            order_id: currentOrderId,
-            amount_paise: priceQuote.total * 100,
-            currency: 'INR',
-            receipt: `order_${currentOrderId.slice(0, 12)}`,
-          }
+          body: { order_id: currentOrderId, amount_paise: priceQuote.total * 100, currency: 'INR', receipt: `order_${currentOrderId.slice(0, 12)}` }
         });
         if (rzpErr || !rzpData?.razorpay_order_id) throw new Error(rzpErr?.message || 'Failed to create payment order');
         currentRzpOrderId = rzpData.razorpay_order_id;
@@ -313,14 +441,22 @@ export default function RegisterPage() {
         currency = rzpData.currency;
         setRazorpayOrderId(currentRzpOrderId);
         setRazorpayKeyId(keyId);
+        setRazorpayAmount(amount);
+        setRazorpayCurrency(currency);
       }
 
-      // 3. Open Razorpay checkout
       await openRazorpayCheckout(currentOrderId, currentRzpOrderId!, keyId!, amount, currency);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Payment failed', description: e.message });
+      setPaymentState('razorpay_failed');
       setRazorpayLoading(false);
     }
+  };
+
+  const handleSwitchPaymentMethod = () => {
+    // Reset Razorpay state but keep orderId so we don't recreate it
+    setPaymentState('select_method');
+    setPaymentMethod('upi_qr');
   };
 
   const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -332,9 +468,7 @@ export default function RegisterPage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('order_id', orderId);
-      const { data, error } = await supabase.functions.invoke('verify-payment-proof', {
-        body: formData,
-      });
+      const { data, error } = await supabase.functions.invoke('verify-payment-proof', { body: formData });
       if (error) throw error;
       setVerifyResult(data);
       if (data.verdict === 'verified') {
@@ -383,14 +517,12 @@ export default function RegisterPage() {
     <div className="min-h-screen relative" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <BackgroundOrbs />
 
-      {/* Preview mode banner */}
       {isPreviewMode && (
         <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-warning/90 text-warning-foreground text-sm font-semibold py-2 px-4 backdrop-blur-sm">
           ⚠️ PREVIEW MODE — This page is not live. Changes are not saved.
         </div>
       )}
 
-      {/* Disclaimer bar */}
       <div className="disclaimer-bar text-center text-xs py-2 px-4 relative z-10">
         {getConfig('disclaimer_bar_text', '🎯 Fun Guess Game only — entertainment. No betting. Event fees are for hospitality only.')}
       </div>
@@ -405,14 +537,12 @@ export default function RegisterPage() {
           <p className="text-muted-foreground text-sm text-center">{getConfig('register_header_venue', 'Hotel Drona Palace')}</p>
         </div>
 
-        {/* Match Banner */}
         {bannerUrl && (
           <div className="mb-4 rounded-xl overflow-hidden">
             <img src={bannerUrl} alt="Match Banner" className="w-full h-40 object-cover" />
           </div>
         )}
 
-        {/* Match Info Card */}
         <GlassCard className="p-4 mb-5 text-center">
           <div className="flex items-center justify-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-xl flex-shrink-0">🏟️</div>
@@ -429,10 +559,9 @@ export default function RegisterPage() {
           )}
         </GlassCard>
 
-        {/* Step Indicators */}
         <StepBar step={step} />
 
-        {/* Step 0: Personal Details */}
+        {/* ─── Step 0: Personal Details ─── */}
         {step === 0 && (
           <GlassCard className="p-6 animate-fade-in" glow>
             <div className="flex items-center justify-center gap-2 mb-5">
@@ -442,79 +571,39 @@ export default function RegisterPage() {
             <div className="space-y-4">
               <div>
                 <Label className="text-foreground mb-1.5 block text-center">Full Name *</Label>
-                <Input
-                  ref={nameRef}
-                  className={`glass-input ${nameError ? 'border-destructive' : ''}`}
-                  placeholder="Enter your full name"
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  autoComplete="name"
-                />
-                {nameError && (
-                  <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> Please enter your full name
-                  </p>
-                )}
+                <Input ref={nameRef} className={`glass-input ${nameError ? 'border-destructive' : ''}`}
+                  placeholder="Enter your full name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" />
+                {nameError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Please enter your full name</p>}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <Label className="text-foreground w-full text-center">Mobile Number *</Label>
-                  <span className={`text-xs font-mono ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>
-                    {mobile.length}/10
-                  </span>
+                  <span className={`text-xs font-mono ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>{mobile.length}/10</span>
                 </div>
-                <Input
-                  className={`glass-input ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
-                  placeholder="10-digit mobile number"
-                  value={mobile}
+                <Input className={`glass-input ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
+                  placeholder="10-digit mobile number" value={mobile}
                   onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  inputMode="numeric"
-                  type="tel"
-                  autoComplete="tel"
-                />
-                {mobileError && (
-                  <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> Enter a valid 10-digit number
-                  </p>
-                )}
-                {mobileValid && (
-                  <p className="text-xs text-success mt-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Valid mobile number
-                  </p>
-                )}
+                  inputMode="numeric" type="tel" autoComplete="tel" />
+                {mobileError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Enter a valid 10-digit number</p>}
+                {mobileValid && <p className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Valid mobile number</p>}
               </div>
               <div>
                 <Label className="text-foreground mb-1.5 block text-center">Email (optional)</Label>
-                <Input
-                  className="glass-input"
-                  placeholder="your@email.com"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  autoComplete="email"
-                />
+                <Input className="glass-input" placeholder="your@email.com" type="email"
+                  value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
               </div>
-
-              {/* Terms notice */}
               <p className="text-xs text-muted-foreground text-center">
                 By continuing, you agree to our{' '}
-                <Link to="/terms" target="_blank" className="text-primary underline underline-offset-2 hover:text-primary/80">
-                  Event Terms & Conditions
-                </Link>
+                <Link to="/terms" target="_blank" className="text-primary underline underline-offset-2 hover:text-primary/80">Event Terms & Conditions</Link>
               </p>
-
-              <GlassButton
-                variant="primary" size="lg" className="w-full mt-2"
-                onClick={handleStep1}
-                disabled={!fullName.trim() || !mobileValid}
-              >
+              <GlassButton variant="primary" size="lg" className="w-full mt-2" onClick={handleStep1} disabled={!fullName.trim() || !mobileValid}>
                 Continue <ChevronRight className="h-4 w-4" />
               </GlassButton>
             </div>
           </GlassCard>
         )}
 
-        {/* Step 1: Seats & Pricing */}
+        {/* ─── Step 1: Seats & Pricing ─── */}
         {step === 1 && (
           <GlassCard className="p-6 animate-fade-in" glow>
             <div className="flex items-center justify-center gap-2 mb-5">
@@ -525,41 +614,50 @@ export default function RegisterPage() {
               <div>
                 <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Number of Seats</Label>
                 <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setSeatsCount(Math.max(1, seatsCount - 1))}
-                    className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all"
-                  >−</button>
+                  <button onClick={() => setSeatsCount(Math.max(1, seatsCount - 1))}
+                    className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all">−</button>
                   <span className="font-display text-3xl font-bold text-foreground w-12 text-center tabular-nums">{seatsCount}</span>
-                  <button
-                    onClick={() => setSeatsCount(Math.min(10, seatsCount + 1))}
-                    className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all"
-                  >+</button>
+                  <button onClick={() => setSeatsCount(Math.min(10, seatsCount + 1))}
+                    className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all">+</button>
                   <span className="text-sm text-muted-foreground">seat{seatsCount > 1 ? 's' : ''}</span>
                 </div>
               </div>
-
               <div>
                 <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Seating Type</Label>
                 <div className="grid grid-cols-2 gap-3">
                   {(['regular', 'family'] as const).map(type => (
-                    <button
-                      key={type}
-                      onClick={() => setSeatingType(type)}
+                    <button key={type} onClick={() => setSeatingType(type)}
                       className={`p-4 rounded-xl border-2 text-sm font-semibold transition-all active:scale-95 ${
-                        seatingType === type
-                          ? 'border-primary bg-primary/15 text-primary shadow-glow-primary'
-                          : 'border-border bg-muted/20 text-muted-foreground hover:border-primary/40'
-                      }`}
-                    >
+                        seatingType === type ? 'border-primary bg-primary/15 text-primary shadow-glow-primary' : 'border-border bg-muted/20 text-muted-foreground hover:border-primary/40'
+                      }`}>
                       <div className="text-2xl mb-1">{type === 'regular' ? '🪑' : '👨‍👩‍👧'}</div>
                       <div>{type === 'regular' ? 'Regular' : 'Family'}</div>
                     </button>
                   ))}
                 </div>
               </div>
-
-...
-
+              {quoteLoading ? (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">Getting price…</span>
+                </div>
+              ) : priceQuote ? (
+                <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">Price Breakdown</p>
+                  {priceQuote.seats.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Seat {i + 1}
+                        {s.reason !== 'new_customer' && <span className="ml-1 text-xs text-success font-medium">({s.reason.replace(/_/g, ' ')})</span>}
+                      </span>
+                      <span className="font-semibold text-foreground">₹{s.price}</span>
+                    </div>
+                  ))}
+                  <div className="pt-2 border-t border-border/50 flex items-center justify-between">
+                    <span className="font-display font-bold text-foreground">Total</span>
+                    <span className="font-display text-2xl font-bold gradient-text">₹{priceQuote.total}</span>
+                  </div>
+                </div>
+              ) : null}
               <div className="flex gap-3 pt-1">
                 <GlassButton variant="ghost" size="md" className="flex-1 h-12" onClick={() => setStep(0)}>Back</GlassButton>
                 <GlassButton variant="primary" size="lg" className="flex-1" onClick={handleStep2} disabled={!priceQuote}>
@@ -570,140 +668,47 @@ export default function RegisterPage() {
           </GlassCard>
         )}
 
-        {/* Step 2: Payment */}
+        {/* ─── Step 2: Payment ─── */}
         {step === 2 && (
           <div className="space-y-4 animate-fade-in">
-            <GlassCard className="p-6" glow>
-              <div className="flex items-center justify-center gap-2 mb-5">
-                <div className="w-7 h-7 rounded-full step-active flex items-center justify-center text-sm font-bold text-primary-foreground">③</div>
-                <h3 className="font-display text-xl font-bold text-foreground">Payment</h3>
-              </div>
 
-              {/* Total amount — prominent */}
-              <div className="text-center mb-5 py-3 rounded-xl bg-primary/5 border border-primary/20">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Amount</p>
-                <p className="font-display text-4xl font-bold gradient-text">₹{priceQuote?.total}</p>
-                <p className="text-xs text-muted-foreground mt-1">{seatsCount} seat{seatsCount > 1 ? 's' : ''} · {seatingType}</p>
-              </div>
+            {/* Pre-payment summary before opening Razorpay */}
+            {paymentState === 'razorpay_summary' && priceQuote && (
+              <GlassCard className="p-6" glow>
+                <PrePaymentSummary
+                  match={activeMatch}
+                  fullName={fullName} mobile={mobile}
+                  seatsCount={seatsCount} seatingType={seatingType}
+                  total={priceQuote.total}
+                  onConfirm={handleRazorpayPayment}
+                  onBack={() => setPaymentState('select_method')}
+                  loading={razorpayLoading}
+                />
+              </GlassCard>
+            )}
 
-              {/* Razorpay retry state — order created but modal was dismissed */}
-              {orderId && paymentMethod === 'razorpay' ? (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-center">
-                    <p className="text-sm font-semibold text-warning mb-1">⚠️ Payment Incomplete</p>
-                    <p className="text-xs text-muted-foreground">Your booking is reserved. Complete payment to get your passes.</p>
-                  </div>
-                  <GlassButton variant="primary" size="lg" className="w-full" loading={razorpayLoading} onClick={handleRazorpayPayment}>
-                    <Zap className="h-4 w-4" /> Retry Payment — ₹{priceQuote?.total}
-                  </GlassButton>
-                  <GlassButton variant="ghost" size="md" className="w-full" onClick={() => setStep(1)}>← Change seats / method</GlassButton>
-                </div>
-              ) : !orderId ? (
-                <div className="space-y-4">
-                  <Label className="text-foreground block text-center">Choose Payment Method</Label>
+            {/* Razorpay processing */}
+            {paymentState === 'razorpay_processing' && (
+              <GlassCard className="p-6" glow>
+                <PaymentProcessing />
+              </GlassCard>
+            )}
 
-                  {/* Razorpay — Cards, UPI, Wallets */}
-                  <button
-                    onClick={() => setPaymentMethod('razorpay')}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                      paymentMethod === 'razorpay'
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-primary/40'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Zap className={`h-6 w-6 mt-0.5 flex-shrink-0 ${paymentMethod === 'razorpay' ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-display font-bold text-base ${paymentMethod === 'razorpay' ? 'text-primary' : 'text-foreground'}`}>
-                            Pay via Razorpay
-                          </span>
-                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">Secure Gateway</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">Cards, UPI, Net Banking, Wallets — instant confirmation</p>
-                      </div>
-                      {paymentMethod === 'razorpay' && (
-                        <CheckCircle2 className="h-5 w-5 text-primary ml-auto flex-shrink-0" />
-                      )}
-                    </div>
-                  </button>
+            {/* Payment failed / cancelled / pending */}
+            {(paymentState === 'razorpay_failed' || paymentState === 'razorpay_cancelled' || paymentState === 'razorpay_pending') && (
+              <GlassCard className="p-6" glow>
+                <PaymentFailed
+                  reason={paymentState === 'razorpay_failed' ? 'failed' : paymentState === 'razorpay_pending' ? 'pending' : 'cancelled'}
+                  onRetryRazorpay={handleRazorpayPayment}
+                  onSwitchMethod={handleSwitchPaymentMethod}
+                  loading={razorpayLoading}
+                />
+              </GlassCard>
+            )}
 
-                  {/* UPI QR */}
-                  <button
-                    onClick={() => setPaymentMethod('upi_qr')}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                      paymentMethod === 'upi_qr'
-                        ? 'border-success bg-success/10'
-                        : 'border-border hover:border-success/40'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Smartphone className={`h-6 w-6 mt-0.5 flex-shrink-0 ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-muted-foreground'}`} />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-display font-bold text-base ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-foreground'}`}>
-                            Pay via UPI / QR
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR & upload screenshot — AI verification</p>
-                      </div>
-                      {paymentMethod === 'upi_qr' && (
-                        <CheckCircle2 className="h-5 w-5 text-success ml-auto flex-shrink-0" />
-                      )}
-                    </div>
-                  </button>
-
-                  {/* Pay at Hotel */}
-                  <button
-                    onClick={() => setPaymentMethod('pay_at_hotel')}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                      paymentMethod === 'pay_at_hotel'
-                        ? 'border-warning bg-warning/10'
-                        : 'border-border hover:border-warning/40'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <CreditCard className={`h-6 w-6 mt-0.5 flex-shrink-0 ${paymentMethod === 'pay_at_hotel' ? 'text-warning' : 'text-muted-foreground'}`} />
-                      <div>
-                        <span className={`font-display font-bold text-base ${paymentMethod === 'pay_at_hotel' ? 'text-warning' : 'text-foreground'}`}>
-                          Pay at Hotel
-                        </span>
-                        <p className="text-xs text-muted-foreground mt-0.5">Book now, pay cash/UPI at the venue on arrival</p>
-                      </div>
-                      {paymentMethod === 'pay_at_hotel' && (
-                        <CheckCircle2 className="h-5 w-5 text-warning ml-auto flex-shrink-0" />
-                      )}
-                    </div>
-                  </button>
-
-                  {paymentMethod === 'pay_at_hotel' && (
-                    <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-sm text-warning flex items-start gap-2">
-                      <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      <span>Tickets will be marked <strong>Unpaid</strong>. Pay the full amount at the venue before entry.</span>
-                    </div>
-                  )}
-
-                  {/* Disclaimer */}
-                  <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
-                    <Star className="h-3 w-3" />
-                    All fees are for event hospitality only. The Fun Guess Game is free to play.
-                  </p>
-
-                  <div className="flex gap-3 pt-1">
-                    <GlassButton variant="ghost" size="md" className="flex-1 h-12" onClick={() => setStep(1)}>Back</GlassButton>
-                    {paymentMethod === 'razorpay' ? (
-                      <GlassButton variant="primary" size="lg" className="flex-1" loading={razorpayLoading} onClick={handleRazorpayPayment}>
-                        <Zap className="h-4 w-4" /> Pay ₹{priceQuote?.total}
-                      </GlassButton>
-                    ) : (
-                      <GlassButton variant="primary" size="lg" className="flex-1" loading={loading} onClick={() => handleCreateOrder()}>
-                        {paymentMethod === 'pay_at_hotel' ? 'Get My Tickets' : 'Proceed to Pay'} <ChevronRight className="h-4 w-4" />
-                      </GlassButton>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                // UPI QR + Proof Upload
+            {/* UPI QR flow */}
+            {paymentState === 'upi_qr' && orderId && (
+              <GlassCard className="p-6" glow>
                 <div className="space-y-5">
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground mb-3">Scan to pay <span className="font-bold gradient-text">₹{priceQuote?.total}</span></p>
@@ -713,7 +718,6 @@ export default function RegisterPage() {
                     <p className="text-xs text-muted-foreground mt-2">UPI: {payeeVpa}</p>
                     <p className="text-xs text-muted-foreground">Remark: <span className="text-primary">{fullName}_{seatsCount}_{mobile}</span></p>
                   </div>
-
                   <div className="border-t border-border pt-5">
                     <Label className="text-foreground mb-2 block font-semibold text-center">Upload Payment Screenshot</Label>
                     <p className="text-xs text-muted-foreground mb-3 text-center">Upload your UPI payment screenshot for instant AI verification</p>
@@ -725,13 +729,11 @@ export default function RegisterPage() {
                     ) : verifyResult ? (
                       <div className={`rounded-lg p-4 border ${
                         verifyResult.verdict === 'verified' ? 'bg-success/10 border-success/30' :
-                        verifyResult.verdict === 'rejected' ? 'bg-destructive/10 border-destructive/30' :
-                        'bg-warning/10 border-warning/30'
+                        verifyResult.verdict === 'rejected' ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'
                       }`}>
                         <p className="font-medium text-sm">
                           {verifyResult.verdict === 'verified' ? '✅ Payment Verified' :
-                           verifyResult.verdict === 'rejected' ? '❌ Payment Rejected' :
-                           '⏳ Manual Review Required'}
+                           verifyResult.verdict === 'rejected' ? '❌ Payment Rejected' : '⏳ Manual Review Required'}
                         </p>
                         {verifyResult.reason && <p className="text-xs mt-1 text-muted-foreground">{verifyResult.reason}</p>}
                         {verifyResult.verdict !== 'verified' && (
@@ -750,25 +752,158 @@ export default function RegisterPage() {
                     )}
                   </div>
                 </div>
-              )}
-            </GlassCard>
+              </GlassCard>
+            )}
+
+            {/* Main payment method selector */}
+            {paymentState === 'select_method' && (
+              <GlassCard className="p-6" glow>
+                <div className="flex items-center justify-center gap-2 mb-5">
+                  <div className="w-7 h-7 rounded-full step-active flex items-center justify-center text-sm font-bold text-primary-foreground">③</div>
+                  <h3 className="font-display text-xl font-bold text-foreground">Payment</h3>
+                </div>
+
+                {/* Total amount — prominent */}
+                <div className="text-center mb-5 py-3 rounded-xl bg-primary/5 border border-primary/20">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Amount</p>
+                  <p className="font-display text-4xl font-bold gradient-text">₹{priceQuote?.total}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{seatsCount} seat{seatsCount > 1 ? 's' : ''} · {seatingType}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-foreground block text-center text-sm">Choose Payment Method</Label>
+
+                  {/* ── Razorpay — Premium option ── */}
+                  <button
+                    onClick={() => setPaymentMethod('razorpay')}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all relative overflow-hidden ${
+                      paymentMethod === 'razorpay' ? 'border-primary bg-primary/10 shadow-glow-primary' : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    {paymentMethod === 'razorpay' && (
+                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-xs font-bold px-2 py-0.5 rounded-bl-lg">Recommended</div>
+                    )}
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentMethod === 'razorpay' ? 'bg-primary/20' : 'bg-muted/40'}`}>
+                        <Zap className={`h-5 w-5 ${paymentMethod === 'razorpay' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-display font-bold text-base ${paymentMethod === 'razorpay' ? 'text-primary' : 'text-foreground'}`}>Pay via Razorpay</span>
+                          <span className="text-xs bg-success/15 text-success px-2 py-0.5 rounded-full font-semibold border border-success/20">Instant Confirmation</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">No screenshot upload • Passes generated automatically</p>
+                        <RazorpayBadges />
+                        <div className="flex items-center gap-1 mt-1.5">
+                          <Shield className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">Powered by Razorpay · 256-bit SSL</span>
+                        </div>
+                      </div>
+                      {paymentMethod === 'razorpay' && <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />}
+                    </div>
+                  </button>
+
+                  {/* ── UPI QR ── */}
+                  <button
+                    onClick={() => setPaymentMethod('upi_qr')}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      paymentMethod === 'upi_qr' ? 'border-success bg-success/10' : 'border-border hover:border-success/40'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentMethod === 'upi_qr' ? 'bg-success/20' : 'bg-muted/40'}`}>
+                        <Smartphone className={`h-5 w-5 ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <span className={`font-display font-bold text-base ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-foreground'}`}>Pay via UPI / QR</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR code & upload screenshot — AI verification</p>
+                      </div>
+                      {paymentMethod === 'upi_qr' && <CheckCircle2 className="h-5 w-5 text-success ml-auto flex-shrink-0" />}
+                    </div>
+                  </button>
+
+                  {/* ── Pay at Hotel ── */}
+                  <button
+                    onClick={() => setPaymentMethod('pay_at_hotel')}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      paymentMethod === 'pay_at_hotel' ? 'border-warning bg-warning/10' : 'border-border hover:border-warning/40'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentMethod === 'pay_at_hotel' ? 'bg-warning/20' : 'bg-muted/40'}`}>
+                        <CreditCard className={`h-5 w-5 ${paymentMethod === 'pay_at_hotel' ? 'text-warning' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <span className={`font-display font-bold text-base ${paymentMethod === 'pay_at_hotel' ? 'text-warning' : 'text-foreground'}`}>Pay at Hotel</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">Book now — pay cash or UPI at the venue on arrival</p>
+                      </div>
+                      {paymentMethod === 'pay_at_hotel' && <CheckCircle2 className="h-5 w-5 text-warning ml-auto flex-shrink-0" />}
+                    </div>
+                  </button>
+
+                  {paymentMethod === 'pay_at_hotel' && (
+                    <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-sm text-warning flex items-start gap-2">
+                      <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      <span>Passes marked <strong>Unpaid</strong>. Pay the full amount at the venue before entry.</span>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1 pt-1">
+                    <Star className="h-3 w-3" />
+                    All fees are for event hospitality only. The Fun Guess Game is free to play.
+                  </p>
+
+                  <div className="flex gap-3 pt-1">
+                    <GlassButton variant="ghost" size="md" className="flex-1 h-12" onClick={() => setStep(1)}>Back</GlassButton>
+                    {paymentMethod === 'razorpay' ? (
+                      <GlassButton variant="primary" size="lg" className="flex-1" onClick={() => setPaymentState('razorpay_summary')}>
+                        <ArrowRight className="h-4 w-4" /> Review & Pay
+                      </GlassButton>
+                    ) : (
+                      <GlassButton variant="primary" size="lg" className="flex-1" loading={loading}
+                        onClick={async () => {
+                          if (paymentMethod === 'upi_qr') {
+                            const newOrderId = await handleCreateOrder('upi_qr');
+                            if (newOrderId) setPaymentState('upi_qr');
+                          } else {
+                            handleCreateOrder();
+                          }
+                        }}>
+                        {paymentMethod === 'pay_at_hotel' ? 'Get My Tickets' : 'Proceed to Pay'} <ChevronRight className="h-4 w-4" />
+                      </GlassButton>
+                    )}
+                  </div>
+                </div>
+              </GlassCard>
+            )}
           </div>
         )}
 
-        {/* Step 3: Tickets */}
+        {/* ─── Step 3: Tickets ─── */}
         {step === 3 && (
           <div className="space-y-4 animate-fade-in">
-            {/* Prominent success banner */}
-            <div className="rounded-xl p-4 text-center border-2 border-success/50 bg-success/10 animate-pulse-glow">
-              <div className="text-4xl mb-2">🎟️</div>
-              <h3 className="font-display text-2xl font-bold text-success">Your Tickets are Ready!</h3>
-              <p className="text-sm text-muted-foreground mt-1">Show the QR code at the gate for check-in</p>
+            {/* Success banner */}
+            <div className="rounded-xl p-5 text-center border-2 border-success/50 bg-success/10 animate-pulse-glow">
+              <div className="text-5xl mb-2">🎟️</div>
+              <h3 className="font-display text-2xl font-bold text-success">
+                {paymentMethod === 'pay_at_hotel' ? 'Booking Confirmed!' : 'Payment Confirmed!'}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {paymentMethod === 'pay_at_hotel'
+                  ? 'Pay the full amount at the venue on arrival'
+                  : 'Your passes are ready — show QR at the gate'}
+              </p>
+              {paymentMethod === 'razorpay' && paymentVerifiedAt && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  ✅ Verified at {new Date(paymentVerifiedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
             </div>
 
             {tickets.map((ticket, i) => (
               <GlassCard key={ticket.id} className="seat-pass p-5">
-                {/* Payment status banner at top */}
-                <div className={`-mt-5 -mx-5 mb-4 px-5 py-3 flex items-center justify-center gap-2 font-display text-base font-bold tracking-wide ${
+                {/* Payment status banner */}
+                <div className={`-mt-5 -mx-5 mb-4 px-5 py-3 flex items-center justify-center gap-2 font-display text-sm font-bold tracking-wide ${
                   paymentMethod === 'pay_at_hotel'
                     ? 'bg-warning/20 border-b border-warning/30 text-warning'
                     : 'bg-success/20 border-b border-success/30 text-success'
@@ -794,7 +929,6 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                {/* Large QR */}
                 <div className="flex flex-col items-center mb-4">
                   <div className="qr-container" style={{ padding: 16 }}>
                     <QRCodeSVG value={ticket.qr_text} size={140} />
@@ -812,16 +946,18 @@ export default function RegisterPage() {
               🖨️ Print Tickets
             </GlassButton>
 
-            <p className="text-xs text-muted-foreground text-center">
-              Also accessible at{' '}
-              <Link to="/ticket" className="text-primary underline">
-                /ticket
-              </Link>{' '}
-              using your mobile number ·{' '}
-              <Link to="/terms" target="_blank" className="text-muted-foreground underline">
-                View Event Terms
-              </Link>
-            </p>
+            {/* Support footer on ticket page */}
+            <div className="rounded-xl bg-muted/20 border border-border p-4 text-center space-y-2">
+              <p className="text-xs font-semibold text-foreground">Need Help?</p>
+              <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                <a href="tel:7217016170" className="flex items-center gap-1 hover:text-primary transition-colors"><Phone className="h-3 w-3" /> 7217016170</a>
+                <a href="mailto:dronapalace@gmail.com" className="flex items-center gap-1 hover:text-primary transition-colors"><Mail className="h-3 w-3" /> dronapalace@gmail.com</a>
+              </div>
+              <p className="text-xs text-muted-foreground">Also accessible at{' '}
+                <Link to="/ticket" className="text-primary underline">/ticket</Link> using your mobile ·{' '}
+                <Link to="/terms" target="_blank" className="text-muted-foreground underline">Event Terms</Link>
+              </p>
+            </div>
           </div>
         )}
       </div>
