@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
 import { Lock, Zap, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 
@@ -22,6 +23,7 @@ interface PredictionPanelProps {
 
 export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) {
   const [windows, setWindows] = useState<PredictionWindow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [submittedWindows, setSubmittedWindows] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         setSubmittedWindows(submitted);
       }
     }
+    setLoading(false);
   };
 
   const subscribeRealtime = () => {
@@ -105,6 +108,47 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const openWindows = windows.filter(w => w.status === 'open');
   const closedWindows = windows.filter(w => w.status !== 'open');
 
+  /* ── Skeleton loading state ── */
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {/* Disclaimer always visible */}
+        <div className="disclaimer-bar rounded-lg px-4 py-3 flex items-start gap-2 text-xs">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+          <span>
+            <strong>Fun Guess Game for entertainment only.</strong> This is not betting, gambling, or wagering.
+            No real money is staked. Participation is voluntary and purely for fun.
+          </span>
+        </div>
+        {/* Active window skeleton */}
+        <GlassCard className="p-4 border border-primary/20 animate-pulse">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full skeleton" />
+            <div className="h-3 w-28 skeleton rounded" />
+          </div>
+          <div className="h-4 w-3/4 skeleton rounded mb-4" />
+          <div className="grid grid-cols-2 gap-2.5 mb-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-[52px] skeleton rounded-xl" />
+            ))}
+          </div>
+          <div className="h-11 skeleton rounded-xl" />
+        </GlassCard>
+        {/* Past windows skeleton */}
+        {Array.from({ length: 2 }).map((_, i) => (
+          <GlassCard key={i} className="p-3 opacity-60 animate-pulse">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-3 w-16 skeleton rounded" />
+              <div className="h-3 w-10 skeleton rounded ml-auto" />
+            </div>
+            <div className="h-3 w-full skeleton rounded" />
+            <div className="h-3 w-2/3 skeleton rounded mt-1.5" />
+          </GlassCard>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {/* Persistent legal disclaimer — non-removable */}
@@ -118,7 +162,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
       {windows.length === 0 && (
         <GlassCard className="p-5 text-center">
-          <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <Clock className="h-8 w-8 text-primary/30 mx-auto mb-2" />
           <p className="text-foreground font-bold">No Active Fun Guess</p>
           <p className="text-muted-foreground text-sm">Guesses open when an active window appears</p>
         </GlassCard>
