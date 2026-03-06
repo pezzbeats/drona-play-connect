@@ -9,7 +9,7 @@ interface GlassButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
   children: React.ReactNode;
 }
 
-export const GlassButton = ({
+export const GlassButton = React.forwardRef<HTMLButtonElement, GlassButtonProps>(({
   className,
   variant = 'primary',
   size = 'md',
@@ -17,7 +17,7 @@ export const GlassButton = ({
   disabled,
   children,
   ...props
-}: GlassButtonProps) => {
+}, ref) => {
   const base = 'inline-flex items-center justify-center gap-2 rounded-lg font-display font-semibold tracking-wide transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variants = {
@@ -38,6 +38,7 @@ export const GlassButton = ({
 
   return (
     <button
+      ref={ref}
       className={cn(base, variants[variant], sizes[size], className)}
       disabled={disabled || loading}
       {...props}
@@ -46,4 +47,6 @@ export const GlassButton = ({
       {children}
     </button>
   );
-};
+});
+
+GlassButton.displayName = 'GlassButton';

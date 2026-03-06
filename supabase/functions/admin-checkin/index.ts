@@ -22,10 +22,27 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { ticket_id, admin_id, regenerate } = await req.json();
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    }
 
-    // Get ticket + order
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    }
+
+    const { ticket_id, admin_id, regenerate } = await req.json();
+    const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
     const { data: ticket } = await supabase.from("tickets").select("*, orders(purchaser_mobile, match_id, purchaser_full_name)").eq("id", ticket_id).single();
     if (!ticket) throw new Error("Ticket not found");
 
@@ -35,11 +52,9 @@ serve(async (req) => {
     const matchId = (ticket as any).orders?.match_id;
 
     if (!regenerate) {
-      // Mark ticket as used (checked in)
       await supabase.from("tickets").update({ status: "used", checked_in_at: new Date().toISOString(), checked_in_by_admin_id: admin_id } as any).eq("id", ticket_id);
     }
 
-    // Upsert game_access record
     await supabase.from("game_access").upsert({
       match_id: matchId, ticket_id, mobile, pin_hash: pinHash,
       pin_created_at: new Date().toISOString(), is_active: true,
