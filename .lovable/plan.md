@@ -1,138 +1,128 @@
 
-## Analysis
+## Analysis of Current State
 
-**What exists today:**
-- `AdminDashboard.tsx` — 6 basic stat tiles (total orders, paid, unpaid, pending, check-ins today, total seats). No charts, no revenue breakdown by payment method, no occupancy meter, no prediction stats, no CSV export, no per-match filtering.
-- `AdminOrders.tsx` — raw order list with filters. No aggregated analytics.
-- `AdminLeaderboard.tsx` — per-match leaderboard. Has CSV export but only for leaderboard data.
+**What exists:**
+- `admin_activity` table exists with INSERT/SELECT policies — some pages already write audit logs (control, validate, orders, matches), but many critical paths still miss them (leaderboard adjustments, team edits, payment proof overrides, match-flag changes, check-in)
+- All authenticated admins are equal — no roles (no `super_admin` vs `operator` vs `gate_staff` distinction)
+- No rate limiting on any edge function — `submit-prediction`, `create-order`, and `verify-game-pin` are open to abuse
+- No system health page — no DB health, edge function status, or connectivity indicators
+- `AuthContext` exposes only `user` + `loading` — no role attached
+- Error handling is try/catch per function but no global error boundary in React
+- No graceful fallback UI for network failures
+- Data backup is Supabase-native (automatic), but no documentation/export scheduled workflow exists
 
-**What needs building:**
-A dedicated `/admin/analytics` page that aggregates across existing tables (`orders`, `tickets`, `payment_collections`, `predictions`, `prediction_windows`) and presents operational charts and exportable summaries.
+**What to build:**
 
-No schema changes are needed — all data is available in existing tables.
+### 1. Role-based admin access (DB migration + code)
+- New `admin_roles` table: `user_id uuid, role text ('super_admin'|'operator'|'gate_staff')` with RLS
+- DB function `get_admin_role(user_id)` SECURITY DEFINER
+- `AuthContext` extended: loads role on sign-in, exposes `role` and `isRole()` helper
+- `ProtectedRoute` gets a `requiredRole` prop for role-gating specific pages
+- Role restrictions:
+  - `gate_staff` → only `/validate` and `/dashboard`
+  - `operator` → all except `/admin/control`, `/admin/leaderboard` (freeze/adjust), `/admin/analytics`
+  - `super_admin` → everything
+- `AdminSidebar` hides nav items the user can't access
 
----
+### 2. Activity log completions + Activity Log page
+- Complete coverage: add `admin_activity` inserts to: leaderboard adjust/freeze, match-flag changes (panic freeze), match scoring config save, team/player create/edit/delete, payment proof override
+- New `/admin/activity` page — paginated audit trail table, filterable by action/admin/entity type, date range, CSV export
 
-## Plan
+### 3. Error handling & graceful fallbacks
+- Global React `ErrorBoundary` component wrapping admin routes
+- Network error toast helper (detect `Failed to fetch` → "Check your connection")
+- Edge functions: consistent error shape `{ error, code, retryable }` — already mostly done, just needs `retryable` flag
+- Skeleton states already exist — ensure all data-fetching pages have proper empty states
 
-### New file: `src/pages/admin/AdminAnalytics.tsx`
+### 4. Rate limiting on sensitive edge functions
+- `submit-prediction`: per-mobile sliding window using DB — insert into `rate_limit_log` or simply check prediction count in last N seconds. Simpler: check predictions count for same `mobile + window_id` (already upserted so naturally idempotent) — main risk is flooding different windows. Add check: max 60 predictions per mobile per match per minute using a simple in-memory approach via a DB count.
+- `verify-game-pin` / `create-order`: add basic IP-based rate limiting: count attempts in `ticket_scan_log` / a new `rate_limit_events` table within a 60-second window; reject with 429 if > threshold.
+- Approach: lightweight — add a new `rate_limit_events(key text, created_at)` table. Edge functions check count of rows with matching `key` in last 60 seconds; insert a row each call; clean old rows periodically.
 
-One page, match-selector at the top, then 6 sections:
+### 5. System health dashboard (new page `/admin/health`)
+- 4 health cards:
+  - **DB connectivity**: tries a lightweight `supabase.from('matches').select('count')` — shows ✅/❌ + latency
+  - **Auth service**: checks `supabase.auth.getSession()` — shows ✅/❌
+  - **Edge Functions**: pings each function via a lightweight OPTIONS request — shows reachable/unreachable
+  - **Realtime**: shows connected/disconnected from `supabase.channel` status
+- Active match summary (name, status, registration state)
+- Last 5 admin activity entries inline
+- Auto-refresh every 30 seconds
 
-**1. Match selector** — dropdown of all matches; loads all data for that match on change. Also shows an "All Matches" option for aggregate view.
-
-**2. Ticket Sales Summary** — 3 key cards:
-- Total Registrations (order count)
-- Total Seats Sold
-- Conversion rate: paid/total %
-
-**3. Paid vs Unpaid Breakdown** — horizontal stacked bar (Recharts `BarChart`) showing:
-- `paid_verified` | `paid_manual_verified` | `pending_verification` | `unpaid` | `paid_rejected`
-- Also a donut/pie chart (Recharts `PieChart`) as a visual summary
-
-**4. Revenue Summary by Payment Method** — cards:
-- Revenue from `upi_qr` orders (sum of `total_amount` where `payment_method = 'upi_qr'` and paid)
-- Revenue from `pay_at_hotel` (sum where `payment_method = 'pay_at_hotel'` and paid)
-- Total verified revenue
-- Uses `orders.total_amount` for paid orders
-
-**5. Live Occupancy Meter** — a progress bar showing `checked_in / total_seats_sold`. Fetches `tickets` count with `checked_in_at IS NOT NULL` for the selected match vs total tickets.
-
-**6. Prediction Participation Stats** — 3 cards:
-- Total prediction windows for the match
-- Total predictions submitted
-- Participation rate: unique mobiles who predicted / unique mobiles who have tickets
-- Small bar chart: predictions per window (top 5 windows by participation)
-
-**7. Export CSV** — single "Export Report" button that generates a multi-section CSV:
-```
-T20 Fan Night Analytics — [Match Name]
-DISCLAIMER: For entertainment only. No gambling or wagering.
-
-TICKET SALES
-...
-
-REVENUE BY PAYMENT METHOD
-...
-
-CHECK-IN STATS
-...
-
-PREDICTION STATS
-...
-```
-
-### Routing + Sidebar
-
-Add `{ icon: BarChart2, label: 'Analytics', to: '/admin/analytics' }` to `AdminSidebar.tsx` navItems.
-Add `<Route path="analytics" element={<AdminAnalytics />} />` in `App.tsx`.
-
----
-
-## Data fetching strategy
-
-All done client-side from the Supabase JS client — no new edge functions needed:
-
-```typescript
-// Orders for match
-const { data: orders } = await supabase
-  .from('orders')
-  .select('id, payment_status, payment_method, total_amount, seats_count, created_at')
-  .eq('match_id', selectedMatchId);
-
-// Tickets check-in count
-const { count: checkedIn } = await supabase
-  .from('tickets')
-  .select('*', { count: 'exact', head: true })
-  .eq('match_id', selectedMatchId)
-  .not('checked_in_at', 'is', null);
-
-const { count: totalTickets } = await supabase
-  .from('tickets')
-  .select('*', { count: 'exact', head: true })
-  .eq('match_id', selectedMatchId);
-
-// Prediction windows
-const { data: windows } = await supabase
-  .from('prediction_windows')
-  .select('id, question, status')
-  .eq('match_id', selectedMatchId);
-
-// Predictions (count per window)
-const { data: predictions } = await supabase
-  .from('predictions')
-  .select('id, window_id, mobile')
-  .eq('match_id', selectedMatchId);
-```
-
----
-
-## Files changed
+## Files Changed
 
 | File | Change |
 |---|---|
-| `src/pages/admin/AdminAnalytics.tsx` | New page — all analytics sections |
-| `src/components/admin/AdminSidebar.tsx` | Add Analytics nav entry |
-| `src/App.tsx` | Add `/admin/analytics` route |
+| `supabase/migrations/[new].sql` | `admin_roles` table + `get_admin_role()` function + `rate_limit_events` table |
+| `src/contexts/AuthContext.tsx` | Load + expose `role`, `isRole()` |
+| `src/components/admin/ProtectedRoute.tsx` | Accept `requiredRole` prop, redirect on insufficient role |
+| `src/components/admin/AdminSidebar.tsx` | Filter nav items by role |
+| `src/components/admin/ErrorBoundary.tsx` | New global error boundary |
+| `src/App.tsx` | Wrap admin routes in ErrorBoundary; add `/admin/activity` and `/admin/health` routes with role guards |
+| `supabase/functions/submit-prediction/index.ts` | Rate limit: max 30 predictions/mobile/match/minute |
+| `supabase/functions/verify-game-pin/index.ts` | Rate limit: max 10 attempts/IP/minute |
+| `supabase/functions/create-order/index.ts` | Rate limit: max 5 orders/mobile/10min |
+| `src/pages/admin/AdminActivity.tsx` | New page — paginated audit log, filters, CSV export |
+| `src/pages/admin/AdminHealth.tsx` | New health dashboard page |
+| Existing admin pages | Plug missing `admin_activity` inserts (leaderboard, control flags, scoring config) |
 
-No DB migrations needed.
-
----
-
-## Layout sketch
+## Role permissions matrix
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ Analytics & Reports        [Match selector ▾]  [Export CSV]  │
-├──────────────────────────────────────────────────────────────┤
-│ [Total Regs]  [Seats Sold]  [Paid %]  [Revenue Total]        │
-├──────────────────────────────────────────────────────────────┤
-│  Payment Status Breakdown           Occupancy Meter          │
-│  ████▓▓▓░░░░  (stacked bar)        ████████░░ 68% checked in│
-├──────────────────────────────────────────────────────────────┤
-│  Revenue by Method                  Prediction Participation  │
-│  UPI QR: ₹24,500                    Windows: 12              │
-│  Pay at Hotel: ₹8,200               Predictions: 345         │
-│  Total: ₹32,700                     Participation: 74%       │
-└──────────────────────────────────────────────────────────────┘
+Route/Feature         gate_staff  operator  super_admin
+/admin/dashboard           ✓          ✓          ✓
+/admin/validate            ✓          ✓          ✓
+/admin/orders              ✗          ✓          ✓
+/admin/manual-booking      ✗          ✓          ✓
+/admin/matches             ✗          ✓          ✓
+/admin/teams               ✗          ✓          ✓
+/admin/control             ✗          ✓          ✓
+/admin/leaderboard         ✗          ✗          ✓
+/admin/analytics           ✗          ✓          ✓
+/admin/activity            ✗          ✗          ✓
+/admin/health              ✗          ✓          ✓
+```
+
+## Rate limiting approach (lightweight, no Redis needed)
+
+```sql
+CREATE TABLE public.rate_limit_events (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  key text NOT NULL,       -- e.g. "predict:mobile:matchId" or "pin:ip"
+  created_at timestamptz DEFAULT now()
+);
+CREATE INDEX idx_rle_key_time ON public.rate_limit_events(key, created_at);
+-- No RLS needed — only called via service_role in edge functions
+```
+
+Edge function checks:
+```typescript
+const windowStart = new Date(Date.now() - 60_000).toISOString();
+const { count } = await supabase
+  .from('rate_limit_events')
+  .select('*', { count: 'exact', head: true })
+  .eq('key', limitKey)
+  .gte('created_at', windowStart);
+if ((count || 0) >= LIMIT) return 429;
+await supabase.from('rate_limit_events').insert({ key: limitKey });
+```
+
+Old rows auto-purge via a simple delete on insert (delete rows older than 5 minutes for same key).
+
+## Health page layout
+
+```text
+┌─────────────────────────────────────────┐
+│ System Health      [Refresh] last: 10s  │
+├──────────┬──────────┬──────────┬────────┤
+│ Database │   Auth   │ Edge Fn  │Realtime│
+│  ✅ 42ms │  ✅ OK   │ ✅ 3/3  │  ✅   │
+├─────────────────────────────────────────┤
+│ Active Match: T20 Night 4   [Live ●]   │
+│ Registrations: Open  |  Tickets: 142   │
+├─────────────────────────────────────────┤
+│ Recent Activity (last 5 actions)        │
+│ admin@... set_match_active  2m ago      │
+│ admin@... verify_payment    5m ago      │
+└─────────────────────────────────────────┘
 ```
