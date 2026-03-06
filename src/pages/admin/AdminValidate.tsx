@@ -639,9 +639,9 @@ export default function AdminValidate() {
                   <button
                     key={id}
                     onClick={() => setCollectMethod(id)}
-                    className={`flex flex-col items-center gap-1.5 py-4 rounded-xl border-2 font-semibold text-sm transition-all duration-150 min-h-[70px] ${
+                    className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 font-semibold text-sm transition-all duration-150 min-h-[76px] active:scale-95 ${
                       collectMethod === id
-                        ? 'bg-primary/20 border-primary text-primary shadow-[0_0_12px_hsl(210_100%_56%/0.3)]'
+                        ? 'bg-warning/20 border-warning text-warning shadow-glow-warning'
                         : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
                     }`}
                   >
@@ -654,7 +654,7 @@ export default function AdminValidate() {
               {collectMethod && (
                 <div className="space-y-3">
                   <Input
-                    className="glass-input h-12 text-base"
+                    className="glass-input h-14 text-lg font-semibold"
                     type="number"
                     placeholder={`Amount ₹ (total: ₹${order?.total_amount})`}
                     value={collectAmount}
@@ -662,7 +662,7 @@ export default function AdminValidate() {
                   />
                   {collectMethod !== 'cash' && (
                     <Input
-                      className="glass-input"
+                      className="glass-input h-12 text-base"
                       placeholder={collectMethod === 'upi' ? 'UTR / Transaction ID *' : 'Card ref / last 4 digits *'}
                       value={collectRef}
                       onChange={e => setCollectRef(e.target.value)}

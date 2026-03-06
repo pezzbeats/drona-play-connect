@@ -59,10 +59,18 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   const getRankIcon = (rank: number) => {
-    if (rank === 1) return <Trophy className="h-4 w-4 text-primary" />;
+    if (rank === 1) return <Trophy className="h-4 w-4 text-secondary" />;
     if (rank === 2) return <Medal className="h-4 w-4 text-muted-foreground" />;
-    if (rank === 3) return <Medal className="h-4 w-4 text-accent-foreground" />;
-    return <span className="text-xs text-muted-foreground w-4 text-center">{rank}</span>;
+    if (rank === 3) return <Medal className="h-4 w-4 text-primary" />;
+    return <span className="text-xs font-bold text-muted-foreground w-4 text-center tabular-nums">{rank}</span>;
+  };
+
+  const getRowBg = (rank: number, isMe: boolean) => {
+    if (isMe) return 'bg-primary/15 border-l-2 border-primary';
+    if (rank === 1) return 'bg-secondary/10';
+    if (rank === 2) return 'bg-muted/30';
+    if (rank === 3) return 'bg-primary/5';
+    return '';
   };
 
   if (entries.length === 0) {
@@ -118,7 +126,7 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
         <div className="divide-y divide-border/30">
           {entries.map((entry, i) => {
             const rank = entry.rank_position ?? (i + 1);
-            const isMe = mobile && entry.mobile === mobile;
+            const isMe = !!(mobile && entry.mobile === mobile);
             const totalPts = (entry.total_points || 0) + (entry.points_adjustment || 0);
             const acc = entry.total_predictions > 0
               ? ((entry.correct_predictions / entry.total_predictions) * 100).toFixed(0) + '%'
@@ -127,23 +135,23 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
             return (
               <div
                 key={entry.mobile}
-                className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isMe ? 'bg-primary/10' : ''}`}
+                className={`flex items-center gap-3 px-3 py-3.5 transition-colors ${getRowBg(rank, isMe)}`}
               >
-                <div className="w-5 flex-shrink-0 flex justify-center">
+                <div className="w-6 flex-shrink-0 flex justify-center">
                   {getRankIcon(rank)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium truncate ${isMe ? 'text-primary' : 'text-foreground'}`}>
+                  <p className={`text-sm font-semibold truncate ${isMe ? 'text-primary' : 'text-foreground'}`}>
                     {entry.player_name || entry.mobile.slice(-4).padStart(10, '•')}
-                    {isMe && <span className="ml-1 text-xs">(you)</span>}
+                    {isMe && <span className="ml-1.5 text-xs font-bold bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">you</span>}
                   </p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                     <span>{entry.correct_predictions}/{entry.total_predictions} correct</span>
-                    {acc && <span className="text-primary/70">{acc}</span>}
+                    {acc && <span className="text-primary/70 font-medium">{acc}</span>}
                   </div>
                 </div>
-                <span className={`font-bold text-sm flex-shrink-0 ${isMe ? 'text-primary' : 'text-foreground'}`}>
-                  {totalPts}
+                <span className={`font-bold text-sm flex-shrink-0 tabular-nums ${isMe ? 'text-primary' : 'text-foreground'}`}>
+                  {totalPts} <span className="text-xs font-normal text-muted-foreground">pts</span>
                 </span>
               </div>
             );

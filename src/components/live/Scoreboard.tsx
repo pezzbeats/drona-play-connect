@@ -172,23 +172,23 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
             )}
 
             {/* Players */}
-            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+            <div className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
               {state.current_striker_id && players[state.current_striker_id] && (
-                <div className="bg-success/10 rounded-lg p-2 text-center">
-                  <div className="text-success font-bold text-[10px]">STRIKER</div>
-                  <div className="text-foreground font-medium truncate">{players[state.current_striker_id].name}</div>
+                <div className="bg-success/10 rounded-xl px-3 py-2.5 flex items-center gap-2 sm:flex-col sm:text-center sm:gap-1">
+                  <div className="text-success font-bold text-[10px] uppercase tracking-wider sm:block">🏏 Striker</div>
+                  <div className="text-foreground font-semibold text-sm sm:text-xs truncate">{players[state.current_striker_id].name}</div>
                 </div>
               )}
               {state.current_non_striker_id && players[state.current_non_striker_id] && (
-                <div className="bg-muted/20 rounded-lg p-2 text-center">
-                  <div className="text-muted-foreground font-bold text-[10px]">NON-STRIKER</div>
-                  <div className="text-foreground font-medium truncate">{players[state.current_non_striker_id].name}</div>
+                <div className="bg-muted/20 rounded-xl px-3 py-2.5 flex items-center gap-2 sm:flex-col sm:text-center sm:gap-1">
+                  <div className="text-muted-foreground font-bold text-[10px] uppercase tracking-wider sm:block">Non-Striker</div>
+                  <div className="text-foreground font-semibold text-sm sm:text-xs truncate">{players[state.current_non_striker_id].name}</div>
                 </div>
               )}
               {state.current_bowler_id && players[state.current_bowler_id] && (
-                <div className="bg-accent/10 rounded-lg p-2 text-center">
-                  <div className="text-accent-foreground font-bold text-[10px]">BOWLER</div>
-                  <div className="text-foreground font-medium truncate">{players[state.current_bowler_id].name}</div>
+                <div className="bg-primary/10 rounded-xl px-3 py-2.5 flex items-center gap-2 sm:flex-col sm:text-center sm:gap-1">
+                  <div className="text-primary font-bold text-[10px] uppercase tracking-wider sm:block">⚡ Bowler</div>
+                  <div className="text-foreground font-semibold text-sm sm:text-xs truncate">{players[state.current_bowler_id].name}</div>
                 </div>
               )}
             </div>

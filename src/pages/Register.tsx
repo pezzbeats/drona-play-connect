@@ -399,79 +399,46 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-5">
               <div>
-                <Label className="text-foreground mb-2 block">Number of Seats</Label>
-                <div className="flex items-center gap-3">
-                  <GlassButton variant="ghost" size="sm" onClick={() => setSeatsCount(Math.max(1, seatsCount - 1))}>−</GlassButton>
-                  <span className="font-display text-2xl font-bold text-foreground w-10 text-center">{seatsCount}</span>
-                  <GlassButton variant="ghost" size="sm" onClick={() => setSeatsCount(Math.min(10, seatsCount + 1))}>+</GlassButton>
+                <Label className="text-foreground mb-3 block text-sm font-semibold">Number of Seats</Label>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setSeatsCount(Math.max(1, seatsCount - 1))}
+                    className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all"
+                  >−</button>
+                  <span className="font-display text-3xl font-bold text-foreground w-12 text-center tabular-nums">{seatsCount}</span>
+                  <button
+                    onClick={() => setSeatsCount(Math.min(10, seatsCount + 1))}
+                    className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all"
+                  >+</button>
+                  <span className="text-sm text-muted-foreground">seat{seatsCount > 1 ? 's' : ''}</span>
                 </div>
               </div>
 
               <div>
-                <Label className="text-foreground mb-2 block">Seating Type</Label>
+                <Label className="text-foreground mb-3 block text-sm font-semibold">Seating Type</Label>
                 <div className="grid grid-cols-2 gap-3">
                   {(['regular', 'family'] as const).map(type => (
                     <button
                       key={type}
                       onClick={() => setSeatingType(type)}
-                      className={`p-3 rounded-lg border text-sm font-medium transition-all ${
+                      className={`p-4 rounded-xl border-2 text-sm font-semibold transition-all active:scale-95 ${
                         seatingType === type
-                          ? 'border-primary bg-primary/10 text-primary shadow-glow-primary'
+                          ? 'border-primary bg-primary/15 text-primary shadow-glow-primary'
                           : 'border-border bg-muted/20 text-muted-foreground hover:border-primary/40'
                       }`}
                     >
-                      {type === 'regular' ? '🪑 Regular' : '👨‍👩‍👧 Family'}
+                      <div className="text-2xl mb-1">{type === 'regular' ? '🪑' : '👨‍👩‍👧'}</div>
+                      <div>{type === 'regular' ? 'Regular' : 'Family'}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Price Quote Table */}
-              {quoteLoading ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span className="ml-2 text-muted-foreground text-sm">Calculating your price...</span>
-                </div>
-              ) : priceQuote ? (
-                <div>
-                  {/* Eligibility banner */}
-                  <div className="mb-3 flex items-center gap-2 bg-success/10 border border-success/30 rounded-lg px-3 py-2 text-sm text-success">
-                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                    <span>You're eligible! Price locked in.</span>
-                  </div>
-                  <Label className="text-foreground mb-2 block">Price Breakdown</Label>
-                  <div className="rounded-lg overflow-hidden border border-border">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-muted/30">
-                          <th className="text-left p-2.5 text-muted-foreground font-medium">Seat</th>
-                          <th className="text-left p-2.5 text-muted-foreground font-medium">Type</th>
-                          <th className="text-right p-2.5 text-muted-foreground font-medium">Price</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {priceQuote.seats.map((s) => (
-                          <tr key={s.seat_index} className="border-t border-border/50">
-                            <td className="p-2.5 text-foreground">#{s.seat_index + 1}</td>
-                            <td className="p-2.5 text-muted-foreground capitalize text-xs">{s.reason.replace('_', ' ')}</td>
-                            <td className="p-2.5 text-right font-medium text-foreground">₹{s.price}</td>
-                          </tr>
-                        ))}
-                        <tr className="border-t-2 border-primary/30 bg-primary/5">
-                          <td colSpan={2} className="p-2.5 font-display font-bold text-foreground">Total</td>
-                          <td className="p-2.5 text-right font-display text-xl font-bold gradient-text">₹{priceQuote.total}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <GlassButton variant="outline" size="sm" onClick={fetchQuote}>Get Price Quote</GlassButton>
-              )}
+...
 
-              <div className="flex gap-3">
-                <GlassButton variant="ghost" size="md" className="flex-1" onClick={() => setStep(0)}>Back</GlassButton>
-                <GlassButton variant="primary" size="md" className="flex-1" onClick={handleStep2} disabled={!priceQuote}>
+              <div className="flex gap-3 pt-1">
+                <GlassButton variant="ghost" size="md" className="flex-1 h-12" onClick={() => setStep(0)}>Back</GlassButton>
+                <GlassButton variant="primary" size="lg" className="flex-1" onClick={handleStep2} disabled={!priceQuote}>
                   Continue <ChevronRight className="h-4 w-4" />
                 </GlassButton>
               </div>
@@ -561,9 +528,9 @@ export default function RegisterPage() {
                     All fees are for event hospitality only. The Fun Guess Game is free to play.
                   </p>
 
-                  <div className="flex gap-3">
-                    <GlassButton variant="ghost" size="md" className="flex-1" onClick={() => setStep(1)}>Back</GlassButton>
-                    <GlassButton variant="primary" size="md" className="flex-1" loading={loading} onClick={handleCreateOrder}>
+                  <div className="flex gap-3 pt-1">
+                    <GlassButton variant="ghost" size="md" className="flex-1 h-12" onClick={() => setStep(1)}>Back</GlassButton>
+                    <GlassButton variant="primary" size="lg" className="flex-1" loading={loading} onClick={handleCreateOrder}>
                       {paymentMethod === 'pay_at_hotel' ? 'Get My Tickets' : 'Proceed to Pay'} <ChevronRight className="h-4 w-4" />
                     </GlassButton>
                   </div>
@@ -607,9 +574,10 @@ export default function RegisterPage() {
                         )}
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 transition-colors bg-muted/10">
-                        <Upload className="h-6 w-6 text-muted-foreground mb-2" />
-                        <span className="text-sm text-muted-foreground">Tap to upload screenshot or PDF</span>
+                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-primary/30 rounded-2xl cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-all active:scale-[0.98] bg-muted/10">
+                        <Upload className="h-8 w-8 text-primary mb-2 mt-4" />
+                        <span className="text-sm font-semibold text-foreground">Tap to Upload Screenshot</span>
+                        <span className="text-xs text-muted-foreground mt-1 mb-4">or PDF — AI verifies instantly</span>
                         <input ref={fileRef} type="file" className="hidden" accept="image/*,.pdf" onChange={handleProofUpload} />
                       </label>
                     )}

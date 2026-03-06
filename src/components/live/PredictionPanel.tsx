@@ -140,7 +140,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
               {window.question || 'What will happen on the next ball?'}
             </p>
 
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2.5 mb-3">
               {(window.options || []).map((opt: any) => {
                 const isSelected = (submitted || selected) === opt.key;
                 const isSubmitted = submitted === opt.key;
@@ -149,7 +149,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
                     key={opt.key}
                     disabled={!!submitted}
                     onClick={() => setSelectedAnswers(prev => ({ ...prev, [window.id]: opt.key }))}
-                    className={`rounded-lg p-2.5 text-sm font-medium transition-all border ${
+                    className={`rounded-xl p-3.5 min-h-[52px] text-sm font-semibold transition-all border-2 active:scale-95 ${
                       isSubmitted
                         ? 'border-primary bg-primary/20 text-primary'
                         : isSelected
@@ -167,7 +167,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
             {!submitted ? (
               <GlassButton
                 variant="primary"
-                size="sm"
+                size="md"
                 className="w-full"
                 loading={submitting === window.id}
                 disabled={!selected}
