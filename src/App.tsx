@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 
 import Index from "./pages/Index";
+import TermsPage from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 import RegisterPage from "./pages/Register";
 import TicketPage from "./pages/Ticket";
@@ -40,11 +41,12 @@ const App = () => (
         <AuthProvider>
           <Routes>
             {/* Public */}
-            <Route path="/" element={<Navigate to="/register" replace />} />
+            <Route path="/" element={<Index />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/ticket" element={<TicketPage />} />
             <Route path="/play" element={<PlayPage />} />
             <Route path="/live" element={<LivePage />} />
+            <Route path="/terms" element={<TermsPage />} />
 
             {/* Admin Auth */}
             <Route path="/admin/login" element={<AdminLoginPage />} />

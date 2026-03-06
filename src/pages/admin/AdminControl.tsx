@@ -8,6 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
 import {
   Loader2, Zap, Trophy, Users, ScanLine, CheckCircle, AlertCircle,
@@ -37,6 +42,9 @@ export default function AdminControl() {
   const [matchFlags, setMatchFlags] = useState<any>(null);
   const [freezeReason, setFreezeReason] = useState('');
   const [flagLoading, setFlagLoading] = useState<string | null>(null);
+
+  // Confirmation dialogs for dangerous actions
+  const [confirmDialog, setConfirmDialog] = useState<{ phase: string; label: string } | null>(null);
 
   // Delivery form state
   const [delivery, setDelivery] = useState({

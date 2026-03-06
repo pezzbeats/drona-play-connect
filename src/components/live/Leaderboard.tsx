@@ -16,7 +16,7 @@ interface LeaderboardEntry {
 
 interface LeaderboardProps {
   matchId: string;
-  mobile?: string; // highlight this user
+  mobile?: string;
 }
 
 export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
@@ -70,12 +70,12 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
       <GlassCard className="p-5 text-center">
         <Star className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
         <p className="text-foreground font-bold">Leaderboard Empty</p>
-        <p className="text-muted-foreground text-sm">Make predictions to appear here</p>
+        <p className="text-muted-foreground text-sm">Make guesses to appear here</p>
+        <p className="text-xs text-muted-foreground mt-2">Fun participation rankings only — no cash prize</p>
       </GlassCard>
     );
   }
 
-  // Find "my" position using rank_position or fallback index
   const myIdx = mobile ? entries.findIndex(e => e.mobile === mobile) : -1;
   const myEntry = myIdx >= 0 ? entries[myIdx] : null;
   const myRank = myEntry?.rank_position ?? (myIdx >= 0 ? myIdx + 1 : -1);
@@ -108,9 +108,12 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
 
       <GlassCard className="overflow-hidden">
         <div className="p-3 border-b border-border">
-          <h3 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-primary" /> Leaderboard
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-primary" /> Fun Guess Leaderboard
+            </h3>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">Fun participation rankings — no cash prize, entertainment only</p>
         </div>
         <div className="divide-y divide-border/30">
           {entries.map((entry, i) => {
