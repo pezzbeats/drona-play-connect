@@ -278,7 +278,7 @@ export default function RegisterPage() {
             <span className="text-3xl">🏏</span>
             <h1 className="font-display text-3xl font-bold gradient-text">T20 Fan Night</h1>
           </div>
-          <p className="text-muted-foreground text-sm">Hotel Drona Palace</p>
+          <p className="text-muted-foreground text-sm text-center">Hotel Drona Palace</p>
         </div>
 
         {/* Match Banner */}
@@ -289,8 +289,8 @@ export default function RegisterPage() {
         )}
 
         {/* Match Info Card */}
-        <GlassCard className="p-4 mb-5">
-          <div className="flex items-center gap-3">
+        <GlassCard className="p-4 mb-5 text-center">
+          <div className="flex items-center justify-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-xl flex-shrink-0">🏟️</div>
             <div>
               <h2 className="font-display text-xl font-bold text-foreground">{activeMatch.name}</h2>
@@ -298,7 +298,7 @@ export default function RegisterPage() {
             </div>
           </div>
           {activeMatch.start_time && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
               {activeMatch.venue} · {new Date(activeMatch.start_time).toLocaleString('en-IN')}
             </div>
@@ -311,13 +311,13 @@ export default function RegisterPage() {
         {/* Step 0: Personal Details */}
         {step === 0 && (
           <GlassCard className="p-6 animate-fade-in" glow>
-            <div className="flex items-center gap-2 mb-5">
+            <div className="flex items-center justify-center gap-2 mb-5">
               <div className="w-7 h-7 rounded-full step-active flex items-center justify-center text-sm font-bold text-primary-foreground">①</div>
               <h3 className="font-display text-xl font-bold text-foreground">Your Details</h3>
             </div>
             <div className="space-y-4">
               <div>
-                <Label className="text-foreground mb-1.5 block">Full Name *</Label>
+                <Label className="text-foreground mb-1.5 block text-center">Full Name *</Label>
                 <Input
                   ref={nameRef}
                   className={`glass-input ${nameError ? 'border-destructive' : ''}`}
@@ -334,7 +334,7 @@ export default function RegisterPage() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label className="text-foreground">Mobile Number *</Label>
+                  <Label className="text-foreground w-full text-center">Mobile Number *</Label>
                   <span className={`text-xs font-mono ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>
                     {mobile.length}/10
                   </span>
@@ -360,7 +360,7 @@ export default function RegisterPage() {
                 )}
               </div>
               <div>
-                <Label className="text-foreground mb-1.5 block">Email (optional)</Label>
+                <Label className="text-foreground mb-1.5 block text-center">Email (optional)</Label>
                 <Input
                   className="glass-input"
                   placeholder="your@email.com"
@@ -372,7 +372,7 @@ export default function RegisterPage() {
               </div>
 
               {/* Terms notice */}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground text-center">
                 By continuing, you agree to our{' '}
                 <Link to="/terms" target="_blank" className="text-primary underline underline-offset-2 hover:text-primary/80">
                   Event Terms & Conditions
@@ -393,13 +393,13 @@ export default function RegisterPage() {
         {/* Step 1: Seats & Pricing */}
         {step === 1 && (
           <GlassCard className="p-6 animate-fade-in" glow>
-            <div className="flex items-center gap-2 mb-5">
+            <div className="flex items-center justify-center gap-2 mb-5">
               <div className="w-7 h-7 rounded-full step-active flex items-center justify-center text-sm font-bold text-primary-foreground">②</div>
               <h3 className="font-display text-xl font-bold text-foreground">Seats & Pricing</h3>
             </div>
             <div className="space-y-5">
               <div>
-                <Label className="text-foreground mb-3 block text-sm font-semibold">Number of Seats</Label>
+                <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Number of Seats</Label>
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => setSeatsCount(Math.max(1, seatsCount - 1))}
@@ -415,7 +415,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <Label className="text-foreground mb-3 block text-sm font-semibold">Seating Type</Label>
+                <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Seating Type</Label>
                 <div className="grid grid-cols-2 gap-3">
                   {(['regular', 'family'] as const).map(type => (
                     <button
@@ -450,7 +450,7 @@ export default function RegisterPage() {
         {step === 2 && (
           <div className="space-y-4 animate-fade-in">
             <GlassCard className="p-6" glow>
-              <div className="flex items-center gap-2 mb-5">
+              <div className="flex items-center justify-center gap-2 mb-5">
                 <div className="w-7 h-7 rounded-full step-active flex items-center justify-center text-sm font-bold text-primary-foreground">③</div>
                 <h3 className="font-display text-xl font-bold text-foreground">Payment</h3>
               </div>
@@ -464,7 +464,7 @@ export default function RegisterPage() {
 
               {!orderId ? (
                 <div className="space-y-4">
-                  <Label className="text-foreground block">Choose Payment Method</Label>
+                  <Label className="text-foreground block text-center">Choose Payment Method</Label>
 
                   {/* UPI QR — recommended */}
                   <button
@@ -548,8 +548,8 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="border-t border-border pt-5">
-                    <Label className="text-foreground mb-2 block font-semibold">Upload Payment Screenshot</Label>
-                    <p className="text-xs text-muted-foreground mb-3">Upload your UPI payment screenshot for instant AI verification</p>
+                    <Label className="text-foreground mb-2 block font-semibold text-center">Upload Payment Screenshot</Label>
+                    <p className="text-xs text-muted-foreground mb-3 text-center">Upload your UPI payment screenshot for instant AI verification</p>
                     {verifyLoading ? (
                       <div className="flex items-center justify-center gap-2 py-6">
                         <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -612,12 +612,12 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="flex items-start justify-between mb-4">
-                  <div>
+                  <div className="text-center flex-1">
                     <p className="font-display text-lg font-bold text-foreground">{fullName}</p>
                     <p className="text-sm text-muted-foreground">{activeMatch?.name}</p>
                     <p className="text-xs text-muted-foreground">{activeMatch?.venue}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-center">
                     <div className="text-xs text-muted-foreground">SEAT</div>
                     <div className="font-display text-3xl font-bold gradient-text">
                       {i + 1} <span className="text-base text-muted-foreground">of {tickets.length}</span>
