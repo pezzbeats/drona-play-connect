@@ -1,128 +1,46 @@
 
-## Mobile-First Transformation Plan
+## Problem Identified
 
-### Current State Assessment
-- **AdminLayout**: Uses a fixed left sidebar (`w-60` / `w-16`) — completely unusable on phones, pushes content with `ml-60`
-- **Live.tsx**: Tab labels hidden on mobile (`hidden sm:inline`), reasonable but can be improved
-- **Register.tsx**: Already has a step bar and cards, but vertical flow can be tightened
-- **AdminControl.tsx**: 873 lines of dense form-heavy UI, not optimized for mobile touch
-- **AdminValidate.tsx**: 747 lines — the most critical mobile screen, needs biggest lift
-- **AdminDashboard**: `p-6 space-y-6` desktop padding, `grid-cols-2 lg:grid-cols-3` stat grid
-- **Ticket.tsx**: Reasonable but scrolling card stack needs carousel feel on mobile
+`src/index.css` has **two full `@layer base` + `@layer components` blocks**. The first (lines 1–318) correctly defines the cricket green/crimson/gold theme. The second (lines 337–652) is the old navy/blue deep-space theme that **overrides every CSS variable** — making the entire app render in blue despite all previous theme work.
 
-### Strategy: Two separate concerns
+The reference image shows:
+- **Background**: Rich mowed cricket-green outfield with alternating light/dark stripe bands — a global grass texture
+- **Foreground panels (cards)**: Vivid crimson-red scoreboard with a soft radial gradient (lighter center, deeper edges), framed in a metallic bronze/gold border
+- **Combination**: Deep green ground + crimson scoreboard + gold frame = the three design tokens already correct in the first `:root` block
 
-**1. Admin area** — needs a full navigation paradigm shift:
-- On mobile: hide the left sidebar entirely, show a **bottom nav bar** with the 4-5 most used items + hamburger drawer for the rest
-- On desktop (md+): keep existing sidebar behavior
-- This is the single biggest UX win for the whole admin side
+## What's Wrong
+- Lines 337–652: Entire second CSS block with navy `--background: 222 47%`, blue `--primary: 210 100%`, cyan, etc. — fully overrides the first block
+- `BackgroundOrbs`: Good (crimson + green orbs already set)
+- `tailwind.config.ts`: Already has crimson/gold values — fine
 
-**2. Public pages** (Register, Ticket, Play, Live, Index) — already max-w-lg centered, just need polish:
-- Safe-area padding, font sizing, input zoom prevention (`text-[16px]`), better tap targets
+## Changes
 
----
+### `src/index.css` — Single unified rewrite
+**Remove the entire duplicate second block (lines 337–652)** and replace with clean closing print styles only.
 
-## Files to Change
+At the same time, upgrade the first block to better match the reference:
+
+1. **Background**: Slightly richer green — `140 60% 5%` (more saturated/visible than current `140 55% 4%`)
+2. **Grass stripe texture on `body`**: Add `repeating-linear-gradient` diagonal stripes globally — subtle alternating green bands like the mowed outfield, `opacity ~0.04`, overlaid on the hero gradient
+3. **Card glass background**: Shift from neutral-green to a very slight crimson-tinted glass — `355 25% 8% / 0.70` instead of `140 45% 8% / 0.65` — echoes the scoreboard panel on the grass
+4. **Glass border**: Increase gold/bronze presence — `38 60% 55% / 0.20` (the bronze frame around the scoreboard)
+5. **Gradient hero**: Richer green — `140 65% 4%` → `145 55% 7%` → `140 65% 4%`
+6. **Body background**: Add a CSS `::before` pseudo-element or inline `background` layering with the stripe pattern
+
+Actually the cleanest approach: add the stripe overlay directly on `body` using a multi-layer `background` property combining the hero gradient and a `repeating-linear-gradient` for the mowed-grass stripe effect.
+
+### `src/components/ui/BackgroundOrbs.tsx`
+- Increase crimson orb opacity slightly (0.3 → match the vivid scoreboard red)
+- Add a third orb that's a softer gold/bronze for the frame color
+
+## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/admin/AdminLayout.tsx` | Mobile bottom nav + hamburger drawer; sidebar only on `md+` |
-| `src/components/admin/AdminSidebar.tsx` | Make it `md+` only (hidden on mobile); extract nav items to shared const |
-| `src/components/admin/AdminBottomNav.tsx` | **New** — mobile bottom tab bar (5 key items) |
-| `src/pages/admin/AdminDashboard.tsx` | Mobile-safe padding, tighter quick-action cards |
-| `src/pages/admin/AdminValidate.tsx` | Larger touch targets, full-screen scan zone feel, sticky result strip |
-| `src/pages/admin/AdminControl.tsx` | Sticky status bar, collapsible sections, larger buttons |
-| `src/pages/admin/AdminOrders.tsx` | Cards instead of table rows on mobile |
-| `src/pages/admin/AdminManualBooking.tsx` | Full-width inputs, proper mobile form flow |
-| `src/pages/Register.tsx` | `text-[16px]` on inputs (prevent zoom), safe-area bottom padding |
-| `src/pages/Play.tsx` | Center-pinned, safe-area aware |
-| `src/pages/Live.tsx` | Bottom-sticky tab bar replacing top tabs, full-height panel |
-| `src/pages/Ticket.tsx` | Swipeable-feel carousel cards, safe-area padding |
-| `src/index.css` | Mobile base: `font-size: 16px` on inputs, safe-area vars, touch-callout none |
+| `src/index.css` | Remove entire duplicate second block (lines 337–652), upgrade first block: richer background, grass stripe on body, crimson-tinted glass cards, gold/bronze glass borders |
+| `src/components/ui/BackgroundOrbs.tsx` | Tune orb colors/opacity to better match the image atmosphere |
 
----
+Two files only. No logic changes.
 
-## Key Implementation Details
-
-### AdminLayout + Bottom Nav (biggest change)
-
-```
-Mobile (< md):
-┌─────────────────────────────────┐
-│   Page Content (full width)     │
-│   safe-area top padding         │
-│                                 │
-│                                 │
-│                                 │
-├─────────────────────────────────┤
-│  🏠  📋  📷  📚  ☰            │  ← bottom nav bar (56px + safe-area)
-└─────────────────────────────────┘
-
-Desktop (md+):
-┌──────┬──────────────────────────┐
-│Sidebar│   Page Content          │
-│ w-60  │                         │
-└──────┴──────────────────────────┘
-```
-
-`AdminBottomNav.tsx`:
-- 5 slots: Dashboard · Validate (primary, highlighted) · Orders · Control · More (opens Sheet drawer with remaining nav items)
-- Active route highlighted with crimson bg pill
-- Uses `pb-safe` (safe area inset bottom) — via CSS env variable
-- `fixed bottom-0 z-50` 
-
-`AdminLayout.tsx`:
-- On mobile: `ml-0`, `pb-16` (space for bottom nav), no sidebar
-- On desktop `md:ml-60`: sidebar + no bottom nav
-
-### Live.tsx — Bottom Tab Bar
-
-Move the `score / predict / leaderboard` tabs from the top header area to a **sticky bottom bar**. This frees up the full viewport for content and keeps navigation thumb-reachable.
-
-```
-┌─────────────────────────────┐
-│  Match name · mobile · Exit │  ← compact fixed header
-├─────────────────────────────┤
-│                             │
-│     Tab content area        │
-│     (scrollable)            │
-│                             │
-├─────────────────────────────┤
-│  📊 Score  🎯 Guess  🏆 LB  │  ← fixed bottom tabs
-└─────────────────────────────┘
-```
-
-### Input zoom prevention
-
-In `index.css` and all input fields: ensure `font-size: 16px` minimum so iOS Safari doesn't auto-zoom. Add to `.glass-input`:
-```css
-font-size: 16px; /* prevent iOS zoom */
-```
-
-### Safe-area padding
-
-Add to `index.css`:
-```css
-.safe-top    { padding-top:    env(safe-area-inset-top); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-.pb-safe     { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
-```
-
-### AdminOrders mobile cards
-
-Current: expandable rows, expand button `<ChevronDown>`. Works on desktop.  
-Mobile: each order renders as a `GlassCard` with status badge, name, amount, and an expand chevron — readable at a glance without horizontal scroll.
-
-### AdminValidate — full-screen scan feel
-
-- Input field takes full width, `text-[16px]`, large `h-14`
-- After scan: result card slides up as a bottom sheet feel (fixed bottom panel on mobile)
-- Checkin button `h-16 text-lg w-full`
-
----
-
-## Scope Note
-
-**Not changing:** AdminControl's core form logic (873 lines) — it will get mobile padding/sizing fixes but the full delivery form refactor is a separate pass to avoid breaking the complex state machine.
-
-**Not changing:** Any backend, edge functions, database, or business logic.
+## Result
+Every page will use the single correct cricket theme: deep mowed-green background with grass stripe texture, crimson-tinted glass cards (scoreboard-panel feel), gold/bronze borders, and cream/white text — exactly matching the reference image's background/foreground combination.
