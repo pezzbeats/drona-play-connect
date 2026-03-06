@@ -14,6 +14,7 @@ import {
   Phone, Mail, ArrowRight, XCircle, Clock
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import hotelLogo from '@/assets/hotel-logo.png';
 
 declare global {
   interface Window { Razorpay: any; }
@@ -530,6 +531,11 @@ export default function RegisterPage() {
       <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
         {/* Header */}
         <div className="text-center mb-5">
+          <div className="flex justify-center mb-3">
+            <div className="w-12 h-12 rounded-full overflow-hidden border border-secondary/40 shadow-[0_0_12px_hsl(38_75%_52%/0.4)]">
+              <img src={hotelLogo} alt="Hotel Drona Palace" className="w-full h-full object-cover" />
+            </div>
+          </div>
           <div className="flex items-center justify-center gap-2 mb-1">
             <span className="text-3xl">🏏</span>
             <h1 className="font-display text-3xl font-bold gradient-text">{getConfig('register_header_title', 'T20 Fan Night')}</h1>

@@ -6,6 +6,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Loader2, Printer, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import hotelLogo from '@/assets/hotel-logo.png';
 
 interface TicketData {
   id: string;
@@ -241,7 +242,10 @@ export default function TicketPage() {
 
                   {/* Bottom strip */}
                   <div className="pt-3 border-t border-border/30 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">T20 Fan Night · Hotel Drona Palace</span>
+                    <div className="flex items-center gap-2">
+                      <img src={hotelLogo} alt="Hotel Drona Palace" className="w-7 h-7 rounded-full object-cover border border-border/40" />
+                      <span className="text-xs text-muted-foreground">T20 Fan Night · Hotel Drona Palace</span>
+                    </div>
                     <span className="text-xs text-muted-foreground">
                       {new Date(ticket.issued_at).toLocaleDateString('en-IN')}
                     </span>
