@@ -27,6 +27,9 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [submittedWindows, setSubmittedWindows] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
+  // Track which window id triggered the last stagger so we only animate new windows
+  const [animatingWindowId, setAnimatingWindowId] = useState<string | null>(null);
+  const prevOpenWindowIdRef = useRef<string | null>(null);
   const { toast } = useToast();
   const channelRef = useRef<any>(null);
 
@@ -47,7 +50,15 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       .order('created_at', { ascending: false })
       .limit(5);
 
-    if (data) setWindows(data as any);
+    if (data) {
+      setWindows(data as any);
+      // Detect new open window → trigger stagger animation
+      const newOpenId = (data as any[]).find(w => w.status === 'open')?.id ?? null;
+      if (newOpenId && newOpenId !== prevOpenWindowIdRef.current) {
+        setAnimatingWindowId(newOpenId);
+        prevOpenWindowIdRef.current = newOpenId;
+      }
+    }
 
     if (data && data.length > 0) {
       const windowIds = data.map(w => w.id);
@@ -185,21 +196,25 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
             </p>
 
             <div className="grid grid-cols-2 gap-2.5 mb-3">
-              {(window.options || []).map((opt: any) => {
+              {(window.options || []).map((opt: any, optIdx: number) => {
                 const isSelected = (submitted || selected) === opt.key;
                 const isSubmitted = submitted === opt.key;
+                const shouldAnimate = animatingWindowId === window.id;
                 return (
                   <button
                     key={opt.key}
                     disabled={!!submitted}
                     onClick={() => setSelectedAnswers(prev => ({ ...prev, [window.id]: opt.key }))}
                     className={`rounded-xl p-3.5 min-h-[52px] text-sm font-semibold transition-all border-2 active:scale-95 ${
+                      shouldAnimate ? 'animate-slide-up' : ''
+                    } ${
                       isSubmitted
                         ? 'border-primary bg-primary/20 text-primary'
                         : isSelected
                         ? 'border-primary/60 bg-primary/10 text-primary'
                         : 'border-border bg-card/50 text-foreground hover:border-primary/40'
                     }`}
+                    style={shouldAnimate ? { animationDelay: `${optIdx * 60}ms`, animationFillMode: 'both' } as React.CSSProperties : undefined}
                   >
                     {isSubmitted && <CheckCircle2 className="h-3.5 w-3.5 inline mr-1" />}
                     {opt.label}
