@@ -737,6 +737,7 @@ export type Database = {
           created_by_admin_id: string | null
           created_source: Database["public"]["Enums"]["created_source_enum"]
           event_id: string
+          gateway_response: Json | null
           id: string
           match_id: string
           payment_method: Database["public"]["Enums"]["payment_method_enum"]
@@ -748,6 +749,9 @@ export type Database = {
           purchaser_email: string | null
           purchaser_full_name: string
           purchaser_mobile: string
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
           seating_type: Database["public"]["Enums"]["seating_type_enum"]
           seats_count: number
           total_amount: number
@@ -757,6 +761,7 @@ export type Database = {
           created_by_admin_id?: string | null
           created_source?: Database["public"]["Enums"]["created_source_enum"]
           event_id: string
+          gateway_response?: Json | null
           id?: string
           match_id: string
           payment_method: Database["public"]["Enums"]["payment_method_enum"]
@@ -768,6 +773,9 @@ export type Database = {
           purchaser_email?: string | null
           purchaser_full_name: string
           purchaser_mobile: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
           seating_type?: Database["public"]["Enums"]["seating_type_enum"]
           seats_count: number
           total_amount: number
@@ -777,6 +785,7 @@ export type Database = {
           created_by_admin_id?: string | null
           created_source?: Database["public"]["Enums"]["created_source_enum"]
           event_id?: string
+          gateway_response?: Json | null
           id?: string
           match_id?: string
           payment_method?: Database["public"]["Enums"]["payment_method_enum"]
@@ -788,6 +797,9 @@ export type Database = {
           purchaser_email?: string | null
           purchaser_full_name?: string
           purchaser_mobile?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
           seating_type?: Database["public"]["Enums"]["seating_type_enum"]
           seats_count?: number
           total_amount?: number
@@ -1321,7 +1333,12 @@ export type Database = {
         | "ended"
       match_type_enum: "group" | "semi_final" | "final" | "other"
       over_status_enum: "pending" | "active" | "complete" | "locked"
-      payment_method_enum: "pay_at_hotel" | "upi_qr" | "cash" | "card"
+      payment_method_enum:
+        | "pay_at_hotel"
+        | "upi_qr"
+        | "cash"
+        | "card"
+        | "razorpay"
       payment_status_enum:
         | "unpaid"
         | "pending_verification"
@@ -1493,7 +1510,13 @@ export const Constants = {
       ],
       match_type_enum: ["group", "semi_final", "final", "other"],
       over_status_enum: ["pending", "active", "complete", "locked"],
-      payment_method_enum: ["pay_at_hotel", "upi_qr", "cash", "card"],
+      payment_method_enum: [
+        "pay_at_hotel",
+        "upi_qr",
+        "cash",
+        "card",
+        "razorpay",
+      ],
       payment_status_enum: [
         "unpaid",
         "pending_verification",
