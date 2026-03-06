@@ -60,29 +60,29 @@ export default function IndexPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    try {
-      const { data: matchData } = await supabase
-        .from('matches')
-        .select('id, name, opponent, venue, start_time, status, match_type')
-        .eq('is_active_for_registration', true)
-        .single();
+    const { data: matchData, error: matchError } = await supabase
+      .from('matches')
+      .select('id, name, opponent, venue, start_time, status, match_type')
+      .eq('is_active_for_registration', true)
+      .maybeSingle();
 
-      if (matchData) {
-        setMatch(matchData);
+    if (matchError) {
+      console.error('[Index] Error fetching active match:', matchError);
+    }
 
-        const [bannerRes, pricingRes] = await Promise.all([
-          supabase.from('match_assets').select('file_path').eq('match_id', matchData.id).eq('asset_type', 'banner_image').maybeSingle(),
-          supabase.from('match_pricing_rules').select('base_price_new, base_price_returning, rule_type').eq('match_id', matchData.id).limit(1).maybeSingle(),
-        ]);
+    if (matchData) {
+      setMatch(matchData);
 
-        if (bannerRes.data?.file_path) {
-          const { data: url } = supabase.storage.from('match-assets').getPublicUrl(bannerRes.data.file_path);
-          setBannerUrl(url?.publicUrl || null);
-        }
-        if (pricingRes.data) setPricing(pricingRes.data);
+      const [bannerRes, pricingRes] = await Promise.all([
+        supabase.from('match_assets').select('file_path').eq('match_id', matchData.id).eq('asset_type', 'banner_image').maybeSingle(),
+        supabase.from('match_pricing_rules').select('base_price_new, base_price_returning, rule_type').eq('match_id', matchData.id).limit(1).maybeSingle(),
+      ]);
+
+      if (bannerRes.data?.file_path) {
+        const { data: url } = supabase.storage.from('match-assets').getPublicUrl(bannerRes.data.file_path);
+        setBannerUrl(url?.publicUrl || null);
       }
-    } catch {
-      // No active match
+      if (pricingRes.data) setPricing(pricingRes.data);
     }
     setLoading(false);
   };
@@ -310,21 +310,6 @@ export default function IndexPage() {
               </GlassCard>
             )}
 
-            {/* ─── PRIMARY CTA ─── */}
-            <div className="mb-6 animate-slide-up" style={{ animationDelay: '0.27s' } as React.CSSProperties}>
-              <Link to="/register" className="block mb-3">
-                <button className="w-full h-16 btn-gradient rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 animate-glow-pulse transition-transform hover:scale-[1.02] active:scale-[0.98]">
-                  Reserve Your Seats Now <ChevronRight className="h-6 w-6" />
-                </button>
-              </Link>
-              <p className="text-sm text-center text-muted-foreground">
-                Already booked?{' '}
-                <Link to="/ticket" className="text-primary font-semibold underline underline-offset-2 hover:text-primary/80 transition-colors">
-                  View Your Passes
-                </Link>
-              </p>
-            </div>
-
             {/* ─── TRUST STRIP ─── */}
             <div className="mb-6 animate-slide-up" style={{ animationDelay: '0.3s' } as React.CSSProperties}>
               <GlassCard className="p-5">
@@ -367,6 +352,21 @@ export default function IndexPage() {
             </div>
           </GlassCard>
         )}
+
+        {/* ─── PRIMARY CTA — always visible ─── */}
+        <div className="mb-6 animate-slide-up" style={{ animationDelay: '0.27s' } as React.CSSProperties}>
+          <Link to="/register" className="block mb-3">
+            <button className="w-full h-16 btn-gradient rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 animate-glow-pulse transition-transform hover:scale-[1.02] active:scale-[0.98]">
+              Reserve Your Seats Now <ChevronRight className="h-6 w-6" />
+            </button>
+          </Link>
+          <p className="text-sm text-center text-muted-foreground">
+            Already booked?{' '}
+            <Link to="/ticket" className="text-primary font-semibold underline underline-offset-2 hover:text-primary/80 transition-colors">
+              View Your Passes
+            </Link>
+          </p>
+        </div>
 
         {/* ─── LEGAL DISCLAIMER ─── */}
         <div className="mb-6 disclaimer-bar rounded-xl p-5 text-xs animate-slide-up" style={{ animationDelay: '0.33s' } as React.CSSProperties}>
