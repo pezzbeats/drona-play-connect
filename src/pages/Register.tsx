@@ -60,7 +60,7 @@ function StepBar({ step }: { step: number }) {
             }`}>
               {i < step ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
             </div>
-            <span className={`text-xs font-medium text-center leading-tight ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>{s}</span>
+            <span className={`text-[10px] font-medium text-center leading-tight truncate w-full ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>{s}</span>
           </div>
         ))}
       </div>
