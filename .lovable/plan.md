@@ -1,29 +1,53 @@
 
-## Plan: Replace HTML Widget with React SDK Integration
+## Root Cause — Found
 
-### What's changing
-- Remove the `<elevenlabs-convai>` HTML widget and `<script>` tag from `index.html`
-- Install `@elevenlabs/react` npm package
-- Create a new `src/components/VoiceAgent.tsx` React component using the `useConversation` hook
-- Mount it globally in `src/App.tsx` alongside the Toasters
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-### Component design
-The floating button will:
-- Fixed bottom-right (matching the old widget position)
-- Mic icon button — one tap to start, another to stop
-- Show a subtle "speaking / listening" indicator when active
-- Request microphone permission before starting
-- Connect via WebRTC with `agentId: "agent_2101kk1n1zmfezxswwp4xxf5d0ew"` (public agent, no server token needed)
-- Match the app's existing dark/glass aesthetic (transparent dark background, gold accent)
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-### Files touched
-1. `index.html` — remove lines 29–30 (widget tag + CDN script)
-2. `package.json` — add `@elevenlabs/react` dependency
-3. `src/components/VoiceAgent.tsx` — new floating mic button component
-4. `src/App.tsx` — import and render `<VoiceAgent />` at the top level
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-### Technical notes
-- Uses `connectionType: "webrtc"` for lower latency (same as React SDK docs recommend)
-- No API key or edge function needed for a public agent
-- Microphone permission is requested on first tap with a clear UX state (idle → connecting → connected)
-- `conversation.status` drives button state: `disconnected` = mic off, `connected` = mic live with pulse animation
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
+```
+
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
+```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |

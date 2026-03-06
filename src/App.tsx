@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/admin/ProtectedRoute";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { VoiceAgent } from "@/components/VoiceAgent";
 
 import Index from "./pages/Index";
 import TermsPage from "./pages/Terms";
@@ -47,6 +48,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <VoiceAgent />
       <BrowserRouter>
         <AuthProvider>
           <Routes>
