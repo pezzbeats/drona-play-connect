@@ -1,49 +1,31 @@
 
-## What Already Exists vs. What Needs Building
+## Plan: Eligibility Discount Badge on Step 3
 
-The previous edit already added the eligibility badge to Step 2 (pricing). The existing system has `semifinal_eligibility` table, the upload page, and the `pricing-quote` edge function checking it. The prompt is a broader feature request that includes several improvements on top of what's there.
+### What needs changing
 
-### Gaps to fill:
+There are **two visible areas in Step 3**:
 
-1. **Schema**: `semifinal_eligibility` table is missing `full_name` and `notes` columns — needs a migration
-2. **Template CSV**: Currently only exports `mobile` — needs `mobile,full_name,notes` columns
-3. **CSV parsing**: Needs to read `full_name` and `notes` from the uploaded file
-4. **Upload mode**: No Replace vs. Append choice — needs a toggle
-5. **Clear all list**: No bulk-clear with confirmation
-6. **Export current list**: No way to download existing records as CSV
-7. **Seat reason labels**: Step 2 shows raw reason codes (`loyal_base`, `semifinal_attendee`) — should show "Special ₹949 eligible" or "Standard ₹999"
-8. **Admin Orders view**: Pricing source badge ("Special ₹949" / "Standard ₹999") missing
+1. **Payment method selector** (`select_method` state, lines 843–848) — the "Total Amount" prominent block already shows the total. The eligibility badge should appear just below this total amount box.
 
----
+2. **Pre-payment summary** (`razorpay_summary` state, the `PrePaymentSummary` component) — the order summary card (lines 101–128) shows a rows-based breakdown but only shows "Total Payable" at the bottom with no seat-by-seat breakdown or eligibility indicator. The badge and per-seat breakdown should appear here.
 
-### Changes
+### Changes to make
 
-**1. Database migration** — add `full_name text` and `notes text` (both nullable) to `semifinal_eligibility`
+**1. `PrePaymentSummary` component (lines 83–88, 101–128)**
+- Add `eligibilityStatus` and `priceQuote` as new props
+- Insert the eligibility banner (green star badge for eligible, muted info for standard) between the header and the order summary card
+- Replace the static `Seats: N × type` row with a small per-seat breakdown from `priceQuote.seats` — the same readable labels used on Step 2 (`⭐ Special ₹949 eligible`, `Standard rate`, etc.)
 
-**2. `AdminEligibility.tsx`** — full overhaul:
-- Template now exports `mobile,full_name,notes` with example rows
-- CSV parser reads the `full_name` and `notes` columns in addition to `mobile`
-- Upload payload includes `full_name` and `notes`
-- Preview table shows all three columns (mobile, name, notes) with valid/invalid indicator
-- **Upload mode toggle**: "Append to existing" (default) vs "Replace all" (clears first with a warning banner)
-- **Clear All** button at bottom of list with AlertDialog confirmation
-- **Export List** button — downloads all current records as CSV
+**2. `select_method` panel (lines 843–848)**
+- Add the eligibility badge directly under the "Total Amount" box so eligible users see it even before picking a method
+- Eligible: green star banner — "⭐ Semifinal attendee discount applied — seats at ₹949"
+- Standard: a subtle muted note — "Standard pricing — ₹999/seat"
 
-**3. `Register.tsx` (Step 2 price breakdown)** — improve reason label display:
-- `semifinal_attendee` → `"⭐ Special ₹949"`
-- `loyal_base` → `"⭐ Returning rate"`
-- `extra_seat` → `"Standard rate"`
-- `new_customer` → `""` (no badge, clean)
-
-**4. `AdminOrders.tsx`** — add pricing source badge in the seat/price column:
-- Read `pricing_model_snapshot` from order
-- If any seat has reason `semifinal_attendee` or `loyal_base` → show green "Special ₹949" badge
-- Otherwise → show muted "Standard ₹999" badge
+**3. Pass new props at the call site (line 755–763)**
+- Add `eligibilityStatus={eligibilityStatus}` and `priceQuote={priceQuote}` to the `<PrePaymentSummary>` component call
 
 ### Files to modify
-| File | Change |
-|---|---|
-| `supabase/migrations/new.sql` | Add `full_name`, `notes` to `semifinal_eligibility` |
-| `src/pages/admin/AdminEligibility.tsx` | Template, parsing, replace/append, clear all, export |
-| `src/pages/Register.tsx` | Friendly reason labels in price breakdown |
-| `src/pages/admin/AdminOrders.tsx` | Pricing source badge |
+- `src/pages/Register.tsx` only — three small edits within the same file:
+  1. Update `PrePaymentSummary` prop interface + render
+  2. Update the call site to pass the new props
+  3. Add badge under Total Amount in `select_method`
