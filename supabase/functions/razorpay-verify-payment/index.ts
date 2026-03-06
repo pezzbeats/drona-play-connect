@@ -85,6 +85,22 @@ serve(async (req) => {
 
     if (orderError || !order) throw new Error("Order not found");
 
+    // IDEMPOTENCY: Check if tickets already exist for this order
+    const { data: existingTickets, error: ticketCheckErr } = await supabase
+      .from("tickets")
+      .select("*")
+      .eq("order_id", order.id);
+
+    if (!ticketCheckErr && existingTickets && existingTickets.length > 0) {
+      // Tickets already generated — return them without re-creating
+      console.log("Tickets already exist for order", order.id, "— returning existing tickets");
+      return new Response(
+        JSON.stringify({ verified: true, tickets: existingTickets, idempotent: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // IDEMPOTENCY: If already paid_verified but no tickets found, still generate
     // Update order to paid_verified and store Razorpay IDs
     await supabase
       .from("orders")
@@ -94,7 +110,12 @@ serve(async (req) => {
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
-        gateway_response: { razorpay_order_id, razorpay_payment_id, verified_at: new Date().toISOString() },
+        gateway_response: {
+          razorpay_order_id,
+          razorpay_payment_id,
+          verified_at: new Date().toISOString(),
+          source: "frontend",
+        },
       } as any)
       .eq("id", order_id);
 

@@ -119,6 +119,8 @@ export default function RegisterPage() {
   // Step 3
   const [paymentMethod, setPaymentMethod] = useState<'pay_at_hotel' | 'upi_qr' | 'razorpay'>('upi_qr');
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [razorpayOrderId, setRazorpayOrderId] = useState<string | null>(null);
+  const [razorpayKeyId, setRazorpayKeyId] = useState<string | null>(null);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyResult, setVerifyResult] = useState<any>(null);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
@@ -225,78 +227,100 @@ export default function RegisterPage() {
     }
   };
 
+  const openRazorpayCheckout = async (internalOrderId: string, rzpOrderId: string, keyId: string, amount: number, currency: string) => {
+    const loaded = await loadRazorpayScript();
+    if (!loaded) throw new Error('Payment gateway failed to load. Please try again.');
+
+    const options = {
+      key: keyId,
+      amount,
+      currency,
+      name: getConfig('register_header_venue', 'Hotel Drona Palace'),
+      description: `T20 Fan Night — ${activeMatch?.name}`,
+      order_id: rzpOrderId,
+      prefill: {
+        name: fullName,
+        contact: `+91${mobile}`,
+        email: email || undefined,
+      },
+      theme: { color: '#e8423c' },
+      handler: async (response: any) => {
+        // Verify on backend
+        try {
+          const { data: verifyData, error: verifyErr } = await supabase.functions.invoke('razorpay-verify-payment', {
+            body: {
+              order_id: internalOrderId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }
+          });
+          if (verifyErr || !verifyData?.verified) {
+            toast({ variant: 'destructive', title: '⚠️ Verification Failed', description: 'Payment received but verification failed. Contact support.' });
+            setRazorpayLoading(false);
+            return;
+          }
+          setTickets(verifyData.tickets || []);
+          setStep(3);
+          toast({ title: '✅ Payment Successful!', description: 'Your passes are ready.' });
+        } catch (e: any) {
+          toast({ variant: 'destructive', title: 'Verification error', description: e.message });
+          setRazorpayLoading(false);
+        }
+      },
+      modal: {
+        ondismiss: () => {
+          // Keep orderId and razorpayOrderId so user can retry
+          toast({ variant: 'destructive', title: 'Payment cancelled', description: 'Tap "Retry Payment" below to try again.' });
+          setRazorpayLoading(false);
+        }
+      }
+    };
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+  };
+
   const handleRazorpayPayment = async () => {
     if (!activeMatch || !priceQuote) return;
     setRazorpayLoading(true);
     try {
-      // 1. Create internal order
-      const newOrderId = await handleCreateOrder('razorpay');
-      if (!newOrderId) return;
+      // 1. Create internal order (only if not already created)
+      let currentOrderId = orderId;
+      if (!currentOrderId) {
+        currentOrderId = await handleCreateOrder('razorpay');
+        if (!currentOrderId) return;
+      }
 
-      // 2. Create Razorpay order
-      const { data: rzpData, error: rzpErr } = await supabase.functions.invoke('razorpay-create-order', {
-        body: {
-          order_id: newOrderId,
-          amount_paise: priceQuote.total * 100,
-          currency: 'INR',
-          receipt: `order_${newOrderId.slice(0, 12)}`,
-        }
-      });
-      if (rzpErr || !rzpData?.razorpay_order_id) throw new Error(rzpErr?.message || 'Failed to create payment order');
+      // 2. Create Razorpay order (only if not already created)
+      let currentRzpOrderId = razorpayOrderId;
+      let keyId = razorpayKeyId;
+      let amount = priceQuote.total * 100;
+      let currency = 'INR';
 
-      // 3. Load script
-      const loaded = await loadRazorpayScript();
-      if (!loaded) throw new Error('Payment gateway failed to load. Please try again.');
-
-      // 4. Open Razorpay checkout
-      const options = {
-        key: rzpData.key_id,
-        amount: rzpData.amount,
-        currency: rzpData.currency,
-        name: getConfig('register_header_venue', 'Hotel Drona Palace'),
-        description: `T20 Fan Night — ${activeMatch.name}`,
-        order_id: rzpData.razorpay_order_id,
-        prefill: {
-          name: fullName,
-          contact: `+91${mobile}`,
-          email: email || undefined,
-        },
-        theme: { color: '#e8423c' },
-        handler: async (response: any) => {
-          // 5. Verify on backend
-          try {
-            const { data: verifyData, error: verifyErr } = await supabase.functions.invoke('razorpay-verify-payment', {
-              body: {
-                order_id: newOrderId,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }
-            });
-            if (verifyErr || !verifyData?.verified) {
-              toast({ variant: 'destructive', title: '⚠️ Verification Failed', description: 'Payment received but verification failed. Contact support.' });
-              return;
-            }
-            setTickets(verifyData.tickets || []);
-            setStep(3);
-            toast({ title: '✅ Payment Successful!', description: 'Your passes are ready.' });
-          } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Verification error', description: e.message });
+      if (!currentRzpOrderId) {
+        const { data: rzpData, error: rzpErr } = await supabase.functions.invoke('razorpay-create-order', {
+          body: {
+            order_id: currentOrderId,
+            amount_paise: priceQuote.total * 100,
+            currency: 'INR',
+            receipt: `order_${currentOrderId.slice(0, 12)}`,
           }
-        },
-        modal: {
-          ondismiss: () => {
-            toast({ variant: 'destructive', title: 'Payment cancelled', description: 'You can retry payment below.' });
-            setRazorpayLoading(false);
-          }
-        }
-      };
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+        });
+        if (rzpErr || !rzpData?.razorpay_order_id) throw new Error(rzpErr?.message || 'Failed to create payment order');
+        currentRzpOrderId = rzpData.razorpay_order_id;
+        keyId = rzpData.key_id;
+        amount = rzpData.amount;
+        currency = rzpData.currency;
+        setRazorpayOrderId(currentRzpOrderId);
+        setRazorpayKeyId(keyId);
+      }
+
+      // 3. Open Razorpay checkout
+      await openRazorpayCheckout(currentOrderId, currentRzpOrderId!, keyId!, amount, currency);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Payment failed', description: e.message });
+      setRazorpayLoading(false);
     }
-    setRazorpayLoading(false);
   };
 
   const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -562,7 +586,19 @@ export default function RegisterPage() {
                 <p className="text-xs text-muted-foreground mt-1">{seatsCount} seat{seatsCount > 1 ? 's' : ''} · {seatingType}</p>
               </div>
 
-              {!orderId ? (
+              {/* Razorpay retry state — order created but modal was dismissed */}
+              {orderId && paymentMethod === 'razorpay' ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-center">
+                    <p className="text-sm font-semibold text-warning mb-1">⚠️ Payment Incomplete</p>
+                    <p className="text-xs text-muted-foreground">Your booking is reserved. Complete payment to get your passes.</p>
+                  </div>
+                  <GlassButton variant="primary" size="lg" className="w-full" loading={razorpayLoading} onClick={handleRazorpayPayment}>
+                    <Zap className="h-4 w-4" /> Retry Payment — ₹{priceQuote?.total}
+                  </GlassButton>
+                  <GlassButton variant="ghost" size="md" className="w-full" onClick={() => setStep(1)}>← Change seats / method</GlassButton>
+                </div>
+              ) : !orderId ? (
                 <div className="space-y-4">
                   <Label className="text-foreground block text-center">Choose Payment Method</Label>
 

@@ -287,10 +287,13 @@ function GatewaySettingsTab() {
   const { role, user } = useAuth();
   const [keyId, setKeyId] = useState('');
   const [keySecret, setKeySecret] = useState('');
+  const [webhookSecret, setWebhookSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [saving, setSaving] = useState(false);
   const [currentKeyId, setCurrentKeyId] = useState<string | null>(null);
   const [secretSet, setSecretSet] = useState(false);
+  const [webhookSecretSet, setWebhookSecretSet] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadCurrent = useCallback(async () => {
@@ -298,14 +301,16 @@ function GatewaySettingsTab() {
     const { data } = await supabase
       .from('gateway_secrets' as any)
       .select('key, value, updated_at')
-      .in('key', ['razorpay_key_id', 'razorpay_key_secret']);
+      .in('key', ['razorpay_key_id', 'razorpay_key_secret', 'razorpay_webhook_secret']);
 
     if (data) {
       const rows = (data as unknown) as { key: string; value: string; updated_at: string }[];
       const kid = rows.find(r => r.key === 'razorpay_key_id');
       const ks = rows.find(r => r.key === 'razorpay_key_secret');
+      const wh = rows.find(r => r.key === 'razorpay_webhook_secret');
       setCurrentKeyId(kid?.value || null);
       setSecretSet(!!(ks?.value));
+      setWebhookSecretSet(!!(wh?.value));
     }
     setLoading(false);
   }, []);
@@ -325,7 +330,7 @@ function GatewaySettingsTab() {
   }
 
   const handleSave = async () => {
-    if (!keyId && !keySecret) {
+    if (!keyId && !keySecret && !webhookSecret) {
       toast.error('Enter at least one value to update');
       return;
     }
@@ -338,6 +343,9 @@ function GatewaySettingsTab() {
       if (keySecret) {
         updates.push({ key: 'razorpay_key_secret', value: keySecret, updated_at: new Date().toISOString(), updated_by_admin_id: user?.id });
       }
+      if (webhookSecret) {
+        updates.push({ key: 'razorpay_webhook_secret', value: webhookSecret, updated_at: new Date().toISOString(), updated_by_admin_id: user?.id });
+      }
 
       for (const row of updates) {
         const { error } = await supabase
@@ -349,6 +357,7 @@ function GatewaySettingsTab() {
       toast.success('Gateway credentials updated successfully');
       setKeyId('');
       setKeySecret('');
+      setWebhookSecret('');
       loadCurrent();
     } catch (e: any) {
       toast.error(e.message || 'Failed to update credentials');
@@ -365,11 +374,11 @@ function GatewaySettingsTab() {
   return (
     <div className="max-w-lg space-y-5">
       {/* Warning banner */}
-      <div className="flex gap-3 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
-        <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+      <div className="flex gap-3 p-4 rounded-xl border border-warning/30 bg-warning/10">
+        <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-yellow-400">Handle with care</p>
-          <p className="text-xs text-yellow-400/80 mt-0.5">
+          <p className="text-sm font-semibold text-warning">Handle with care</p>
+          <p className="text-xs text-warning/80 mt-0.5">
             Changing these values will affect all future Razorpay payments immediately.
             Incorrect credentials will cause checkout failures.
           </p>
@@ -383,17 +392,40 @@ function GatewaySettingsTab() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-foreground">Key ID</span>
             {maskedKeyId
-              ? <span className="font-mono text-xs text-green-400">{maskedKeyId}</span>
+              ? <span className="font-mono text-xs text-success">{maskedKeyId}</span>
               : <Badge variant="outline" className="text-xs text-muted-foreground">Not set</Badge>}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-foreground">Key Secret</span>
             {secretSet
-              ? <span className="font-mono text-xs text-green-400">••••••••••••••••</span>
+              ? <span className="font-mono text-xs text-success">••••••••••••••••</span>
+              : <Badge variant="outline" className="text-xs text-muted-foreground">Not set</Badge>}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-foreground">Webhook Secret</span>
+            {webhookSecretSet
+              ? <span className="font-mono text-xs text-success">••••••••••••••••</span>
               : <Badge variant="outline" className="text-xs text-muted-foreground">Not set</Badge>}
           </div>
         </div>
       )}
+
+      {/* Webhook URL info */}
+      <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Webhook Configuration</p>
+        <p className="text-xs text-muted-foreground">Register this URL in your Razorpay Dashboard → Webhooks. Subscribe to <code className="bg-muted px-1 rounded text-foreground">payment.captured</code> event.</p>
+        <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2">
+          <code className="text-xs font-mono text-foreground flex-1 break-all">
+            https://fkblggtrpyubuglndotz.supabase.co/functions/v1/razorpay-webhook
+          </code>
+          <button
+            onClick={() => { navigator.clipboard.writeText('https://fkblggtrpyubuglndotz.supabase.co/functions/v1/razorpay-webhook'); toast.success('Copied!'); }}
+            className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
 
       {/* Form */}
       <div className="space-y-4">
@@ -432,7 +464,31 @@ function GatewaySettingsTab() {
           </p>
         </div>
 
-        <Button onClick={handleSave} disabled={saving || (!keyId && !keySecret)} className="w-full">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">Webhook Secret</label>
+          <div className="relative">
+            <Input
+              type={showWebhookSecret ? 'text' : 'password'}
+              placeholder="Enter Webhook Secret from Razorpay Dashboard"
+              value={webhookSecret}
+              onChange={e => setWebhookSecret(e.target.value)}
+              className="font-mono text-sm pr-10 bg-background"
+            />
+            <button
+              type="button"
+              onClick={() => setShowWebhookSecret(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Found in Razorpay Dashboard → Settings → Webhooks. Used to verify incoming webhook events.
+            Leave blank to keep the existing webhook secret.
+          </p>
+        </div>
+
+        <Button onClick={handleSave} disabled={saving || (!keyId && !keySecret && !webhookSecret)} className="w-full">
           {saving ? 'Saving…' : 'Save Credentials'}
         </Button>
       </div>
