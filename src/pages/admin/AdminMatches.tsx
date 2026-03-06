@@ -115,7 +115,7 @@ export default function AdminMatches() {
               <Plus className="h-4 w-4" /> New Match
             </GlassButton>
           </DialogTrigger>
-          <DialogContent className="glass-card border-border max-w-md">
+          <DialogContent className="glass-card-elevated border-border max-w-md">
             <DialogHeader>
               <DialogTitle className="font-display text-xl gradient-text">Create Match</DialogTitle>
             </DialogHeader>
@@ -238,7 +238,7 @@ export default function AdminMatches() {
 
       {/* Confirm activation dialog */}
       <AlertDialog open={!!confirmActivateMatch} onOpenChange={open => !open && setConfirmActivateMatch(null)}>
-        <AlertDialogContent className="glass-card border-border">
+        <AlertDialogContent className="glass-card-elevated border-border">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display text-foreground">Activate Registration?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">

@@ -59,6 +59,193 @@ const ROLE_LABELS: Record<string, string> = {
   wicketkeeper: 'Wicketkeeper',
 };
 
+// ─── Bulk Import Dialog ───────────────────────────────────────────────────────
+
+type ParsedRow = {
+  raw: string;
+  valid: boolean;
+  name: string;
+  role: string;
+  jersey_number: number | null;
+};
+
+function BulkImportDialog({ teams, onImported }: { teams: Team[]; onImported: () => void }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [bulkTeamId, setBulkTeamId] = useState('');
+  const [bulkText, setBulkText] = useState('');
+  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [previewed, setPreviewed] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importedCount, setImportedCount] = useState<number | null>(null);
+
+  const validRoles = ['batsman', 'bowler', 'all_rounder', 'wicketkeeper'];
+
+  const parseRow = (line: string): ParsedRow => {
+    const parts = line.split(/[,\t|]/).map(s => s.trim());
+    const name = parts[0] || '';
+    const roleRaw = (parts[1] || '').toLowerCase().replace(/[-\s]/g, '_');
+    const role = validRoles.includes(roleRaw) ? roleRaw : 'batsman';
+    const jersey_number = parts[2] ? parseInt(parts[2]) || null : null;
+    return { raw: line, valid: !!name, name, role, jersey_number };
+  };
+
+  const handlePreview = () => {
+    const rows = bulkText.split('\n').filter(l => l.trim()).map(parseRow);
+    setParsedRows(rows);
+    setPreviewed(true);
+  };
+
+  const validRows = parsedRows.filter(r => r.valid);
+
+  const handleImport = async () => {
+    if (!bulkTeamId || validRows.length === 0) return;
+    setImporting(true);
+    const payload = validRows.map(r => ({
+      name: r.name,
+      role: r.role as Player['role'],
+      jersey_number: r.jersey_number,
+      team_id: bulkTeamId,
+    }));
+    const { error } = await supabase.from('players').insert(payload);
+    setImporting(false);
+    if (error) { toast({ title: 'Import failed', description: error.message, variant: 'destructive' }); return; }
+    setImportedCount(validRows.length);
+    onImported();
+  };
+
+  const handleClose = (o: boolean) => {
+    setOpen(o);
+    if (!o) {
+      setBulkText(''); setParsedRows([]); setPreviewed(false);
+      setImportedCount(null); setBulkTeamId('');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <Upload className="h-4 w-4 mr-1" /> Bulk Import
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="glass-card-elevated border-border max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bulk Import Players</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Team selector */}
+          <div className="space-y-1.5">
+            <Label>Assign all players to team <span className="text-destructive">*</span></Label>
+            <Select value={bulkTeamId || 'none'} onValueChange={v => setBulkTeamId(v === 'none' ? '' : v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Select team —</SelectItem>
+                {teams.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: t.color || '#888' }} />
+                      {t.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Paste area */}
+          {importedCount === null && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Paste player list</Label>
+                <Textarea
+                  className="font-mono text-sm h-40 resize-none"
+                  placeholder={`Rohit Sharma, batsman, 45\nJasprit Bumrah, bowler, 93\nHardik Pandya, all_rounder, 33\nMS Dhoni, wicketkeeper, 7\nVirat Kohli`}
+                  value={bulkText}
+                  onChange={e => { setBulkText(e.target.value); setPreviewed(false); setParsedRows([]); }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  One player per line · Fields: <code className="bg-muted px-1 rounded">Name, Role, Jersey#</code> · Separator: comma, tab or pipe
+                </p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={handlePreview} disabled={!bulkText.trim()}>
+                Preview
+              </Button>
+            </>
+          )}
+
+          {/* Preview table */}
+          {previewed && importedCount === null && parsedRows.length > 0 && (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <div className="px-3 py-2 bg-muted/40 text-xs text-muted-foreground flex items-center justify-between">
+                <span>{validRows.length} valid · {parsedRows.length - validRows.length} skipped</span>
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-6" />
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Jersey</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parsedRows.map((row, i) => (
+                      <TableRow key={i} className={!row.valid ? 'opacity-50' : ''}>
+                        <TableCell className="py-1.5">
+                          {row.valid
+                            ? <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                            : <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
+                        </TableCell>
+                        <TableCell className="py-1.5 font-medium text-sm">{row.name || <span className="italic text-muted-foreground">{row.raw}</span>}</TableCell>
+                        <TableCell className="py-1.5">
+                          {row.valid && <Badge variant="outline" className="text-xs">{ROLE_LABELS[row.role]}</Badge>}
+                        </TableCell>
+                        <TableCell className="py-1.5 font-mono text-xs text-muted-foreground">
+                          {row.jersey_number ?? '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {/* Success state */}
+          {importedCount !== null && (
+            <div className="rounded-lg border border-success/30 bg-success/10 px-4 py-6 flex flex-col items-center gap-2 text-center">
+              <CheckCircle2 className="h-10 w-10 text-success" />
+              <p className="font-semibold">{importedCount} player{importedCount !== 1 ? 's' : ''} imported successfully</p>
+              <p className="text-xs text-muted-foreground">The Players tab has been refreshed.</p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          {importedCount !== null ? (
+            <Button onClick={() => setOpen(false)}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button
+                onClick={handleImport}
+                disabled={!previewed || validRows.length === 0 || importing || !bulkTeamId}
+              >
+                {importing ? 'Importing…' : `Import ${validRows.length > 0 ? validRows.length : ''} player${validRows.length !== 1 ? 's' : ''}`}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Teams Tab ────────────────────────────────────────────────────────────────
 
 function TeamsTab() {
@@ -139,7 +326,7 @@ function TeamsTab() {
               <Plus className="h-4 w-4 mr-1" /> Add Team
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="glass-card-elevated border-border">
             <DialogHeader>
               <DialogTitle>{editing ? 'Edit Team' : 'New Team'}</DialogTitle>
             </DialogHeader>
@@ -168,6 +355,7 @@ function TeamsTab() {
         </Dialog>
       </div>
 
+      {/* Teams list */}
       {loading ? (
         <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
       ) : teams.length === 0 ? (
@@ -191,16 +379,12 @@ function TeamsTab() {
                 <TableRow key={team.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: team.color || '#888' }} />
+                      <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: team.color || '#888' }} />
                       <span className="font-medium">{team.name}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono">{team.short_code}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{playerCounts[team.id] || 0} players</Badge>
-                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{team.short_code}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{playerCounts[team.id] ?? 0}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(team)}>
@@ -218,222 +402,6 @@ function TeamsTab() {
         </div>
       )}
     </div>
-  );
-}
-
-// ─── Bulk Import Dialog ───────────────────────────────────────────────────────
-
-type ParsedRow = {
-  raw: string;
-  name: string;
-  role: Player['role'];
-  jersey_number: number | null;
-  valid: boolean;
-  error?: string;
-};
-
-function parseRole(token: string): Player['role'] {
-  const t = token.toLowerCase().trim();
-  if (t.includes('bowl')) return 'bowler';
-  if (t.includes('all') || t.includes('rounder')) return 'all_rounder';
-  if (t.includes('keep') || t.includes('wk') || t.includes('wicket')) return 'wicketkeeper';
-  return 'batsman';
-}
-
-function parseBulkText(text: string): ParsedRow[] {
-  return text
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map(raw => {
-      const parts = raw.split(/[,\t|]/).map(p => p.trim());
-      const name = parts[0];
-      if (!name) return { raw, name: '', role: 'batsman' as Player['role'], jersey_number: null, valid: false, error: 'Name is empty' };
-      const role: Player['role'] = parts[1] ? parseRole(parts[1]) : 'batsman';
-      const jerseyRaw = parts[2] || parts[1];
-      const jerseyNum = jerseyRaw ? parseInt(jerseyRaw) : NaN;
-      // Only use as jersey if it's a clean number field (field 3, or field 2 that's a pure number)
-      const jersey_number = parts[2] && !isNaN(parseInt(parts[2])) ? parseInt(parts[2]) :
-                            parts[1] && /^\d+$/.test(parts[1].trim()) ? parseInt(parts[1]) :
-                            null;
-      return { raw, name, role, jersey_number, valid: true };
-    });
-}
-
-function BulkImportDialog({ teams, onImported }: { teams: Team[]; onImported: () => void }) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [bulkTeamId, setBulkTeamId] = useState('');
-  const [bulkText, setBulkText] = useState('');
-  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [previewed, setPreviewed] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importedCount, setImportedCount] = useState<number | null>(null);
-
-  const reset = () => {
-    setBulkText('');
-    setParsedRows([]);
-    setPreviewed(false);
-    setImportedCount(null);
-    setBulkTeamId(teams[0]?.id || '');
-  };
-
-  const handleOpen = (o: boolean) => {
-    setOpen(o);
-    if (o) reset();
-  };
-
-  const handlePreview = () => {
-    const rows = parseBulkText(bulkText);
-    setParsedRows(rows);
-    setPreviewed(true);
-  };
-
-  const validRows = parsedRows.filter(r => r.valid);
-
-  const handleImport = async () => {
-    if (!bulkTeamId) { toast({ title: 'Select a team first', variant: 'destructive' }); return; }
-    setImporting(true);
-    const payload = validRows.map(r => ({
-      name: r.name,
-      role: r.role,
-      jersey_number: r.jersey_number,
-      team_id: bulkTeamId || null,
-    }));
-    const { error } = await supabase.from('players').insert(payload);
-    setImporting(false);
-    if (error) { toast({ title: 'Import failed', description: error.message, variant: 'destructive' }); return; }
-    setImportedCount(validRows.length);
-    toast({ title: `${validRows.length} player${validRows.length !== 1 ? 's' : ''} imported!` });
-    onImported();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <Upload className="h-4 w-4 mr-1" /> Bulk Import
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Bulk Import Players</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          {/* Team selector */}
-          <div className="space-y-1.5">
-            <Label>Assign all players to team <span className="text-destructive">*</span></Label>
-            <Select value={bulkTeamId || 'none'} onValueChange={v => setBulkTeamId(v === 'none' ? '' : v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— Select team —</SelectItem>
-                {teams.map(t => (
-                  <SelectItem key={t.id} value={t.id}>
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: t.color || '#888' }} />
-                      {t.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Paste area */}
-          {importedCount === null && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Paste player list</Label>
-                <Textarea
-                  className="font-mono text-sm h-40 resize-none"
-                  placeholder={`Rohit Sharma, batsman, 45\nJasprit Bumrah, bowler, 93\nHardik Pandya, all_rounder, 33\nMS Dhoni, wicketkeeper, 7\nVirat Kohli`}
-                  value={bulkText}
-                  onChange={e => { setBulkText(e.target.value); setPreviewed(false); setParsedRows([]); }}
-                />
-                <p className="text-xs text-muted-foreground">
-                  One player per line · Fields: <code className="bg-muted px-1 rounded">Name, Role, Jersey#</code> · Separator: comma, tab or pipe
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handlePreview}
-                disabled={!bulkText.trim()}
-              >
-                Preview
-              </Button>
-            </>
-          )}
-
-          {/* Preview table */}
-          {previewed && importedCount === null && parsedRows.length > 0 && (
-            <div className="rounded-lg border border-border overflow-hidden">
-              <div className="px-3 py-2 bg-muted/40 text-xs text-muted-foreground flex items-center justify-between">
-                <span>{validRows.length} valid · {parsedRows.length - validRows.length} skipped</span>
-              </div>
-              <div className="max-h-56 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-6" />
-                      <TableHead>Name</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Jersey</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {parsedRows.map((row, i) => (
-                      <TableRow key={i} className={!row.valid ? 'opacity-50' : ''}>
-                        <TableCell className="py-1.5">
-                          {row.valid
-                            ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                            : <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
-                        </TableCell>
-                        <TableCell className="py-1.5 font-medium text-sm">{row.name || <span className="italic text-muted-foreground">{row.raw}</span>}</TableCell>
-                        <TableCell className="py-1.5">
-                          {row.valid && <Badge variant="outline" className="text-xs">{ROLE_LABELS[row.role]}</Badge>}
-                        </TableCell>
-                        <TableCell className="py-1.5 font-mono text-xs text-muted-foreground">
-                          {row.jersey_number ?? '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
-
-          {/* Success state */}
-          {importedCount !== null && (
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 flex flex-col items-center gap-2 text-center">
-              <CheckCircle2 className="h-10 w-10 text-green-500" />
-              <p className="font-semibold">{importedCount} player{importedCount !== 1 ? 's' : ''} imported successfully</p>
-              <p className="text-xs text-muted-foreground">The Players tab has been refreshed.</p>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter className="gap-2">
-          {importedCount !== null ? (
-            <Button onClick={() => setOpen(false)}>Done</Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button
-                onClick={handleImport}
-                disabled={!previewed || validRows.length === 0 || importing || !bulkTeamId}
-              >
-                {importing ? 'Importing…' : `Import ${validRows.length > 0 ? validRows.length : ''} player${validRows.length !== 1 ? 's' : ''}`}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -534,46 +502,46 @@ function PlayersTab() {
                 <Plus className="h-4 w-4 mr-1" /> Add Player
               </Button>
             </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editing ? 'Edit Player' : 'New Player'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <Label>Full Name</Label>
-                <Input placeholder="e.g. Rohit Sharma" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            <DialogContent className="glass-card-elevated border-border">
+              <DialogHeader>
+                <DialogTitle>{editing ? 'Edit Player' : 'New Player'}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
                 <div className="space-y-1.5">
-                  <Label>Role</Label>
-                  <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v as Player['role'] }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Label>Full Name</Label>
+                  <Input placeholder="e.g. Rohit Sharma" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Role</Label>
+                    <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v as Player['role'] }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(ROLE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Jersey #</Label>
+                    <Input type="number" placeholder="e.g. 45" value={form.jersey_number} onChange={e => setForm(f => ({ ...f, jersey_number: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Team</Label>
+                  <Select value={form.team_id || 'none'} onValueChange={v => setForm(f => ({ ...f, team_id: v === 'none' ? '' : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(ROLE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Jersey #</Label>
-                  <Input type="number" placeholder="e.g. 45" value={form.jersey_number} onChange={e => setForm(f => ({ ...f, jersey_number: e.target.value }))} />
-                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Team</Label>
-                <Select value={form.team_id || 'none'} onValueChange={v => setForm(f => ({ ...f, team_id: v === 'none' ? '' : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
-                    {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-            </DialogFooter>
-          </DialogContent>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+              </DialogFooter>
+            </DialogContent>
           </Dialog>
         </div>
       </div>
@@ -673,7 +641,6 @@ function MatchRosterTab() {
     setSaving(true);
     setSaved(false);
 
-    // Delete existing roster rows for this match, then re-insert
     await supabase.from('match_roster').delete().eq('match_id', activeMatch.id);
 
     const rows = [
@@ -704,7 +671,7 @@ function MatchRosterTab() {
   return (
     <div className="space-y-6 max-w-lg">
       <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 flex items-center gap-3">
-        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+        <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
         <div>
           <p className="text-xs text-muted-foreground">Active Match</p>
           <p className="font-semibold text-sm">{activeMatch.name}</p>
@@ -775,10 +742,10 @@ function MatchRosterTab() {
       </Button>
 
       {saved && (
-        <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 flex items-start gap-3">
-          <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+        <div className="rounded-lg border border-success/30 bg-success/10 px-4 py-3 flex items-start gap-3">
+          <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-green-700 dark:text-green-400">Roster saved successfully</p>
+            <p className="text-sm font-medium text-success">Roster saved successfully</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               The Live Control delivery form will now show players from <strong>{homeTeam?.name}</strong> and <strong>{awayTeam?.name}</strong>.
             </p>

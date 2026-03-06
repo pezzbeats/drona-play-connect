@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowLeft, Upload, Loader2, Image, FileText, Flag, Map, Copy, Eye,
-  ExternalLink, Zap, RefreshCw, X, Users, UserCheck,
+  ExternalLink, Zap, X,
 } from 'lucide-react';
 
 const assetTypes = [
@@ -49,7 +49,6 @@ export default function AdminMatchDetail() {
   const [assets, setAssets] = useState<any[]>([]);
   const [uploadingAsset, setUploadingAsset] = useState<string | null>(null);
   const [removingAsset, setRemovingAsset] = useState<string | null>(null);
-  const [pricing, setPricing] = useState<any[]>([]);
   const [allMatches, setAllMatches] = useState<any[]>([]);
   const [form, setForm] = useState({ name: '', opponent: '', match_type: 'group', venue: '', status: 'draft', start_time: '' });
   const [pricingForm, setPricingForm] = useState({ base_price_new: '', base_price_returning: '', rule_type: 'standard', loyalty_from_match_id: '' });
@@ -84,7 +83,6 @@ export default function AdminMatchDetail() {
       rule_type: pr.rule_type,
       loyalty_from_match_id: pr.loyalty_from_match_id || '',
     });
-    setPricing(pricingRes.data || []);
     setLoading(false);
   };
 
@@ -185,16 +183,13 @@ export default function AdminMatchDetail() {
   const handleCloneFrom = async (sourceMatchId: string) => {
     setCloning(sourceMatchId);
     try {
-      const [pricingRes, configRes] = await Promise.all([
-        supabase.from('match_pricing_rules').select('*').eq('match_id', sourceMatchId).single(),
-        supabase.from('match_scoring_config').select('*').eq('match_id', sourceMatchId).maybeSingle(),
-      ]);
-      if (pricingRes.data) {
+      const { data: pricingRes } = await supabase.from('match_pricing_rules').select('*').eq('match_id', sourceMatchId).single();
+      if (pricingRes) {
         setPricingForm({
-          base_price_new: pricingRes.data.base_price_new?.toString() || '',
-          base_price_returning: pricingRes.data.base_price_returning?.toString() || '',
-          rule_type: pricingRes.data.rule_type,
-          loyalty_from_match_id: '', // don't carry over loyalty link
+          base_price_new: pricingRes.base_price_new?.toString() || '',
+          base_price_returning: pricingRes.base_price_returning?.toString() || '',
+          rule_type: pricingRes.rule_type,
+          loyalty_from_match_id: '',
         });
       }
       setCloneOpen(false);
@@ -232,127 +227,66 @@ export default function AdminMatchDetail() {
                 <Copy className="h-3.5 w-3.5 mr-1" /> Clone Settings
               </GlassButton>
             </DialogTrigger>
-            <DialogContent className="glass-card border-border max-w-sm">
+            <DialogContent className="glass-card-elevated border-border max-w-sm">
               <DialogHeader>
                 <DialogTitle className="font-display text-lg gradient-text">Clone from Previous Match</DialogTitle>
               </DialogHeader>
-              <p className="text-sm text-muted-foreground mb-3">Copies pricing rules. Assets must be re-uploaded.</p>
-              {allMatches.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No other matches available.</p>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {allMatches.map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleCloneFrom(m.id)}
-                      disabled={cloning === m.id}
-                      className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 bg-muted/20 hover:bg-primary/5 transition-all text-sm text-left"
-                    >
-                      <span className="text-foreground truncate">{m.name}</span>
-                      {cloning === m.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary flex-shrink-0" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-3 mt-2">
+                <p className="text-sm text-muted-foreground">Select a previous match to copy its pricing and scoring settings.</p>
+                {allMatches.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No other matches to clone from.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {allMatches.map(m => (
+                      <GlassButton
+                        key={m.id}
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        loading={cloning === m.id}
+                        onClick={() => handleCloneFrom(m.id)}
+                      >
+                        {m.name}
+                      </GlassButton>
+                    ))}
+                  </div>
+                )}
+              </div>
             </DialogContent>
           </Dialog>
-          {/* Preview button */}
-          <GlassButton
-            variant="ghost"
-            size="sm"
-            onClick={() => window.open(`/register?preview=${id}`, '_blank')}
-          >
+
+          {/* Preview */}
+          <GlassButton variant="ghost" size="sm" onClick={() => window.open('/ticket', '_blank')}>
             <Eye className="h-3.5 w-3.5 mr-1" /> Preview
           </GlassButton>
+
+          {/* Activate / Deactivate */}
+          {match?.is_active_for_registration ? (
+            <GlassButton variant="success" size="sm" loading={settingActive} onClick={() => handleSetActive(false)}>
+              <Zap className="h-3.5 w-3.5 mr-1" /> Active
+            </GlassButton>
+          ) : (
+            <GlassButton variant="primary" size="sm" loading={settingActive} onClick={() => setShowActiveConfirm(true)}>
+              Activate
+            </GlassButton>
+          )}
         </div>
       </div>
 
-      {/* Registration Controls */}
-      <GlassCard className={`p-5 ${match?.is_active_for_registration ? 'border-primary/40 shadow-glow-primary' : ''}`}>
-        <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-          <Zap className="h-4 w-4 text-primary" /> Registration Controls
-        </h2>
-
-        {/* Status quick-select */}
-        <div className="mb-5">
-          <Label className="text-muted-foreground text-xs uppercase tracking-wide mb-2 block">Match Status</Label>
-          <div className="flex flex-wrap gap-2">
-            {STATUS_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => handleStatusChange(opt.value)}
-                disabled={savingStatus}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                  form.status === opt.value
-                    ? `${opt.color} border-current shadow-sm ring-1 ring-current/30`
-                    : 'bg-muted/20 text-muted-foreground border-border hover:border-primary/30'
-                }`}
-              >
-                {form.status === opt.value && <span className="mr-1">✓</span>}
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Active for registration switch */}
-        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border">
-          <div>
-            <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-              Active for Registration
-              {match?.is_active_for_registration && (
-                <span className="flex items-center gap-1 text-xs text-primary">
-                  <Zap className="h-3 w-3" /> Live
-                </span>
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Only one match can be active at a time</p>
-          </div>
-          <Switch
-            checked={match?.is_active_for_registration ?? false}
-            disabled={settingActive}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                setShowActiveConfirm(true);
-              } else {
-                handleSetActive(false);
-              }
-            }}
-          />
-        </div>
-
-        {/* Preview link */}
-        <div className="mt-4">
-          <GlassButton
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={() => window.open(`/register?preview=${id}`, '_blank')}
-          >
-            <ExternalLink className="h-3.5 w-3.5 mr-2" />
-            Preview Registration Page
-          </GlassButton>
-        </div>
-      </GlassCard>
-
-      {/* Edit Form */}
-      <GlassCard className="p-5">
-        <h2 className="font-display text-lg font-bold text-foreground mb-4">Match Info</h2>
+      {/* Match form */}
+      <GlassCard className="p-5 space-y-4">
+        <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-widest">Match Info</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <Label className="text-foreground mb-1.5 block">Match Name</Label>
+          <div>
+            <Label className="mb-1.5 block">Match Name *</Label>
             <Input className="glass-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           </div>
           <div>
-            <Label className="text-foreground mb-1.5 block">Opponent</Label>
-            <Input className="glass-input" value={form.opponent} onChange={e => setForm(f => ({ ...f, opponent: e.target.value }))} />
+            <Label className="mb-1.5 block">Opponent Team</Label>
+            <Input className="glass-input" placeholder="Opposing team" value={form.opponent} onChange={e => setForm(f => ({ ...f, opponent: e.target.value }))} />
           </div>
           <div>
-            <Label className="text-foreground mb-1.5 block">Type</Label>
+            <Label className="mb-1.5 block">Match Type</Label>
             <Select value={form.match_type} onValueChange={v => setForm(f => ({ ...f, match_type: v }))}>
               <SelectTrigger className="glass-input"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -364,187 +298,105 @@ export default function AdminMatchDetail() {
             </Select>
           </div>
           <div>
-            <Label className="text-foreground mb-1.5 block">Start Time</Label>
-            <Input className="glass-input" type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label className="text-foreground mb-1.5 block">Venue</Label>
+            <Label className="mb-1.5 block">Venue</Label>
             <Input className="glass-input" value={form.venue} onChange={e => setForm(f => ({ ...f, venue: e.target.value }))} />
           </div>
+          <div>
+            <Label className="mb-1.5 block">Start Time</Label>
+            <Input className="glass-input" type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+          </div>
         </div>
-        <GlassButton variant="primary" size="md" className="mt-4" loading={saving} onClick={handleSave}>Save Changes</GlassButton>
+        <GlassButton variant="primary" size="sm" loading={saving} onClick={handleSave}>Save Changes</GlassButton>
       </GlassCard>
 
-      {/* Pricing Rules — Visual cards */}
+      {/* Status */}
       <GlassCard className="p-5">
-        <h2 className="font-display text-lg font-bold text-foreground mb-1">Pricing Tiers</h2>
-        <p className="text-xs text-muted-foreground mb-4">Set pricing for new and returning fans</p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          {/* New Customer card */}
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <Users className="h-3.5 w-3.5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">New Customer</p>
-                <p className="text-xs text-muted-foreground">First-time attendee price</p>
-              </div>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs mb-1 block">Price (₹)</Label>
-              <Input
-                className="glass-input text-xl font-display font-bold"
-                type="number"
-                placeholder="e.g. 999"
-                value={pricingForm.base_price_new}
-                onChange={e => setPricingForm(f => ({ ...f, base_price_new: e.target.value }))}
-              />
-            </div>
-            {newPrice > 0 && (
-              <div className="text-xs text-blue-400 font-medium">₹{newPrice} per seat</div>
-            )}
-          </div>
-
-          {/* Returning / Loyal card */}
-          <div className="rounded-xl border border-success/20 bg-success/5 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-success/20 flex items-center justify-center">
-                <UserCheck className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">Returning / Loyal</p>
-                <p className="text-xs text-muted-foreground">Discounted returning fan price</p>
-              </div>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs mb-1 block">Price (₹)</Label>
-              <Input
-                className="glass-input text-xl font-display font-bold"
-                type="number"
-                placeholder="e.g. 749"
-                value={pricingForm.base_price_returning}
-                onChange={e => setPricingForm(f => ({ ...f, base_price_returning: e.target.value }))}
-              />
-            </div>
-            {returningPrice > 0 && savings > 0 && (
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success/20 text-success text-xs font-semibold">
-                🎉 ₹{savings} off for returning fans
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Rule type + loyalty link */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            <Label className="text-foreground mb-1.5 block text-sm">Rule Type</Label>
-            <Select value={pricingForm.rule_type} onValueChange={v => setPricingForm(f => ({ ...f, rule_type: v }))}>
-              <SelectTrigger className="glass-input"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="standard">Standard</SelectItem>
-                <SelectItem value="loyalty">Loyalty</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-foreground mb-1.5 block text-sm">Loyalty From Match</Label>
-            <Select
-              value={pricingForm.loyalty_from_match_id || 'none'}
-              onValueChange={v => setPricingForm(f => ({ ...f, loyalty_from_match_id: v === 'none' ? '' : v }))}
+        <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-widest mb-3">Status</h2>
+        <div className="flex flex-wrap gap-2">
+          {STATUS_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => handleStatusChange(opt.value)}
+              disabled={savingStatus}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${form.status === opt.value ? opt.color + ' border-current' : 'border-border text-muted-foreground hover:border-primary/50'}`}
             >
-              <SelectTrigger className="glass-input"><SelectValue placeholder="Select match" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None (standard returning)</SelectItem>
-                {allMatches.map(m => (
-                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">Loyalty discount applies to seats bought at this linked match</p>
-          </div>
+              {opt.label}
+            </button>
+          ))}
         </div>
-
-        <GlassButton variant="primary" size="md" loading={savingPrice} onClick={handleSavePricing}>Save Pricing</GlassButton>
       </GlassCard>
 
-      {/* Asset Uploads */}
-      <GlassCard className="p-5">
-        <h2 className="font-display text-lg font-bold text-foreground mb-4">Match Assets</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {/* Pricing */}
+      <GlassCard className="p-5 space-y-4">
+        <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-widest">Pricing</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="mb-1.5 block">New Customer Price (₹) *</Label>
+            <Input className="glass-input" type="number" placeholder="e.g. 299" value={pricingForm.base_price_new} onChange={e => setPricingForm(f => ({ ...f, base_price_new: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="mb-1.5 block">Returning Customer Price (₹)</Label>
+            <Input className="glass-input" type="number" placeholder="e.g. 199" value={pricingForm.base_price_returning} onChange={e => setPricingForm(f => ({ ...f, base_price_returning: e.target.value }))} />
+          </div>
+        </div>
+        {savings > 0 && (
+          <p className="text-xs text-success">Returning customers save ₹{savings}</p>
+        )}
+        <div>
+          <Label className="mb-1.5 block">Rule Type</Label>
+          <Select value={pricingForm.rule_type} onValueChange={v => setPricingForm(f => ({ ...f, rule_type: v }))}>
+            <SelectTrigger className="glass-input max-w-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard">Standard</SelectItem>
+              <SelectItem value="loyalty">Loyalty</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <GlassButton variant="primary" size="sm" loading={savingPrice} onClick={handleSavePricing}>Save Pricing</GlassButton>
+      </GlassCard>
+
+      {/* Match Assets */}
+      <GlassCard className="p-5 space-y-4">
+        <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-widest">Match Assets</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {assetTypes.map(({ value, label, icon: Icon }) => {
-            const uploaded = assets.find(a => a.asset_type === value);
-            let previewUrl: string | null = null;
-            if (uploaded) {
-              const { data: urlData } = supabase.storage.from('match-assets').getPublicUrl(uploaded.file_path);
-              previewUrl = urlData?.publicUrl;
-            }
+            const existing = assets.find(a => a.asset_type === value);
             const isUploading = uploadingAsset === value;
             const isRemoving = removingAsset === value;
-
             return (
-              <div key={value} className={`relative group rounded-xl border overflow-hidden transition-all ${uploaded ? 'border-success/40 bg-success/5' : 'border-dashed border-border hover:border-primary/50'}`}>
-                {/* Preview area */}
-                <div className="relative w-full h-24">
-                  {isUploading || isRemoving ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      <span className="text-xs text-muted-foreground">{isUploading ? 'Uploading...' : 'Removing...'}</span>
-                    </div>
-                  ) : previewUrl && value !== 'terms_pdf' ? (
-                    <>
-                      <img src={previewUrl} alt={label} className="w-full h-24 object-cover" />
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <label className="cursor-pointer">
-                          <input type="file" className="hidden" accept="image/*"
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleAssetUpload(value, f); }} />
-                          <span className="flex items-center gap-1 px-2 py-1 bg-primary/20 rounded text-xs text-primary border border-primary/30 hover:bg-primary/30 transition-colors">
-                            <RefreshCw className="h-3 w-3" /> Replace
-                          </span>
-                        </label>
-                        <button
-                          onClick={() => handleRemoveAsset(value, uploaded.id, uploaded.file_path)}
-                          className="flex items-center gap-1 px-2 py-1 bg-destructive/20 rounded text-xs text-destructive border border-destructive/30 hover:bg-destructive/30 transition-colors"
-                        >
-                          <X className="h-3 w-3" /> Remove
-                        </button>
-                      </div>
-                    </>
-                  ) : uploaded && value === 'terms_pdf' ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-1 relative">
-                      <Icon className="h-8 w-8 text-success" />
-                      <span className="text-xs text-success font-medium">PDF Uploaded</span>
-                      <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <label className="cursor-pointer">
-                          <input type="file" className="hidden" accept=".pdf"
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleAssetUpload(value, f); }} />
-                          <span className="flex items-center gap-1 px-2 py-1 bg-primary/20 rounded text-xs text-primary border border-primary/30 hover:bg-primary/30 transition-colors">
-                            <RefreshCw className="h-3 w-3" /> Replace
-                          </span>
-                        </label>
-                        <button
-                          onClick={() => handleRemoveAsset(value, uploaded.id, uploaded.file_path)}
-                          className="flex items-center gap-1 px-2 py-1 bg-destructive/20 rounded text-xs text-destructive border border-destructive/30 hover:bg-destructive/30 transition-colors"
-                        >
-                          <X className="h-3 w-3" /> Remove
-                        </button>
-                      </div>
-                    </div>
+              <div key={value} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
+                <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{label}</p>
+                  {existing ? (
+                    <p className="text-xs text-success">Uploaded</p>
                   ) : (
-                    <label className="w-full h-full flex flex-col items-center justify-center gap-1 cursor-pointer">
-                      <input type="file" className="hidden" accept={value === 'terms_pdf' ? '.pdf' : 'image/*'}
-                        onChange={e => { const f = e.target.files?.[0]; if (f) handleAssetUpload(value, f); }} />
-                      <Icon className="h-6 w-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                      <Upload className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </label>
+                    <p className="text-xs text-muted-foreground">Not uploaded</p>
                   )}
                 </div>
-                {/* Label */}
-                <div className="px-2 py-1.5 text-center">
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                  {uploaded && !isRemoving && <div className="text-xs text-success mt-0.5">✓ Uploaded</div>}
+                <div className="flex items-center gap-1 shrink-0">
+                  {existing && (
+                    <>
+                      <a href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/match-assets/${existing.file_path}`} target="_blank" rel="noopener noreferrer">
+                        <GlassButton variant="ghost" size="sm"><ExternalLink className="h-3 w-3" /></GlassButton>
+                      </a>
+                      <GlassButton variant="ghost" size="sm" loading={isRemoving} onClick={() => handleRemoveAsset(value, existing.id, existing.file_path)}>
+                        <X className="h-3 w-3 text-destructive" />
+                      </GlassButton>
+                    </>
+                  )}
+                  <label className="cursor-pointer">
+                    {isUploading ? (
+                      <GlassButton variant="outline" size="sm" loading={true}>
+                        <Upload className="h-3 w-3" />
+                      </GlassButton>
+                    ) : (
+                      <span className="inline-flex items-center justify-center h-8 px-2 rounded-lg border border-border bg-transparent hover:bg-muted/30 transition-colors cursor-pointer">
+                        <Upload className="h-3 w-3 text-foreground" />
+                      </span>
+                    )}
+                    <input type="file" className="hidden" accept="image/*,.pdf" onChange={e => { const f = e.target.files?.[0]; if (f) handleAssetUpload(value, f); e.target.value = ''; }} />
+                  </label>
                 </div>
               </div>
             );
@@ -552,13 +404,44 @@ export default function AdminMatchDetail() {
         </div>
       </GlassCard>
 
-      {/* Active confirm dialog */}
+      {/* Match flags */}
+      <GlassCard className="p-5 space-y-3">
+        <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-widest">Match Flags</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Predictions Enabled</p>
+            <p className="text-xs text-muted-foreground">Allow fans to make predictions</p>
+          </div>
+          <Switch
+            checked={match?.predictions_enabled ?? false}
+            onCheckedChange={async v => {
+              await supabase.from('matches').update({ predictions_enabled: v }).eq('id', id!);
+              setMatch((m: any) => ({ ...m, predictions_enabled: v }));
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Disclaimer Enabled</p>
+            <p className="text-xs text-muted-foreground">Show game disclaimer to fans</p>
+          </div>
+          <Switch
+            checked={match?.disclaimer_enabled ?? true}
+            onCheckedChange={async v => {
+              await supabase.from('matches').update({ disclaimer_enabled: v }).eq('id', id!);
+              setMatch((m: any) => ({ ...m, disclaimer_enabled: v }));
+            }}
+          />
+        </div>
+      </GlassCard>
+
+      {/* Activate confirmation */}
       <AlertDialog open={showActiveConfirm} onOpenChange={setShowActiveConfirm}>
-        <AlertDialogContent className="glass-card border-border">
+        <AlertDialogContent className="glass-card-elevated border-border">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display text-foreground">Activate Registration?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will deactivate any currently active match and open registration for <strong className="text-foreground">{match?.name}</strong>. 
+              This will deactivate any currently active match and open registration for <strong className="text-foreground">{match?.name}</strong>.
               Fans will see this match on the registration page immediately.
             </AlertDialogDescription>
           </AlertDialogHeader>
