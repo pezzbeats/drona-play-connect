@@ -1,66 +1,29 @@
 
-## What's Already Working
+## Plan: Add Hotel Logo Across Key Pages
 
-After a thorough review, the Razorpay integration is largely in place:
-- Order creation, checkout popup, backend signature verification, and automatic ticket generation all exist in the current code
-- Gateway secrets management, admin reconciliation page, and CSV export are all built
+### What's needed
+Copy the uploaded logo (`WhatsApp_Image_2026-02-14_at_5.23.37_PM.jpeg`) into `src/assets/hotel-logo.png` and place it in 4 locations:
 
-## What's Actually Missing
+1. **Landing page (Index.tsx)** — prominently in the hero section above the title, alongside the cricket emoji, as a circular/rounded logo badge
+2. **Admin login page (AdminLogin.tsx)** — replace the generic Shield icon in the blue circle with the actual hotel logo image above it, keeping the Shield as a secondary element or swapping it out cleanly
+3. **Register page (Register.tsx)** — small logo at the top of the form header so customers see the hotel branding when booking
+4. **Ticket page (Ticket.tsx)** — on each printed/digital ticket pass, in the bottom strip or header of the seat pass card, so it appears on downloadable/printable tickets
 
-The prompt highlights 3 genuine gaps that need to be built:
+### Placement Details
 
----
+**Landing (Index.tsx)** — In the hero section (line ~157), add the logo above or alongside the cricket emoji row. Show it as a ~80px rounded image with a gold/amber glow ring matching the logo's color palette, centered between the decorative lines.
 
-### 1. Razorpay Webhook Handler (Critical for reliability)
-A new edge function `razorpay-webhook` that handles the case where a user closes the browser after Razorpay processes payment but before the frontend receives the callback.
+**Admin Login (AdminLogin.tsx)** — Replace the `<Shield>` icon's parent div (the gradient circle) with the hotel logo image. Keep "Admin Portal" heading. Logo ~64px circular with a subtle glow.
 
-- Receives Razorpay webhook POST to `/functions/v1/razorpay-webhook`
-- Verifies `X-Razorpay-Signature` header (HMAC-SHA256 of raw body using webhook secret)
-- Handles `payment.captured` event only
-- Looks up the order by `razorpay_order_id` from the payment notes
-- **Idempotent**: checks if tickets already exist before generating — skips if already done
-- Updates order to `paid_verified` if not already
-- Returns 200 immediately (Razorpay requires a fast response)
+**Register (Register.tsx)** — Add a small ~40px logo in the page header area (near the top, before StepBar), centered with "T20 Fan Night" branding.
 
-The webhook secret will be stored in the existing `gateway_secrets` table under key `razorpay_webhook_secret`. The admin can enter it in the Gateway Settings tab on `/admin/payments`.
+**Ticket (Ticket.tsx)** — Inside each `seat-pass` card's bottom strip (the `border-t` section at the bottom), add the logo image (~28px) alongside "T20 Fan Night · Hotel Drona Palace" text. This ensures it appears when printing.
 
----
-
-### 2. Fix Duplicate Ticket Risk in `razorpay-verify-payment`
-Currently the edge function blindly inserts tickets every time it's called. If the frontend calls it twice (e.g. on retry), duplicate tickets are created.
-
-- Add a check: query `tickets` where `order_id = order.id` — if tickets already exist, skip generation and return existing tickets instead
-- Also guard against re-verifying an already `paid_verified` order
-
----
-
-### 3. Payment Retry Flow in Register.tsx
-When the Razorpay modal is dismissed (`ondismiss`), the internal order is already created but the user sees a dead end. They need to retry.
-
-- Add `razorpayOrderId` state to track the Razorpay order ID once created
-- On `ondismiss`: set `razorpayLoading = false` but keep `orderId` and `razorpayOrderId` in state
-- Show a "Retry Payment" button in the payment step if `orderId` is set and `paymentMethod === 'razorpay'`
-- The retry skips order creation and goes directly to opening the Razorpay checkout with the existing Razorpay order ID
-
----
-
-### Files to Create/Edit
-
+### Files to change
 | File | Change |
 |---|---|
-| `supabase/functions/razorpay-webhook/index.ts` | **New** — webhook handler with idempotent ticket generation |
-| `supabase/functions/razorpay-verify-payment/index.ts` | **Fix** — idempotency check before ticket generation |
-| `src/pages/Register.tsx` | **Fix** — retry payment flow after modal dismiss |
-| `src/pages/admin/AdminPayments.tsx` | **Add** — `razorpay_webhook_secret` field in Gateway Settings tab |
-| `supabase/config.toml` | **Add** — `[functions.razorpay-webhook]` entry |
-
----
-
-### Webhook Registration Note
-The webhook URL to register in the Razorpay dashboard will be:
-```
-https://fkblggtrpyubuglndotz.supabase.co/functions/v1/razorpay-webhook
-```
-Events to subscribe: `payment.captured`
-
-The Gateway Settings tab in `/admin/payments` will include a third field for the webhook secret alongside Key ID and Key Secret.
+| `src/assets/hotel-logo.png` | Copy from user-uploads |
+| `src/pages/Index.tsx` | Add logo to hero section |
+| `src/pages/admin/AdminLogin.tsx` | Replace shield icon with logo |
+| `src/pages/Register.tsx` | Add small logo to page header |
+| `src/pages/Ticket.tsx` | Add logo to ticket card bottom strip |
