@@ -1,92 +1,49 @@
 
-## Plan: ₹999 Pricing + Semifinal Eligibility Upload & Check
+## Super Over System — Final Plan (Approved for Implementation)
 
-### What we're building
-1. **Set pricing** for the active match: ₹999 per seat (new), ₹949 per seat (semifinal attendees)
-2. **New DB table** `semifinal_eligibility` — stores pre-approved mobile numbers uploaded by super admin
-3. **Admin CSV Upload section** — super_admin-only page (new route `/admin/eligibility`) where they can download a blank template CSV and upload a filled one
-4. **Eligibility check in `pricing-quote`** — reads `semifinal_eligibility` to grant the ₹949 rate instead of order history
-5. **Live eligibility badge on Register page** — after a valid 10-digit mobile is entered, instantly queries and shows "✅ Semifinal attendee — ₹949/seat" or "Regular price — ₹999/seat"
+### Database Migration
+- Extend `match_phase_enum` to add `'super_over'`
+- Create `public.super_over_rounds` table with columns: `id, match_id, round_number, innings_a_no, innings_b_no, team_a_id, team_b_id, team_a_score, team_a_wickets, team_b_score, team_b_wickets, status (pending|innings_a|innings_b|complete), winner_team_id, is_tied, activated_by_admin_id, created_at, completed_at`
+- RLS: readable by all, writable by authenticated
+- Extend `match_live_state` with: `super_over_active, super_over_round, super_over_innings, super_over_score, super_over_wickets, super_over_overs`
 
----
+### New edge function: `super-over-control`
+Actions: `activate | start_innings | complete_innings | add_round | finalize`
+- `activate`: validate tie, create round 1, set `super_over_active=true`, `phase=super_over`
+- `start_innings`: set batting/bowling teams, update round status, clear live players
+- `complete_innings`: re-sum deliveries server-side, save to `super_over_rounds`, if both done → compare scores and set winner or `is_tied=true`, set round `status=complete`
+- `add_round`: guard `is_tied=true`, create next round, reset live super over score to 0
+- `finalize`: guard no active innings, set `phase=ended`, log result
 
-### Database changes
+### `record-delivery` update
+Route `innings_no >= 3` to `super_over_score / super_over_wickets / super_over_overs` instead of `innings2_*`. Also update `super_over_rounds` team score in real-time during delivery recording.
 
-**New table: `semifinal_eligibility`**
-```text
-id          uuid PK
-mobile      text UNIQUE NOT NULL
-uploaded_by uuid (admin user id)
-uploaded_at timestamptz DEFAULT now()
-match_label text (e.g. "India vs NZ Semi Final")
-```
-RLS: readable by all (for eligibility checks), writable only by authenticated (admins).
+### `match-control` update
+Allow `'super_over'` in `set_phase` — apply same side-effects as `innings2` (clear players, lock prediction windows).
 
-**Update pricing**: Run SQL to upsert `match_pricing_rules` for the active match:
-- `base_price_new = 999`
-- `base_price_returning = 949`
-- `rule_type = 'standard'` (no loyalty_from_match_id — use the new eligibility table instead)
+### `supabase/config.toml`
+Add `[functions.super-over-control]` with `verify_jwt = false`.
 
----
+### `AdminControl.tsx`
+- Add `super_over` tab (Swords icon) — visible only when: phase is `super_over`, OR scores tied after innings2, OR match ended with tied scores
+- Update `PhaseBadge` for `super_over` (amber style)
+- Add `super_over` to phaseButtons
+- Add `super_over_rounds` to realtime subscriptions
+- New `SuperOverTab` component inside the file:
+  - **Tie detection card**: shows when not yet active, with "Activate Super Over" + confirmation dialog
+  - **Active round panel**: round badge, score comparison, Start/Complete buttons for innings A and B, auto-alert when round ties
+  - **Round history**: collapsible list of all completed rounds with winner/tied status
 
-### `pricing-quote` edge function update
+### `Scoreboard.tsx`
+- Add `super_over` to `phaseLabel` map
+- Fetch `super_over_rounds` on initial data load
+- Subscribe `super_over_rounds` in realtime channel
+- When `phase === 'super_over'`: render amber-bordered score card, `super_over_score/wickets`, round badge, collapsible "Regular Match Summary" (both innings), target line for innings B
+- When `phase === 'ended'` with super over rounds: add "Decided via Super Over Round N" to the ended card
 
-Change the returning-customer logic to **also check `semifinal_eligibility`** table:
-
-```text
-IF mobile is in semifinal_eligibility → loyaltySeatCap = seats_count (all seats at ₹949)
-ELSE → standard new customer at ₹999
-(keep old order-history logic as fallback for future matches)
-```
-
-The `reason` label for eligible seats becomes `"semifinal_attendee"`.
-
----
-
-### New Admin page: `AdminEligibility.tsx`
-
-Route: `/admin/eligibility` — **super_admin only**
-
-UI sections:
-1. **Stats strip** — total uploaded numbers, last upload time
-2. **Download Template** button — generates a CSV file in-browser: `mobile` column header + 2 example rows
-3. **Upload CSV** — file input that parses the CSV client-side, validates each row is a 10-digit number, shows a preview table (first 10 rows + count), then bulk-upserts into `semifinal_eligibility`
-4. **Current list** — paginated table of uploaded numbers with delete capability
-
----
-
-### Register page update
-
-In **Step 0** (personal details), after the mobile field shows valid (10 digits), trigger a lightweight check against `semifinal_eligibility`:
-
-```text
-useEffect: debounced 400ms after mobileValid changes to true
-→ SELECT count from semifinal_eligibility WHERE mobile = ?
-→ Show inline badge:
-   ✅ Semifinal attendee — you qualify for ₹949/seat
-   or
-   Standard pricing — ₹999/seat
-```
-
-This is shown **below the mobile field** as a soft info banner (green vs neutral), before they reach the pricing step.
-
----
-
-### Admin sidebar
-
-Add "Eligibility" link to the admin sidebar under super_admin section.
-
----
-
-### Files to create/modify
-
-| File | Change |
-|---|---|
-| `supabase/migrations/...sql` | Create `semifinal_eligibility` table + RLS |
-| `supabase/functions/pricing-quote/index.ts` | Check `semifinal_eligibility` for discount |
-| `src/pages/admin/AdminEligibility.tsx` | New page — template download + CSV upload + list |
-| `src/App.tsx` | Add route `/admin/eligibility` (super_admin protected) |
-| `src/components/admin/AdminSidebar.tsx` | Add Eligibility nav link |
-| `src/components/admin/AdminBottomNav.tsx` | Add Eligibility nav item |
-| `src/pages/Register.tsx` | Add eligibility badge below mobile field |
-| DB data update | Set pricing rule: ₹999 new / ₹949 returning for active match |
+### Key integrity guarantees
+- `innings_no >= 3` never touches `innings1_score` / `innings2_score`
+- `complete_innings` recomputes score from deliveries server-side (not trusting any client value)
+- `activate` blocked if `super_over_active` already true
+- `finalize` blocked if any round status is `innings_a` or `innings_b`
+- All actions write audit rows to `admin_activity`
