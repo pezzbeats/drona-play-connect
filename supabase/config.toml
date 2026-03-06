@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.assign-admin-role]
 verify_jwt = false
+
+[functions.razorpay-webhook]
+verify_jwt = false
