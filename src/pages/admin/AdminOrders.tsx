@@ -200,6 +200,14 @@ export default function AdminOrders() {
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="font-display font-bold text-primary text-base">₹{order.total_amount}</span>
                     <span className="text-xs text-muted-foreground">{order.seats_count} seat{order.seats_count > 1 ? 's' : ''}</span>
+                    {(() => {
+                      const snapshot = order.pricing_model_snapshot;
+                      const seats: any[] = Array.isArray(snapshot?.seats) ? snapshot.seats : [];
+                      const hasSpecial = seats.some((s: any) => s.reason === 'semifinal_attendee' || s.reason === 'loyal_base');
+                      return hasSpecial
+                        ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">⭐ Special ₹949</span>
+                        : <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted/40 text-muted-foreground border border-border/30">Standard ₹999</span>;
+                    })()}
                     {expandedId === order.id
                       ? <ChevronUp className="h-4 w-4 text-muted-foreground mt-1" />
                       : <ChevronDown className="h-4 w-4 text-muted-foreground mt-1" />}

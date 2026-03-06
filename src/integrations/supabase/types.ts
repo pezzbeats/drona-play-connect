@@ -1190,23 +1190,29 @@ export type Database = {
       }
       semifinal_eligibility: {
         Row: {
+          full_name: string | null
           id: string
           match_label: string | null
           mobile: string
+          notes: string | null
           uploaded_at: string
           uploaded_by: string | null
         }
         Insert: {
+          full_name?: string | null
           id?: string
           match_label?: string | null
           mobile: string
+          notes?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }
         Update: {
+          full_name?: string | null
           id?: string
           match_label?: string | null
           mobile?: string
+          notes?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }
