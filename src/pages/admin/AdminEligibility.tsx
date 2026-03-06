@@ -6,7 +6,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import {
   Download, Upload, Trash2, Loader2, CheckCircle2, AlertCircle,
   Users, Clock, FileText, RefreshCw, ToggleLeft, ToggleRight,
-  AlertTriangle, XCircle
+  AlertTriangle, XCircle, Search
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,10 @@ export default function AdminEligibility() {
   const [search, setSearch] = useState('');
   const [uploadMode, setUploadMode] = useState<'append' | 'replace'>('append');
 
+  // Quick-check state
+  const [checkInput, setCheckInput] = useState('');
+  const [checkResult, setCheckResult] = useState<EligibilityRow | null | 'not_found' | 'idle'>('idle');
+
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [matchLabel, setMatchLabel] = useState('Semi Final - Mar 2026');
@@ -60,6 +64,14 @@ export default function AdminEligibility() {
   };
 
   useEffect(() => { fetchRows(); }, []);
+
+  // ── Quick mobile check ─────────────────────────────────────────────────────
+  const handleQuickCheck = () => {
+    const normalized = checkInput.replace(/\D/g, '').slice(0, 10);
+    if (!/^\d{10}$/.test(normalized)) return;
+    const found = rows.find(r => r.mobile === normalized);
+    setCheckResult(found ?? 'not_found');
+  };
 
   // ── Download template ──────────────────────────────────────────────────────
   const handleDownloadTemplate = () => {
@@ -238,6 +250,69 @@ export default function AdminEligibility() {
           </div>
         </GlassCard>
       </div>
+
+      {/* Quick Check */}
+      <GlassCard className="p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <Search className="h-5 w-5 text-primary" />
+          <h2 className="font-display font-semibold text-foreground">Quick Eligibility Check</h2>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            className="glass-input text-sm flex-1"
+            placeholder="Enter 10-digit mobile number…"
+            value={checkInput}
+            onChange={e => {
+              setCheckInput(e.target.value);
+              setCheckResult('idle');
+            }}
+            onKeyDown={e => e.key === 'Enter' && handleQuickCheck()}
+            maxLength={15}
+          />
+          <button
+            onClick={handleQuickCheck}
+            disabled={checkInput.replace(/\D/g, '').length !== 10}
+            className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/20 transition-colors disabled:opacity-40"
+          >
+            Check
+          </button>
+        </div>
+
+        {checkResult !== 'idle' && (
+          <div className={`mt-3 flex items-start gap-3 px-4 py-3 rounded-xl border text-sm ${
+            checkResult === 'not_found'
+              ? 'bg-muted/20 border-border/40'
+              : 'bg-success/10 border-success/30'
+          }`}>
+            {checkResult === 'not_found' ? (
+              <>
+                <XCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-foreground">Not eligible</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">This number is not on the semifinal eligibility list — standard ₹999 pricing applies.</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-success">⭐ Eligible — Special ₹949</p>
+                  {(checkResult as EligibilityRow).full_name && (
+                    <p className="text-xs text-foreground mt-0.5">{(checkResult as EligibilityRow).full_name}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Label: {(checkResult as EligibilityRow).match_label || '—'} · 
+                    Uploaded {new Date((checkResult as EligibilityRow).uploaded_at).toLocaleDateString('en-IN')}
+                  </p>
+                  {(checkResult as EligibilityRow).notes && (
+                    <p className="text-xs text-muted-foreground mt-0.5">Notes: {(checkResult as EligibilityRow).notes}</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </GlassCard>
 
       {/* Download template */}
       <GlassCard className="p-5">
