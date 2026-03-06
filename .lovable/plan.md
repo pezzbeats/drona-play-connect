@@ -1,38 +1,44 @@
 
-The user wants a fully detailed ElevenLabs system prompt — not code changes, just a copy-pasteable system prompt document. This is a content generation task, not an implementation task. No plan needed — I should just write and present the system prompt directly.
+## Root Cause — Confirmed
 
-Let me now construct the full system prompt with all the required sections:
+ElevenLabs sends tool parameters **flat at the root** of the request body, NOT nested under a `parameters` key:
 
-1. Agent identity & personality — "Drona", warm Hinglish persona
-2. Knowledge base references — reference the two KB files (voice-agent-knowledge-base.txt and any second file)
-3. #TOOLS section — all 4 tools with when to call them, what mobile to extract, etc.
-4. Guardrails — no gambling talk, no off-topic, no hallucination, stay in scope
-5. Conversation flow — greeting, how to handle queries, escalation
-6. Error handling
+```text
+// What ElevenLabs actually sends:
+{"tool_name": "check_registration", "mobile": "8449710150"}
 
-Wait — the user mentioned "two files in knowledge base". I only see one file referenced: voice-agent-knowledge-base.txt. The second one may be the FAQ or a separate file they've uploaded to ElevenLabs directly. I'll write the system prompt referencing "knowledge base documents" generally since ElevenLabs presents them to the agent as context.
+// What the code looks for:
+body.parameters.mobile  → undefined (body.parameters is undefined → falls back to {})
+```
 
-The four tools are:
-- lookup_ticket: requires mobile number
-- get_match_info: no params needed
-- get_pricing: optional mobile
-- check_registration: requires mobile
+The logs prove this:
+- My test curl: `{"tool_name":"check_registration","parameters":{"mobile":"8449710150"}}` → works ✅
+- Real ElevenLabs call: `{"tool_name":"check_registration","mobile":"8449710150"}` → mobile is `undefined` → returns "no registration found" ❌
 
-Key details to include:
-- Agent name: Drona
-- Language: Hinglish (Hindi + English mix)
-- Venue: Hotel Drona Palace, Kashipur
-- Contact: +91 72170 16170, dronapalace@gmail.com
-- Mobile normalization: ask user to say "digits only" or clarify if garbled
-- Pricing: ₹999 new, ₹949 returning
-- Payment methods: Razorpay, UPI QR, Pay at Hotel
-- Always call tools for live data (bookings, match info) — never guess
-- Knowledge base for static FAQ (event info, game rules, policies, food, etc.)
+## Fix
 
-This is NOT a code change, it's a content response. I should present the full system prompt in clean markdown code blocks directly in chat — no presentation-plan needed since this is not an implementation task.
+Update parameter extraction in `elevenlabs-tools/index.ts` to check **all three locations** for each parameter:
 
-Actually wait — the instructions say "Present plans for implementation tasks (add feature, refactor). Skip for research ('how does X work?')." This is a content generation task (write a system prompt), not a codebase implementation task. So I should respond directly without a plan.
+1. `body.parameters.mobile` (nested under `parameters`)
+2. `body.params.mobile` (nested under `params`)
+3. `body.mobile` (flat at root — what ElevenLabs actually sends)
 
-But I'm in Plan mode (READ-ONLY). I can still provide text responses — I just can't make code changes. So I'll write the full system prompt as a response.
+Change this single line:
+```ts
+// Before:
+const parameters = body.parameters || body.params || {};
+const params = parameters;
 
-Let me write the system prompt now:
+// After:
+const params = body.parameters || body.params || body || {};
+```
+
+By falling back to `body` itself, every field in the root payload becomes accessible — so `params.mobile` will correctly find `body.mobile` when ElevenLabs sends it flat.
+
+Also add `tool_name` to the exclusion-safe extraction by ensuring the `toolName` extraction stays as-is (it reads from `body.tool_name` directly, which is correct).
+
+## File to Change
+
+- `supabase/functions/elevenlabs-tools/index.ts` — lines 22–26: fix params extraction, then redeploy.
+
+This single one-line fix resolves all four tools simultaneously since they all use `params.mobile` or `params.*` for their parameter access.
