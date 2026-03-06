@@ -23,6 +23,7 @@ import AdminManualBooking from "./pages/admin/AdminManualBooking";
 import AdminControl from "./pages/admin/AdminControl";
 import AdminTeams from "./pages/admin/AdminTeams";
 import AdminLeaderboard from "./pages/admin/AdminLeaderboard";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="control" element={<AdminControl />} />
               <Route path="teams" element={<AdminTeams />} />
               <Route path="leaderboard" element={<AdminLeaderboard />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
