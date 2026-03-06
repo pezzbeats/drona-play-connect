@@ -35,6 +35,12 @@ export function VoiceAgent() {
 
   return (
     <div className="fixed bottom-5 right-5 z-[99999] flex flex-col items-end gap-2">
+      {/* Idle nudge label */}
+      {!isConnected && !isConnecting && (
+        <p className="text-xs font-body text-muted-foreground/70 italic pr-1 animate-fade-in">
+          Confused? Talk to us live
+        </p>
+      )}
       {/* Status label */}
       {isConnected && (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/80 border border-border backdrop-blur-md text-xs font-body text-foreground/80 shadow-glass animate-fade-in">
