@@ -30,7 +30,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mobile, pin } = await req.json();
+    const params = await req.json();
+    const mobile = params.mobile?.toString().replace(/\D/g, "").slice(-10);
+    const { pin } = params;
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // ── Rate limiting: max 10 attempts per mobile per minute ──
