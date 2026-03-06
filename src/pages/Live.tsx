@@ -26,23 +26,14 @@ export default function LivePage() {
   const [activeTab, setActiveTab] = useState<Tab>('score');
   const [predictionsEnabled, setPredictionsEnabled] = useState(false);
 
-  useEffect(() => {
-    initSession();
-  }, []);
+  useEffect(() => { initSession(); }, []);
 
   const initSession = async () => {
     const raw = localStorage.getItem('game_session');
-    if (!raw) {
-      navigate('/play');
-      return;
-    }
-
+    if (!raw) { navigate('/play'); return; }
     try {
       const sess: GameSession = JSON.parse(raw);
-      if (!sess.mobile || !sess.pin) {
-        navigate('/play');
-        return;
-      }
+      if (!sess.mobile || !sess.pin) { navigate('/play'); return; }
       setSession(sess);
 
       const { data: match } = await supabase
@@ -54,10 +45,8 @@ export default function LivePage() {
       if (!match) {
         if (sess.match_id) {
           const { data: sessionMatch } = await supabase
-            .from('matches')
-            .select('id, name, predictions_enabled')
-            .eq('id', sess.match_id)
-            .single();
+            .from('matches').select('id, name, predictions_enabled')
+            .eq('id', sess.match_id).single();
           if (sessionMatch) {
             setMatchId(sessionMatch.id);
             setMatchName(sessionMatch.name);
@@ -72,10 +61,7 @@ export default function LivePage() {
         localStorage.setItem('game_session', JSON.stringify(updatedSession));
         setSession(updatedSession);
       }
-    } catch {
-      navigate('/play');
-      return;
-    }
+    } catch { navigate('/play'); return; }
     setLoading(false);
   };
 
@@ -84,91 +70,96 @@ export default function LivePage() {
     navigate('/play');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <BackgroundOrbs />
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <BackgroundOrbs />
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
 
-  if (!matchId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 relative">
-        <BackgroundOrbs />
-        <GlassCard className="p-8 text-center max-w-sm relative z-10">
-          <div className="text-4xl mb-4">🏏</div>
-          <h2 className="font-display text-xl font-bold text-foreground mb-2">No Active Match</h2>
-          <p className="text-muted-foreground text-sm mb-4">No match is currently live.</p>
-          <GlassButton variant="primary" size="md" onClick={() => navigate('/play')}>Back to Login</GlassButton>
-        </GlassCard>
-      </div>
-    );
-  }
+  if (!matchId) return (
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      <BackgroundOrbs />
+      <GlassCard className="p-8 text-center max-w-sm relative z-10">
+        <div className="text-4xl mb-4">🏏</div>
+        <h2 className="font-display text-xl font-bold text-foreground mb-2">No Active Match</h2>
+        <p className="text-muted-foreground text-sm mb-4">No match is currently live.</p>
+        <GlassButton variant="primary" size="md" onClick={() => navigate('/play')}>Back to Login</GlassButton>
+      </GlassCard>
+    </div>
+  );
 
-  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'score', label: 'Live Score', icon: <BarChart3 className="h-4 w-4" /> },
-    ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: '🎯 Guess', icon: <Gamepad2 className="h-4 w-4" /> }] : []),
-    { key: 'leaderboard', label: 'Leaderboard', icon: <Trophy className="h-4 w-4" /> },
+  const tabs: { key: Tab; label: string; icon: React.ReactNode; emoji: string }[] = [
+    { key: 'score',       label: 'Live Score',  icon: <BarChart3 className="h-5 w-5" />,  emoji: '📊' },
+    ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: 'Guess', icon: <Gamepad2 className="h-5 w-5" />, emoji: '🎯' }] : []),
+    { key: 'leaderboard', label: 'Leaderboard', icon: <Trophy className="h-5 w-5" />, emoji: '🏆' },
   ];
 
   return (
-    <div className="min-h-screen relative">
+    <div
+      className="min-h-screen relative flex flex-col"
+      style={{ paddingBottom: 'calc(68px + env(safe-area-inset-bottom))' }}
+    >
       <BackgroundOrbs />
 
       {/* Disclaimer bar */}
-      <div className="disclaimer-bar text-center text-xs py-2 px-4 relative z-10">
-        🎯 <strong>Fun Guess Game only.</strong> No betting, no wagering, no gambling. Entertainment purposes only.
+      <div className="disclaimer-bar text-center text-xs py-1.5 px-4 relative z-10 shrink-0">
+        🎯 <strong>Fun Game only.</strong> No betting, no wagering. Entertainment only.
       </div>
 
-      {/* Header */}
-      <div className="relative z-10 max-w-lg mx-auto px-4 pt-3 pb-2">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h1 className="font-display text-xl font-bold gradient-text">{matchName}</h1>
+      {/* Compact sticky header */}
+      <div className="sticky top-0 z-20 bg-[hsl(var(--background)/0.85)] backdrop-blur-md border-b border-border/40 px-4 py-3 shrink-0">
+        <div className="flex items-center justify-between max-w-lg mx-auto">
+          <div className="min-w-0">
+            <h1 className="font-display text-base font-bold gradient-text leading-tight truncate">{matchName}</h1>
             <p className="text-xs text-muted-foreground">{session?.mobile}</p>
           </div>
-          <GlassButton variant="ghost" size="sm" onClick={handleLogout}>
+          <GlassButton variant="ghost" size="sm" onClick={handleLogout} className="shrink-0 ml-2">
             Exit
           </GlassButton>
         </div>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-card/50 rounded-lg p-1 mb-4">
+      {/* Scrollable content */}
+      <div className="flex-1 relative z-10 overflow-y-auto">
+        <div className="max-w-lg mx-auto px-4 py-4">
+          {activeTab === 'score' && <Scoreboard matchId={matchId} />}
+          {activeTab === 'predict' && session && (
+            <PredictionPanel matchId={matchId} mobile={session.mobile} pin={session.pin} />
+          )}
+          {activeTab === 'leaderboard' && (
+            <Leaderboard matchId={matchId} mobile={session?.mobile} />
+          )}
+
+          {/* Bottom disclaimer */}
+          <div className="mt-6 disclaimer-bar rounded-lg p-3 text-xs">
+            🎯 <strong>Disclaimer:</strong> Fun entertainment game only. No real money, no gambling. All guesses are for fun.
+          </div>
+        </div>
+      </div>
+
+      {/* Fixed bottom tab bar */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/50 bg-[hsl(var(--background)/0.92)] backdrop-blur-xl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex max-w-lg mx-auto">
           {tabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs font-medium transition-all ${
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-semibold transition-all ${
                 activeTab === tab.key
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
               }`}
             >
-              {tab.icon}
-              <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">{tab.key === 'predict' ? '🎯' : tab.key === 'leaderboard' ? '🏆' : '📊'}</span>
+              <div className={`p-1.5 rounded-lg transition-all ${activeTab === tab.key ? 'bg-primary/15' : ''}`}>
+                {tab.icon}
+              </div>
+              <span>{tab.label}</span>
             </button>
           ))}
-        </div>
-
-        {/* Tab Content */}
-        {activeTab === 'score' && (
-          <Scoreboard matchId={matchId} />
-        )}
-
-        {activeTab === 'predict' && session && (
-          <PredictionPanel matchId={matchId} mobile={session.mobile} pin={session.pin} />
-        )}
-
-        {activeTab === 'leaderboard' && (
-          <Leaderboard matchId={matchId} mobile={session?.mobile} />
-        )}
-
-        {/* Bottom disclaimer — always visible */}
-        <div className="mt-6 disclaimer-bar rounded-lg p-3 text-xs">
-          🎯 <strong>Disclaimer:</strong> This is a fun entertainment game only. No real money, no gambling, no wagering. All guesses are purely for fun and participation.
         </div>
       </div>
     </div>

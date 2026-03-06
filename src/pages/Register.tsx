@@ -256,7 +256,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <BackgroundOrbs />
 
       {/* Preview mode banner */}
@@ -268,10 +268,10 @@ export default function RegisterPage() {
 
       {/* Disclaimer bar */}
       <div className="disclaimer-bar text-center text-xs py-2 px-4 relative z-10">
-        🎯 Fun Guess Game only — for entertainment. No betting, no wagering. All event fees are for hospitality only.
+        🎯 Fun Guess Game only — entertainment. No betting. Event fees are for hospitality only.
       </div>
 
-      <div className="relative z-10 max-w-lg mx-auto px-4 py-6">
+      <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
         {/* Header */}
         <div className="text-center mb-5">
           <div className="flex items-center justify-center gap-2 mb-1">

@@ -83,6 +83,8 @@
 @layer base {
   * {
     @apply border-border;
+    /* Prevent iOS tap highlight */
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -90,6 +92,8 @@
     font-family: 'Inter', sans-serif;
     background: var(--gradient-hero);
     min-height: 100vh;
+    /* Prevent overflow on mobile */
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4 {
@@ -97,7 +101,17 @@
     font-weight: 700;
     letter-spacing: 0.02em;
   }
+
+  /* Prevent iOS zoom on inputs — must be >= 16px */
+  input, textarea, select {
+    font-size: 16px;
+  }
 }
+
+/* Safe area utilities */
+.safe-top    { padding-top:    env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.pb-safe     { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
 
 @layer components {
   /* Glassmorphism card */
@@ -195,6 +209,7 @@
     border: 1px solid hsl(140 30% 22%);
     color: hsl(60 20% 96%);
     backdrop-filter: blur(8px);
+    font-size: 16px; /* prevent iOS zoom */
     transition: border-color 0.2s, box-shadow 0.2s;
   }
 

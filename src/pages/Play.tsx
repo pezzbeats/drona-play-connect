@@ -31,7 +31,6 @@ export default function PlayPage() {
       if (error || !data?.valid) {
         toast({ variant: 'destructive', title: 'Invalid credentials', description: 'Check your mobile and PIN' });
       } else {
-        // Store session in localStorage for /live page
         localStorage.setItem('game_session', JSON.stringify({ mobile, pin, match_id: data.match_id || null }));
         toast({ title: '🎮 Welcome to the game!' });
         navigate('/live');
@@ -43,16 +42,18 @@ export default function PlayPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative"
+      style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+    >
       <BackgroundOrbs />
 
-      <div className="disclaimer-bar fixed top-0 left-0 right-0 text-center text-xs py-2 px-4 z-10">
-        🎯 This is a fun guess game for entertainment only. No betting, no wagering, no gambling.
+      <div className="disclaimer-bar w-full text-center text-xs py-2 px-4 z-10 rounded-lg mb-6">
+        🎯 Fun guess game for entertainment only. No betting, no wagering.
       </div>
 
-      <div className="relative z-10 w-full max-w-sm mt-8">
+      <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-4 shadow-glow-primary">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center mx-auto mb-4 shadow-glow-primary">
             <Gamepad2 className="h-8 w-8 text-primary-foreground" />
           </div>
           <h1 className="font-display text-3xl font-bold gradient-text">Fan Game Login</h1>
@@ -60,38 +61,45 @@ export default function PlayPage() {
           <p className="text-xs text-muted-foreground mt-1">PIN is given at the gate after check-in</p>
         </div>
 
-        <GlassCard className="p-6" glow>
-          <div className="space-y-4">
+        <GlassCard className="p-5" glow>
+          <div className="space-y-5">
             <div>
-              <Label className="text-foreground mb-1.5 block">Mobile Number</Label>
+              <Label className="text-foreground mb-2 block text-sm font-medium">Mobile Number</Label>
               <Input
-                className="glass-input"
+                className="glass-input h-14 text-lg"
                 placeholder="10-digit mobile"
                 type="tel"
+                inputMode="numeric"
                 value={mobile}
                 onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
               />
             </div>
             <div>
-              <Label className="text-foreground mb-1.5 block flex items-center gap-1.5">
+              <Label className="text-foreground mb-2 block text-sm font-medium flex items-center gap-1.5">
                 <Lock className="h-3.5 w-3.5" /> 4-Digit PIN
               </Label>
               <Input
-                className="glass-input tracking-[0.5em] text-center text-xl"
+                className="glass-input h-14 tracking-[0.8em] text-center text-2xl"
                 placeholder="●●●●"
                 type="password"
+                inputMode="numeric"
                 maxLength={4}
                 value={pin}
                 onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
               />
             </div>
-            <GlassButton variant="primary" size="lg" className="w-full mt-2" loading={loading} onClick={handleLogin}>
+            <GlassButton
+              variant="primary" size="lg"
+              className="w-full h-14 text-base font-semibold mt-1"
+              loading={loading}
+              onClick={handleLogin}
+            >
               Enter the Game
             </GlassButton>
           </div>
         </GlassCard>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
+        <p className="text-center text-xs text-muted-foreground mt-6 px-4">
           Don't have a PIN? Check in at the gate with your QR ticket.
         </p>
       </div>

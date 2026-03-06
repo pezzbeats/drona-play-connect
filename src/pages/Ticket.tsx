@@ -122,14 +122,14 @@ export default function TicketPage() {
   const currentTicket = tickets[activeIdx];
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <BackgroundOrbs />
 
       <div className="disclaimer-bar text-center text-xs py-2 px-4 relative z-10 no-print">
-        🎯 Fun Guess Game only — entertainment purposes. No betting, no wagering.
+        🎯 Fun Guess Game only — entertainment. No betting, no wagering.
       </div>
 
-      <div className="relative z-10 max-w-lg mx-auto px-4 py-6">
+      <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
         {/* Header */}
         <div className="text-center mb-6 no-print">
           <h1 className="font-display text-3xl font-bold gradient-text">Your Tickets</h1>

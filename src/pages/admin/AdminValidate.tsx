@@ -378,7 +378,7 @@ export default function AdminValidate() {
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-4 space-y-4 max-w-xl">
+    <div className="px-4 py-4 space-y-4 w-full max-w-xl mx-auto md:mx-0">
 
       {/* Reissue QR Confirmation Dialog */}
       <AlertDialog open={showReissueDialog} onOpenChange={setShowReissueDialog}>
@@ -451,7 +451,8 @@ export default function AdminValidate() {
         <div className="flex gap-2">
           <input
             ref={inputRef}
-            className="flex-1 h-14 px-4 rounded-lg font-mono text-base bg-muted/40 border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
+            className="flex-1 h-14 px-4 rounded-lg font-mono bg-muted/40 border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
+            style={{ fontSize: '16px' }}
             placeholder="Paste / scan QR code here…"
             value={qrInput}
             onChange={e => setQrInput(e.target.value)}

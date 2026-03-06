@@ -19,9 +19,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeMatch, setActiveMatch] = useState<any>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -35,7 +33,6 @@ export default function AdminDashboard() {
     const orders = ordersRes.data || [];
     const today = new Date().toISOString().split('T')[0];
 
-    // Get check-ins today
     const { count: checkinCount } = await supabase
       .from('tickets')
       .select('*', { count: 'exact', head: true })
@@ -54,46 +51,44 @@ export default function AdminDashboard() {
   };
 
   const statCards = stats ? [
-    { icon: Users, label: 'Total Registrations', value: stats.totalOrders, color: 'text-primary', bg: 'bg-primary/10' },
-    { icon: CheckCircle2, label: 'Paid', value: stats.paidOrders, color: 'text-success', bg: 'bg-success/10' },
-    { icon: DollarSign, label: 'Unpaid', value: stats.unpaidOrders, color: 'text-destructive', bg: 'bg-destructive/10' },
-    { icon: TrendingUp, label: 'Pending Review', value: stats.pendingVerification, color: 'text-warning', bg: 'bg-warning/10' },
-    { icon: ScanLine, label: 'Check-ins Today', value: stats.checkedInToday, color: 'text-secondary', bg: 'bg-secondary/10' },
-    { icon: Ticket, label: 'Total Seats', value: stats.totalSeats, color: 'text-accent', bg: 'bg-accent/10' },
+    { icon: Users,        label: 'Registrations',  value: stats.totalOrders,          color: 'text-primary',     bg: 'bg-primary/10' },
+    { icon: CheckCircle2, label: 'Paid',            value: stats.paidOrders,           color: 'text-success',     bg: 'bg-success/10' },
+    { icon: DollarSign,   label: 'Unpaid',          value: stats.unpaidOrders,         color: 'text-destructive', bg: 'bg-destructive/10' },
+    { icon: TrendingUp,   label: 'Pending',         value: stats.pendingVerification,  color: 'text-warning',     bg: 'bg-warning/10' },
+    { icon: ScanLine,     label: 'Check-ins Today', value: stats.checkedInToday,       color: 'text-secondary',   bg: 'bg-secondary/10' },
+    { icon: Ticket,       label: 'Total Seats',     value: stats.totalSeats,           color: 'text-accent',      bg: 'bg-accent/10' },
   ] : [];
 
   const quickActions = [
-    { icon: ScanLine, label: 'Gate Validate', desc: 'Scan QR & check-in', to: '/admin/validate', variant: 'primary' as const },
-    { icon: BookOpen, label: 'Manual Booking', desc: 'Book for walk-in guest', to: '/admin/manual-booking', variant: 'accent' as const },
-    { icon: Trophy, label: 'Manage Matches', desc: 'Create & activate matches', to: '/admin/matches', variant: 'ghost' as const },
+    { icon: ScanLine,  label: 'Gate Validate',  desc: 'Scan QR & check-in',         to: '/admin/validate',        variant: 'primary' as const },
+    { icon: BookOpen,  label: 'Manual Booking', desc: 'Book for walk-in guest',      to: '/admin/manual-booking',  variant: 'accent' as const },
+    { icon: Trophy,    label: 'Manage Matches', desc: 'Create & activate matches',   to: '/admin/matches',         variant: 'ghost' as const },
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="px-4 py-5 space-y-5 max-w-2xl mx-auto md:max-w-none md:p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-bold gradient-text-accent">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">T20 Fan Night Operations</p>
+          <h1 className="font-display text-2xl font-bold gradient-text-accent">Dashboard</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">T20 Fan Night Operations</p>
         </div>
-        <GlassButton variant="ghost" size="sm" onClick={fetchData}>
-          Refresh
-        </GlassButton>
+        <GlassButton variant="ghost" size="sm" onClick={fetchData}>Refresh</GlassButton>
       </div>
 
       {/* Active Match Banner */}
       {activeMatch ? (
         <GlassCard className="p-4 border-l-4 border-primary" glow>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
                 <span className="text-xs font-medium text-success">Registration Open</span>
               </div>
-              <h2 className="font-display text-xl font-bold text-foreground">{activeMatch.name}</h2>
+              <h2 className="font-display text-lg font-bold text-foreground leading-tight">{activeMatch.name}</h2>
               {activeMatch.opponent && <p className="text-sm text-muted-foreground">vs {activeMatch.opponent}</p>}
             </div>
-            <Link to={`/admin/matches/${activeMatch.id}`}>
+            <Link to={`/admin/matches/${activeMatch.id}`} className="shrink-0">
               <GlassButton variant="outline" size="sm">
                 Manage <ArrowRight className="h-3 w-3" />
               </GlassButton>
@@ -106,20 +101,20 @@ export default function AdminDashboard() {
         </GlassCard>
       )}
 
-      {/* Stats Grid */}
+      {/* Stats Grid — 2 cols on mobile, 3 on desktop */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-10">
           <Loader2 className="h-7 w-7 animate-spin text-primary" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {statCards.map(({ icon: Icon, label, value, color, bg }) => (
             <GlassCard key={label} className="p-4">
-              <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center mb-3`}>
-                <Icon className={`h-5 w-5 ${color}`} />
+              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center mb-2.5`}>
+                <Icon className={`h-4.5 w-4.5 ${color}`} />
               </div>
-              <p className={`font-display text-3xl font-bold ${color}`}>{value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{label}</p>
+              <p className={`font-display text-3xl font-bold leading-none ${color}`}>{value}</p>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-tight">{label}</p>
             </GlassCard>
           ))}
         </div>
@@ -127,19 +122,20 @@ export default function AdminDashboard() {
 
       {/* Quick Actions */}
       <div>
-        <h2 className="font-display text-lg font-bold text-foreground mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {quickActions.map(({ icon: Icon, label, desc, to, variant }) => (
+        <h2 className="font-display text-base font-bold text-foreground mb-3">Quick Actions</h2>
+        <div className="space-y-2 sm:grid sm:grid-cols-3 sm:gap-3 sm:space-y-0">
+          {quickActions.map(({ icon: Icon, label, desc, to }) => (
             <Link key={to} to={to}>
-              <GlassCard className="p-4 hover:border-primary/40 transition-colors cursor-pointer group">
+              <GlassCard className="p-4 hover:border-primary/40 transition-colors cursor-pointer group active:scale-[0.98]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground text-sm">{label}</p>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground text-sm">{label}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">{desc}</p>
                   </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
                 </div>
               </GlassCard>
             </Link>
@@ -149,7 +145,7 @@ export default function AdminDashboard() {
 
       {/* Disclaimer */}
       <div className="disclaimer-bar rounded-lg p-3 text-xs">
-        ⚽ <strong>Fun Guess Game Disclaimer:</strong> This is a fun guess game for entertainment only. No betting, no wagering, no gambling.
+        🏏 <strong>Fun Guess Game Disclaimer:</strong> Entertainment only. No betting, no wagering.
       </div>
     </div>
   );
