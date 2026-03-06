@@ -9,7 +9,7 @@ import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
   MapPin, Calendar, Trophy, Star, ChevronRight,
   Clock, ShieldCheck, BadgeCheck, QrCode, Tv2, Utensils, Target,
-  Phone, Mail,
+  Phone, Mail, X,
 } from 'lucide-react';
 import hotelLogo from '@/assets/hotel-logo.png';
 

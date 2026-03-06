@@ -34,7 +34,7 @@ export function VoiceAgent() {
   }, [conversation]);
 
   return (
-    <div className="fixed bottom-[88px] right-5 z-[99999] flex items-center gap-2">
+    <div className="fixed top-5 right-5 z-[99999] flex items-center gap-2">
       {/* Idle nudge label — inline to the left of the button, never above page buttons */}
       {!isConnected && !isConnecting && (
         <p className="text-sm font-display font-bold tracking-wide animate-fade-in pointer-events-none"
