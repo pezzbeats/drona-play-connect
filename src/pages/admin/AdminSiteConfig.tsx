@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FileText, Globe, Star, Shield, BookOpen, Building2, Save } from 'lucide-react';
+import { Loader2, FileText, Globe, Star, Shield, BookOpen, Building2, Save, Lock } from 'lucide-react';
 
 type ConfigMap = Record<string, string>;
 
@@ -78,7 +78,6 @@ const SECTIONS: Section[] = [
     fields: [
       { key: 'register_header_title', label: 'Header Title', placeholder: 'T20 Fan Night' },
       { key: 'register_header_venue', label: 'Header Venue Line', placeholder: 'Hotel Drona Palace' },
-      { key: 'payment_vpa', label: 'UPI VPA (Payment Address)', placeholder: 'example@upi' },
       { key: 'payment_payee_name', label: 'UPI Payee Name', placeholder: 'Hotel Name' },
     ],
   },
@@ -187,6 +186,30 @@ export default function AdminSiteConfig() {
             </div>
 
             <div className="space-y-4">
+              {/* Locked VPA field shown only in the registration section */}
+              {section.id === 'registration' && (
+                <div>
+                  <Label className="text-foreground mb-1.5 block text-sm">
+                    UPI VPA (Payment Address)
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      className="glass-input text-sm pr-10 opacity-60 cursor-not-allowed"
+                      value={config['payment_vpa'] ?? 'paytmqr5oka4x@ptys'}
+                      readOnly
+                      disabled
+                    />
+                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                      <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    <Lock className="h-3 w-3" />
+                    This field is system-locked and cannot be changed from the admin panel.
+                  </p>
+                </div>
+              )}
+
               {section.fields.map(field => (
                 <div key={field.key}>
                   <Label className="text-foreground mb-1.5 block text-sm">{field.label}</Label>
