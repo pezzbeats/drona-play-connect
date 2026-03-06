@@ -2,12 +2,20 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/admin/ProtectedRoute";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { VoiceAgent } from "@/components/VoiceAgent";
+
+const HIDE_VOICE_AGENT_PATHS = ["/register", "/ticket"];
+
+function VoiceAgentGuard() {
+  const location = useLocation();
+  if (HIDE_VOICE_AGENT_PATHS.includes(location.pathname)) return null;
+  return <VoiceAgent />;
+}
 
 import Index from "./pages/Index";
 import TermsPage from "./pages/Terms";
@@ -48,9 +56,9 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <VoiceAgent />
       <BrowserRouter>
         <AuthProvider>
+          <VoiceAgentGuard />
           <Routes>
             {/* Public */}
             <Route path="/" element={<Index />} />
