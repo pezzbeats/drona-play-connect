@@ -663,6 +663,21 @@ export default function RegisterPage() {
               <div className="w-7 h-7 rounded-full step-active flex items-center justify-center text-sm font-bold text-primary-foreground">②</div>
               <h3 className="font-display text-xl font-bold text-foreground">Seats & Pricing</h3>
             </div>
+
+            {/* Eligibility badge — mirrored from Step 1 */}
+            {eligibilityStatus === 'eligible' && (
+              <div className="mb-4 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-success/10 border border-success/30 text-xs text-success font-semibold">
+                <Star className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>Semifinal attendee discount applied — qualifying seats at <strong>₹949/seat</strong> 🎉</span>
+              </div>
+            )}
+            {eligibilityStatus === 'standard' && (
+              <div className="mb-4 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-muted/20 border border-border/30 text-xs text-muted-foreground">
+                <Info className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>Standard pricing — <strong className="text-foreground">₹999/seat</strong></span>
+              </div>
+            )}
+
             <div className="space-y-5">
               <div>
                 <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Number of Seats</Label>
