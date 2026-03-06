@@ -115,6 +115,7 @@ export default function IndexPage() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [pricing, setPricing] = useState<PricingRule | null>(null);
   const [loading, setLoading] = useState(true);
+  const [barDismissed, setBarDismissed] = useState(false);
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 8000);
