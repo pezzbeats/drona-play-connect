@@ -282,6 +282,230 @@ function TransactionsTab() {
   );
 }
 
+// ─── Partial Payments Tab ─────────────────────────────────────────────────────
+
+type PartialOrder = {
+  id: string;
+  purchaser_full_name: string;
+  purchaser_mobile: string;
+  total_amount: number;
+  advance_paid: number;
+  advance_payment_method: string | null;
+  payment_status: string;
+  payment_method: string;
+  created_at: string;
+  match: { name: string } | null;
+};
+
+type SortKey = 'balance_due' | 'advance_paid' | 'total_amount' | 'created_at';
+type SortDir = 'asc' | 'desc';
+
+function SortIcon({ col, active, dir }: { col: string; active: boolean; dir: SortDir }) {
+  if (!active) return <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />;
+  return dir === 'desc'
+    ? <ArrowDown className="h-3 w-3 text-primary" />
+    : <ArrowUp className="h-3 w-3 text-primary" />;
+}
+
+function PartialPaymentsTab() {
+  const [orders, setOrders] = useState<PartialOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('balance_due');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [showCleared, setShowCleared] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, purchaser_full_name, purchaser_mobile, total_amount, advance_paid, advance_payment_method, payment_status, payment_method, created_at, match:matches!match_id(name)')
+      .gt('advance_paid', 0)
+      .order('created_at', { ascending: false });
+    if (!error && data) setOrders(data as unknown as PartialOrder[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const cycleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+
+  const withBalance = orders.map(o => ({
+    ...o,
+    balanceDue: Math.max(0, o.total_amount - o.advance_paid),
+    isCleared: ['paid_verified', 'paid_manual_verified'].includes(o.payment_status),
+  }));
+
+  const filtered = withBalance
+    .filter(o => showCleared ? true : !o.isCleared)
+    .filter(o => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return o.purchaser_full_name.toLowerCase().includes(q) || o.purchaser_mobile.includes(q);
+    })
+    .sort((a, b) => {
+      let diff = 0;
+      if (sortKey === 'balance_due')   diff = a.balanceDue - b.balanceDue;
+      if (sortKey === 'advance_paid')  diff = a.advance_paid - b.advance_paid;
+      if (sortKey === 'total_amount')  diff = a.total_amount - b.total_amount;
+      if (sortKey === 'created_at')    diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return sortDir === 'desc' ? -diff : diff;
+    });
+
+  const totalOutstanding = withBalance.filter(o => !o.isCleared).reduce((s, o) => s + o.balanceDue, 0);
+  const outstandingCount = withBalance.filter(o => !o.isCleared).length;
+  const clearedCount     = withBalance.filter(o => o.isCleared).length;
+
+  const exportCSV = () => {
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const header = ['Date', 'Name', 'Mobile', 'Match', 'Total', 'Advance Paid', 'Advance Method', 'Balance Due', 'Status'];
+    const rows = filtered.map(o => [
+      format(new Date(o.created_at), 'dd MMM yyyy HH:mm'),
+      o.purchaser_full_name,
+      o.purchaser_mobile,
+      (o.match as any)?.name ?? '',
+      String(o.total_amount),
+      String(o.advance_paid),
+      o.advance_payment_method ?? '',
+      String(o.balanceDue),
+      o.payment_status,
+    ].map(escape).join(','));
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `partial-payments-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    toast.success(`Exported ${filtered.length} row${filtered.length !== 1 ? 's' : ''}`);
+  };
+
+  const thBtn = (key: SortKey, label: string) => (
+    <button
+      onClick={() => cycleSort(key)}
+      className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+    >
+      {label} <SortIcon col={key} active={sortKey === key} dir={sortDir} />
+    </button>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4">
+          <p className="text-xs text-muted-foreground mb-1">Total Outstanding</p>
+          <p className="text-xl font-bold text-warning font-display">₹{totalOutstanding.toLocaleString('en-IN')}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground mb-1">Pending Orders</p>
+          <p className="text-xl font-bold text-foreground font-display">{outstandingCount}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground mb-1">Fully Cleared</p>
+          <p className="text-xl font-bold text-foreground font-display">{clearedCount}</p>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search name or mobile…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 bg-background"
+          />
+        </div>
+        <button
+          onClick={() => setShowCleared(v => !v)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            showCleared ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
+          }`}
+        >
+          {showCleared ? 'Showing All' : 'Show Cleared'}
+        </button>
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportCSV} disabled={loading || filtered.length === 0}>
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Export CSV
+        </Button>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="text-left px-4 py-2.5">
+                  <span className="text-xs font-semibold text-muted-foreground">Customer</span>
+                </th>
+                <th className="text-left px-4 py-2.5">{thBtn('total_amount', 'Total')}</th>
+                <th className="text-left px-4 py-2.5">{thBtn('advance_paid', 'Advance Paid')}</th>
+                <th className="text-left px-4 py-2.5">{thBtn('balance_due', 'Balance Due')}</th>
+                <th className="text-left px-4 py-2.5">
+                  <span className="text-xs font-semibold text-muted-foreground">Status</span>
+                </th>
+                <th className="text-left px-4 py-2.5">{thBtn('created_at', 'Date')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Loading…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">No partial-payment orders found</td></tr>
+              ) : (
+                filtered.map(o => (
+                  <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-foreground">{o.purchaser_full_name}</p>
+                      <p className="text-xs text-muted-foreground">{o.purchaser_mobile}</p>
+                      {(o.match as any)?.name && (
+                        <p className="text-xs text-muted-foreground truncate max-w-[160px]">{(o.match as any).name}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-foreground">
+                      ₹{o.total_amount.toLocaleString('en-IN')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-success font-semibold">₹{o.advance_paid.toLocaleString('en-IN')}</span>
+                      {o.advance_payment_method && (
+                        <span className="ml-1.5 text-xs text-muted-foreground capitalize">({o.advance_payment_method})</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {o.isCleared ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-success/15 text-success border border-success/30 font-medium">✓ Cleared</span>
+                      ) : o.balanceDue > 0 ? (
+                        <span className="font-bold text-warning">₹{o.balanceDue.toLocaleString('en-IN')}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={o.payment_status} />
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(o.created_at), 'dd MMM yy, HH:mm')}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Gateway Settings Tab ─────────────────────────────────────────────────────
 
 function GatewaySettingsTab() {
