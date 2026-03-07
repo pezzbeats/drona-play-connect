@@ -29,6 +29,9 @@ export default function AdminManualBooking() {
     advance_payment_method: 'cash',
   });
   const [discount, setDiscount] = useState({ type: 'flat', value: '' });
+  const [lastBooking, setLastBooking] = useState<{
+    name: string; mobile: string; balance: number; orderId: string; waLink: string; matchName: string;
+  } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
