@@ -57,6 +57,7 @@ interface OfflineAction {
 }
 
 const OFFLINE_QUEUE_KEY = 'gate_offline_queue';
+const RECENT_SCANS_KEY = 'gate_recent_scans';
 
 function loadOfflineQueue(): OfflineAction[] {
   try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
@@ -64,6 +65,25 @@ function loadOfflineQueue(): OfflineAction[] {
 }
 function saveOfflineQueue(q: OfflineAction[]) {
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+}
+
+interface RecentScan {
+  name: string;
+  mobile: string;
+  pin: string;
+  checkedInAt: number; // Date.now()
+  seatIndex: number;
+}
+
+function loadRecentScans(): RecentScan[] {
+  try { return JSON.parse(localStorage.getItem(RECENT_SCANS_KEY) || '[]'); }
+  catch { return []; }
+}
+function pushRecentScan(scan: RecentScan) {
+  const existing = loadRecentScans().filter(s => s.mobile !== scan.mobile || s.seatIndex !== scan.seatIndex);
+  const updated = [scan, ...existing].slice(0, 5);
+  localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(updated));
+  return updated;
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
@@ -91,6 +111,7 @@ export default function AdminValidate() {
   const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>(loadOfflineQueue);
   const [matchFlags, setMatchFlags] = useState<any>(null);
   const [notFoundError, setNotFoundError] = useState(false);
+  const [recentScans, setRecentScans] = useState<RecentScan[]>(loadRecentScans);
 
   // Camera scanner state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -436,6 +457,16 @@ export default function AdminValidate() {
       if (error) throw error;
       setGamePin(data.pin);
       toast({ title: '✅ Checked in!', description: `PIN: ${data.pin}` });
+      // Push to recent scans list
+      const ord = ticketData.order;
+      const updated = pushRecentScan({
+        name: ord?.purchaser_full_name || 'Unknown',
+        mobile: ord?.purchaser_mobile || '',
+        pin: data.pin,
+        checkedInAt: Date.now(),
+        seatIndex: ticketData.seat_index ?? 0,
+      });
+      setRecentScans(updated);
       await lookupTicket(qrInput);
     } catch (e: any) { toast({ variant: 'destructive', title: 'Check-in failed', description: e.message }); }
     setCheckingIn(false);
@@ -451,6 +482,16 @@ export default function AdminValidate() {
       if (error) throw error;
       setGamePin(data.pin);
       toast({ title: '🔄 PIN Regenerated', description: `New PIN: ${data.pin}` });
+      // Update the recent scans entry with the new PIN
+      const ord = ticketData.order;
+      const updated = pushRecentScan({
+        name: ord?.purchaser_full_name || 'Unknown',
+        mobile: ord?.purchaser_mobile || '',
+        pin: data.pin,
+        checkedInAt: Date.now(),
+        seatIndex: ticketData.seat_index ?? 0,
+      });
+      setRecentScans(updated);
     } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
     setCheckingIn(false);
   };
@@ -869,6 +910,63 @@ export default function AdminValidate() {
                 Try Again
               </GlassButton>
             </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ── Recent Scans ── */}
+      {recentScans.length > 0 && !ticketData && (
+        <GlassCard className="p-4 border border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <h3 className="font-display font-semibold text-foreground text-sm">Recent Check-ins</h3>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(RECENT_SCANS_KEY);
+                setRecentScans([]);
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="space-y-2">
+            {recentScans.map((scan, i) => {
+              const minutesAgo = Math.round((Date.now() - scan.checkedInAt) / 60000);
+              const timeLabel = minutesAgo < 1 ? 'just now' : minutesAgo < 60 ? `${minutesAgo}m ago` : `${Math.round(minutesAgo / 60)}h ago`;
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-success/8 border border-success/20"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground text-sm truncate leading-tight">{scan.name}</p>
+                      <p className="text-xs text-muted-foreground leading-tight">{scan.mobile} · {timeLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground leading-none mb-0.5">PIN</p>
+                      <p className="font-display font-bold text-success text-lg tracking-widest leading-none">{scan.pin}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard?.writeText(scan.pin);
+                        toast({ title: `📋 PIN copied: ${scan.pin}` });
+                      }}
+                      className="p-1.5 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors"
+                      aria-label="Copy PIN"
+                    >
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </GlassCard>
       )}
