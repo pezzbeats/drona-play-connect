@@ -23,11 +23,13 @@ interface EligibilityRow {
   notes: string | null;
   match_label: string | null;
   uploaded_at: string;
+  eligible_seats: number;
 }
 
 interface PreviewRow {
   mobile: string;
   full_name: string;
+  eligible_seats: number;
   notes: string;
   valid: boolean;
 }
