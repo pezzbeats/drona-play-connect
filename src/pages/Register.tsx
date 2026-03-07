@@ -9,12 +9,40 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
-  CheckCircle2, ChevronRight, CreditCard, Smartphone, Users, MapPin,
+  CheckCircle2, ChevronRight, CreditCard, Smartphone,
   Upload, Loader2, AlertCircle, Star, Info, Zap, Shield, RefreshCw,
-  Phone, Mail, ArrowRight, XCircle, Clock, ArrowLeft
+  Phone, Mail, ArrowRight, XCircle, Clock, ArrowLeft, Download, Share2, MessageCircle, MapPin
 } from 'lucide-react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
+
+// ── Ticket data shape used by pass renderer ────────────────────────────────
+interface TicketData {
+  id: string;
+  seat_index: number;
+  qr_text: string;
+  status: string;
+  issued_at: string;
+  order: {
+    purchaser_full_name: string;
+    purchaser_mobile: string;
+    payment_status: string;
+    seats_count: number;
+    total_amount: number;
+    seating_type: string;
+    advance_paid: number;
+    match: {
+      name: string;
+      venue: string;
+      start_time: string | null;
+      opponent: string | null;
+    };
+  };
+}
+
+function isPaid(status: string) {
+  return ['paid_verified', 'paid_manual_verified'].includes(status);
+}
 
 declare global {
   interface Window { Razorpay: any; }
@@ -330,24 +358,26 @@ export default function RegisterPage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
-  // Auto-download QR PNGs when step 3 loads
+  // Auto-download full pass PNGs when step 3 loads
   useEffect(() => {
-    if (step !== 3 || tickets.length === 0) return;
-    const timer = setTimeout(() => {
-      tickets.forEach((ticket) => {
-        const canvas = document.getElementById(`qr-auto-${ticket.id}`) as HTMLCanvasElement | null;
-        if (!canvas) return;
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `ticket-seat-${ticket.seat_index + 1}.png`;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-        });
-      });
-    }, 600);
+    if (step !== 3 || tickets.length === 0 || !activeMatch) return;
+    const timer = setTimeout(async () => {
+      for (const ticket of tickets) {
+        const shaped = buildTicketShape(ticket);
+        try {
+          const canvas = await buildPassCanvas(shaped);
+          canvas.toBlob((blob) => {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pass-seat-${ticket.seat_index + 1}.png`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+          });
+        } catch { /* silent */ }
+      }
+    }, 800);
     return () => clearTimeout(timer);
   }, [step, tickets]);
 
@@ -594,32 +624,330 @@ export default function RegisterPage() {
     ? `upi://pay?pa=${payeeVpa}&pn=${encodeURIComponent(payeeName)}&am=${priceQuote.total}&cu=INR&tn=${encodeURIComponent(`${fullName}_${seatsCount}_${mobile}`)}`
     : '';
 
+  // ── Pass canvas helpers ───────────────────────────────────────────────────
+  const loadImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+  const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  };
+
+  /** Build a TicketData-compatible shape from local Register state */
+  const buildTicketShape = (ticket: any): TicketData => ({
+    id: ticket.id,
+    seat_index: ticket.seat_index,
+    qr_text: ticket.qr_text,
+    status: ticket.status ?? 'active',
+    issued_at: ticket.issued_at ?? new Date().toISOString(),
+    order: {
+      purchaser_full_name: fullName,
+      purchaser_mobile: mobile,
+      payment_status: paymentMethod === 'pay_at_hotel' ? 'unpaid' : 'paid_manual_verified',
+      seats_count: seatsCount,
+      total_amount: priceQuote?.total ?? 0,
+      seating_type: seatingType,
+      advance_paid: 0,
+      match: {
+        name: activeMatch!.name,
+        venue: activeMatch!.venue,
+        start_time: activeMatch!.start_time ?? null,
+        opponent: activeMatch!.opponent ?? null,
+      },
+    },
+  });
+
+  const buildPassCanvas = async (ticket: TicketData): Promise<HTMLCanvasElement> => {
+    const order = ticket.order as any;
+    const match = order?.match;
+    const paidStatus = isPaid(order?.payment_status);
+    const balanceDue = Math.max(0, (order?.total_amount ?? 0) - (order?.advance_paid ?? 0));
+    const hasBalance = !paidStatus && balanceDue > 0;
+    const isPartiallyPaid = (order?.advance_paid ?? 0) > 0 && !paidStatus;
+
+    const W = 750;
+    const BANNER_H = 52;
+    const BODY_TOP = BANNER_H;
+    const PAD = 40;
+    const QR_SIZE = 260;
+    const FOOTER_H = 72;
+
+    let contentH = 0;
+    contentH += 20;
+    contentH += 30;
+    contentH += 26;
+    contentH += 22;
+    contentH += 22;
+    contentH += 22;
+    if (hasBalance) contentH += 36;
+    contentH += 24;
+    contentH += 1;
+    contentH += 28;
+    contentH += QR_SIZE + 28 + 2;
+    contentH += 30;
+    contentH += 26;
+    contentH += 32;
+    const H = BANNER_H + contentH + FOOTER_H;
+
+    const DPR = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(DPR, DPR);
+
+    roundRect(ctx, 0, 0, W, H, 20);
+    ctx.fillStyle = '#17100a';
+    ctx.fill();
+
+    roundRect(ctx, 0.5, 0.5, W - 1, H - 1, 20);
+    ctx.strokeStyle = paidStatus ? 'hsla(142,60%,35%,0.5)' : 'hsla(38,60%,35%,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
+    if (paidStatus) {
+      bannerGrad.addColorStop(0, 'hsl(142,60%,22%)');
+      bannerGrad.addColorStop(1, 'hsl(142,50%,28%)');
+    } else {
+      bannerGrad.addColorStop(0, 'hsl(38,80%,28%)');
+      bannerGrad.addColorStop(1, 'hsl(38,70%,34%)');
+    }
+    ctx.save();
+    roundRect(ctx, 0, 0, W, BANNER_H, 20);
+    ctx.clip();
+    ctx.fillStyle = bannerGrad as any;
+    ctx.fillRect(0, 0, W, BANNER_H);
+    ctx.restore();
+    ctx.strokeStyle = paidStatus ? 'hsla(142,60%,40%,0.6)' : 'hsla(38,80%,45%,0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, BANNER_H); ctx.lineTo(W, BANNER_H); ctx.stroke();
+
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.fillStyle = paidStatus ? 'hsl(142,80%,80%)' : 'hsl(38,90%,85%)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const bannerText = paidStatus
+      ? '☑  PAID — Entry Confirmed'
+      : isPartiallyPaid
+        ? '⚠  ADVANCE PAID — Balance Due at Entry'
+        : '⚠  UNPAID — Pay at Hotel on Arrival';
+    ctx.fillText(bannerText, W / 2, BANNER_H / 2 + 1);
+
+    let y = BODY_TOP + 28;
+    const leftX = PAD;
+    const rightX = W - PAD;
+    const seatBadgeW = 120;
+    const textRightBound = rightX - seatBadgeW - 16;
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 30px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,90%,88%)';
+    ctx.fillText(order?.purchaser_full_name ?? '', leftX, y, textRightBound - leftX);
+    y += 36;
+
+    ctx.font = '500 20px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,60%,65%)';
+    const matchTitle = `${match?.name ?? ''}${match?.opponent ? ` vs ${match.opponent}` : ''}`;
+    ctx.fillText(matchTitle, leftX, y, textRightBound - leftX);
+    y += 26;
+
+    if (match?.start_time) {
+      ctx.font = '400 17px system-ui, sans-serif';
+      ctx.fillStyle = 'hsl(38,40%,55%)';
+      ctx.fillText(new Date(match.start_time).toLocaleString('en-IN'), leftX, y);
+      y += 24;
+    }
+
+    ctx.font = '400 17px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,40%,55%)';
+    ctx.fillText(match?.venue ?? '', leftX, y);
+    y += 24;
+
+    if (order?.seating_type) {
+      const sType = order.seating_type.charAt(0).toUpperCase() + order.seating_type.slice(1);
+      ctx.font = '600 17px system-ui, sans-serif';
+      ctx.fillStyle = 'hsl(38,80%,65%)';
+      ctx.fillText(`${sType} Seating`, leftX, y);
+      y += 24;
+    }
+
+    if (hasBalance) {
+      const pillText = `⚠  Balance Due: ₹${balanceDue}${isPartiallyPaid ? `  (Adv: ₹${order?.advance_paid})` : ''}`;
+      ctx.font = 'bold 15px system-ui, sans-serif';
+      const pillW = ctx.measureText(pillText).width + 28;
+      const pillH = 30;
+      const pillY = y;
+      roundRect(ctx, leftX, pillY, pillW, pillH, 15);
+      ctx.fillStyle = 'hsla(38,80%,45%,0.18)';
+      ctx.fill();
+      roundRect(ctx, leftX, pillY, pillW, pillH, 15);
+      ctx.strokeStyle = 'hsla(38,80%,50%,0.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'hsl(38,90%,72%)';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pillText, leftX + 14, pillY + pillH / 2);
+      ctx.textBaseline = 'top';
+      y += 42;
+    }
+
+    const seatTopY = BODY_TOP + 28;
+    ctx.textAlign = 'center';
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,50%,50%)';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SEAT', rightX - seatBadgeW / 2, seatTopY);
+
+    const seatNumGrad = ctx.createLinearGradient(rightX - seatBadgeW, seatTopY + 18, rightX, seatTopY + 90);
+    seatNumGrad.addColorStop(0, 'hsl(38,95%,65%)');
+    seatNumGrad.addColorStop(1, 'hsl(38,80%,50%)');
+    ctx.font = 'bold 80px system-ui, sans-serif';
+    ctx.fillStyle = seatNumGrad as any;
+    ctx.textBaseline = 'top';
+    ctx.fillText(String(ticket.seat_index + 1), rightX - seatBadgeW / 2, seatTopY + 18);
+
+    ctx.font = '400 15px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,40%,50%)';
+    ctx.fillText(`of ${order?.seats_count}`, rightX - seatBadgeW / 2, seatTopY + 108);
+    ctx.textAlign = 'left';
+
+    y += 8;
+    ctx.save();
+    ctx.setLineDash([8, 8]);
+    ctx.strokeStyle = 'hsl(38,30%,25%)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+    ctx.restore();
+    y += 28;
+
+    const qrCanvas = document.getElementById(`qr-canvas-${ticket.id}`) as HTMLCanvasElement | null;
+    if (qrCanvas) {
+      const qrBoxPad = 14;
+      const qrBoxSize = QR_SIZE + qrBoxPad * 2;
+      const qrBoxX = (W - qrBoxSize) / 2;
+      const qrBoxY = y;
+      ctx.save();
+      roundRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 14);
+      ctx.shadowColor = paidStatus ? 'hsla(142,60%,45%,0.5)' : 'hsla(38,80%,50%,0.45)';
+      ctx.shadowBlur = 28;
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+      ctx.drawImage(qrCanvas, qrBoxX + qrBoxPad, qrBoxY + qrBoxPad, QR_SIZE, QR_SIZE);
+      y += qrBoxSize + 22;
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = '600 18px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,70%,65%)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(order?.purchaser_mobile ?? '', W / 2, y);
+    y += 26;
+
+    ctx.font = '400 13px monospace, system-ui';
+    ctx.fillStyle = 'hsl(38,30%,42%)';
+    ctx.fillText(`${ticket.qr_text.slice(0, 28)}…`, W / 2, y);
+    ctx.textAlign = 'left';
+
+    const footerY = H - FOOTER_H;
+    ctx.strokeStyle = 'hsl(38,25%,18%)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, footerY); ctx.lineTo(W, footerY); ctx.stroke();
+    ctx.fillStyle = 'hsl(30,18%,6%)';
+    ctx.fillRect(0, footerY, W, FOOTER_H);
+
+    const logoCircleR = 22;
+    const logoCircleX = PAD + logoCircleR;
+    const logoCircleY = footerY + FOOTER_H / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(logoCircleX, logoCircleY, logoCircleR, 0, Math.PI * 2);
+    ctx.fillStyle = 'hsl(38,60%,10%)';
+    ctx.fill();
+    ctx.strokeStyle = 'hsla(38,60%,30%,0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.clip();
+    try {
+      const logoImg = await loadImage(hotelLogo);
+      const logoSize = logoCircleR * 1.4;
+      ctx.drawImage(logoImg, logoCircleX - logoSize / 2, logoCircleY - logoSize / 2, logoSize, logoSize);
+    } catch { /* logo unavailable */ }
+    ctx.restore();
+
+    const textX = PAD + logoCircleR * 2 + 14;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,80%,65%)';
+    ctx.fillText('Hotel Drona Palace', textX, logoCircleY - 9);
+    ctx.font = '400 13px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,30%,42%)';
+    ctx.fillText('A Unit of SR Leisure Inn', textX, logoCircleY + 10);
+
+    ctx.textAlign = 'right';
+    ctx.font = '400 13px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,30%,42%)';
+    ctx.fillText(
+      new Date(ticket.issued_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'numeric', year: 'numeric' }),
+      W - PAD,
+      logoCircleY
+    );
+
+    return canvas;
+  };
+
+  const downloadPassAsPng = async (ticket: TicketData) => {
+    const canvas = await buildPassCanvas(ticket);
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pass-seat-${ticket.seat_index + 1}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+  };
+
   const handleWhatsAppShare = async () => {
     const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${mobile}`;
     const matchName = activeMatch?.name || 'T20 Fan Night';
     const text = `🎫 My T20 Fan Night Pass — ${matchName} — ${tickets.length} seat${tickets.length > 1 ? 's' : ''}\nView tickets: ${ticketUrl}`;
 
-    // Try native share with PNG files on mobile
     if (navigator.canShare && tickets.length > 0) {
       try {
         const files: File[] = [];
         for (const ticket of tickets) {
-          const canvas = document.getElementById(`qr-auto-${ticket.id}`) as HTMLCanvasElement | null;
-          if (!canvas) continue;
-          const blob = await new Promise<Blob | null>(res => canvas.toBlob(res));
+          const shaped = buildTicketShape(ticket);
+          const passCanvas = await buildPassCanvas(shaped);
+          const blob = await new Promise<Blob | null>(res => passCanvas.toBlob(res));
           if (blob) {
-            files.push(new File([blob], `ticket-seat-${ticket.seat_index + 1}.png`, { type: 'image/png' }));
+            files.push(new File([blob], `pass-seat-${ticket.seat_index + 1}.png`, { type: 'image/png' }));
           }
         }
         if (files.length > 0 && navigator.canShare({ files })) {
-          await navigator.share({ files, title: 'My T20 Fan Night Tickets', text });
+          await navigator.share({ files, title: 'My T20 Fan Night Passes', text });
           return;
         }
-      } catch {
-        // fall through to wa.me
-      }
+      } catch { /* fall through */ }
     }
-    // Desktop / fallback: open wa.me deep-link
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -1092,11 +1420,11 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {/* ─── Step 3: Tickets ─── */}
+        {/* ─── Step 3: Tickets (Full Pass Design) ─── */}
         {step === 3 && (
           <div className="space-y-4 animate-fade-in">
             {/* Success banner */}
-            <div className="rounded-xl p-5 text-center border-2 border-success/50 bg-success/10 animate-pulse-glow">
+            <div className="rounded-xl p-5 text-center border-2 border-success/50 bg-success/10">
               <div className="text-5xl mb-2">🎟️</div>
               <h3 className="font-display text-2xl font-bold text-success">
                 {paymentMethod === 'pay_at_hotel' ? 'Booking Confirmed!' : 'Payment Confirmed!'}
@@ -1111,61 +1439,187 @@ export default function RegisterPage() {
                   ✅ Verified at {new Date(paymentVerifiedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground mt-1 opacity-75">Pass downloading automatically…</p>
             </div>
 
-            {/* Hidden canvases for QR PNG generation (auto-download + WhatsApp share) */}
+            {/* Hidden high-res QR canvases for buildPassCanvas */}
             <div className="sr-only" aria-hidden="true">
               {tickets.map((ticket) => (
                 <QRCodeCanvas
                   key={ticket.id}
-                  id={`qr-auto-${ticket.id}`}
+                  id={`qr-canvas-${ticket.id}`}
                   value={ticket.qr_text}
                   size={600}
+                  bgColor="#ffffff"
+                  fgColor="#111111"
                 />
               ))}
             </div>
 
-            {tickets.map((ticket, i) => (
-              <GlassCard key={ticket.id} className="seat-pass p-5">
-                {/* Payment status banner */}
-                <div className={`-mt-5 -mx-5 mb-4 px-5 py-3 flex items-center justify-center gap-2 font-display text-sm font-bold tracking-wide ${
-                  paymentMethod === 'pay_at_hotel'
-                    ? 'bg-warning/20 border-b border-warning/30 text-warning'
-                    : 'bg-success/20 border-b border-success/30 text-success'
-                }`}>
-                  {paymentMethod === 'pay_at_hotel'
-                    ? '⚠️ UNPAID — Pay at Hotel on Arrival'
-                    : paymentMethod === 'razorpay'
-                    ? '✅ PAID via Razorpay — Entry Confirmed'
-                    : '✅ PAID — Entry Confirmed'}
-                </div>
+            {/* Full Pass Cards */}
+            {tickets.map((ticket) => {
+              const shaped = buildTicketShape(ticket);
+              const order = shaped.order;
+              const match = order.match;
+              const paidStatus = isPaid(order.payment_status);
+              const balanceDue = Math.max(0, order.total_amount - order.advance_paid);
+              const hasBalance = !paidStatus && balanceDue > 0;
+              const isPartiallyPaid = order.advance_paid > 0 && !paidStatus;
 
-                <div className="flex items-start justify-between mb-4">
-                  <div className="text-center flex-1">
-                    <p className="font-display text-lg font-bold text-foreground">{fullName}</p>
-                    <p className="text-sm text-muted-foreground">{activeMatch?.name}</p>
-                    <p className="text-xs text-muted-foreground">{activeMatch?.venue}</p>
+              return (
+                <div
+                  key={ticket.id}
+                  className="rounded-2xl overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(145deg, hsl(30 20% 9%), hsl(30 15% 7%))',
+                    border: '1px solid hsl(38 30% 20%)',
+                    boxShadow: paidStatus
+                      ? '0 8px 40px hsl(142 60% 35% / 0.25), 0 0 0 1px hsl(142 60% 35% / 0.15)'
+                      : '0 8px 40px hsl(38 80% 50% / 0.2), 0 0 0 1px hsl(38 80% 50% / 0.15)',
+                  }}
+                >
+                  {/* Status Banner */}
+                  <div
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 font-display text-sm font-bold tracking-wide"
+                    style={{
+                      background: paidStatus
+                        ? 'linear-gradient(90deg, hsl(142 60% 25%), hsl(142 50% 30%))'
+                        : 'linear-gradient(90deg, hsl(38 80% 35%), hsl(38 70% 40%))',
+                      borderBottom: `1px solid ${paidStatus ? 'hsl(142 60% 35% / 0.6)' : 'hsl(38 80% 45% / 0.6)'}`,
+                      color: paidStatus ? 'hsl(142 80% 80%)' : 'hsl(38 90% 85%)',
+                    }}
+                  >
+                    {paidStatus
+                      ? <><span>☑</span> PAID — Entry Confirmed</>
+                      : isPartiallyPaid
+                        ? <><span>⚠</span> ADVANCE PAID — Balance Due at Entry</>
+                        : <><span>⚠</span> UNPAID — Pay at Hotel on Arrival</>
+                    }
                   </div>
-                  <div className="text-center">
-                    <div className="text-xs text-muted-foreground">SEAT</div>
-                    <div className="font-display text-3xl font-bold gradient-text">
-                      {i + 1} <span className="text-base text-muted-foreground">of {tickets.length}</span>
+
+                  {/* Main Body */}
+                  <div className="p-5">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <p className="font-display text-xl font-bold leading-tight mb-0.5" style={{ color: 'hsl(38 90% 88%)' }}>
+                          {order.purchaser_full_name}
+                        </p>
+                        <p className="text-sm font-medium" style={{ color: 'hsl(38 60% 65%)' }}>
+                          {match.name}{match.opponent ? ` vs ${match.opponent}` : ''}
+                        </p>
+                        {match.start_time && (
+                          <p className="text-xs mt-0.5" style={{ color: 'hsl(38 40% 55%)' }}>
+                            {new Date(match.start_time).toLocaleString('en-IN')}
+                          </p>
+                        )}
+                        <p className="text-xs" style={{ color: 'hsl(38 40% 55%)' }}>{match.venue}</p>
+                        <p className="text-xs font-semibold mt-1" style={{ color: 'hsl(38 80% 65%)' }}>
+                          {order.seating_type.charAt(0).toUpperCase() + order.seating_type.slice(1)} Seating
+                        </p>
+                        {hasBalance && (
+                          <div
+                            className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                            style={{
+                              background: 'hsl(38 80% 45% / 0.2)',
+                              border: '1px solid hsl(38 80% 50% / 0.5)',
+                              color: 'hsl(38 90% 72%)',
+                            }}
+                          >
+                            ⚠ Balance Due: ₹{balanceDue}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Seat badge */}
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs uppercase tracking-widest font-semibold mb-0.5" style={{ color: 'hsl(38 50% 50%)' }}>SEAT</p>
+                        <div
+                          className="font-display text-5xl font-black leading-none"
+                          style={{
+                            background: 'linear-gradient(135deg, hsl(38 95% 65%), hsl(38 80% 50%))',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                          }}
+                        >
+                          {ticket.seat_index + 1}
+                        </div>
+                        <p className="text-xs mt-0.5" style={{ color: 'hsl(38 40% 50%)' }}>of {order.seats_count}</p>
+                      </div>
+                    </div>
+
+                    {/* Dashed divider */}
+                    <div
+                      className="w-full h-px my-4"
+                      style={{ background: 'repeating-linear-gradient(90deg, transparent, transparent 6px, hsl(38 30% 25%) 6px, hsl(38 30% 25%) 12px)' }}
+                    />
+
+                    {/* QR Code */}
+                    <div className="flex flex-col items-center gap-3">
+                      <div
+                        className="rounded-xl overflow-hidden"
+                        style={{
+                          padding: '14px',
+                          background: '#ffffff',
+                          boxShadow: paidStatus
+                            ? '0 0 24px hsl(142 60% 45% / 0.35), 0 4px 16px rgba(0,0,0,0.4)'
+                            : '0 0 24px hsl(38 80% 50% / 0.3), 0 4px 16px rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        <QRCodeSVG value={ticket.qr_text} size={170} bgColor="#ffffff" fgColor="#111111" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold tracking-wider" style={{ color: 'hsl(38 70% 65%)' }}>
+                          {order.purchaser_mobile}
+                        </p>
+                        <p className="text-xs font-mono mt-0.5" style={{ color: 'hsl(38 30% 42%)' }}>
+                          {ticket.qr_text.slice(0, 26)}…
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="grid grid-cols-2 gap-3 mt-5">
+                      <button
+                        onClick={() => downloadPassAsPng(shaped)}
+                        className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                        style={{ background: 'hsl(38 40% 12%)', border: '1px solid hsl(38 30% 22%)', color: 'hsl(38 70% 65%)' }}
+                      >
+                        <Download className="h-4 w-4" /> Save Pass
+                      </button>
+                      <button
+                        onClick={handleWhatsAppShare}
+                        className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                        style={{ background: 'hsl(38 40% 12%)', border: '1px solid hsl(38 30% 22%)', color: 'hsl(38 70% 65%)' }}
+                      >
+                        <Share2 className="h-4 w-4" /> Share
+                      </button>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex flex-col items-center mb-4">
-                  <div className="qr-container" style={{ padding: 16 }}>
-                    <QRCodeSVG value={ticket.qr_text} size={140} />
+                  {/* Footer */}
+                  <div
+                    className="flex items-center justify-between px-5 py-3"
+                    style={{ borderTop: '1px solid hsl(38 25% 18%)', background: 'hsl(30 18% 6%)' }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                        style={{ background: 'hsl(38 60% 10%)', border: '1px solid hsl(38 60% 30% / 0.6)', boxShadow: '0 0 10px hsl(38 75% 52% / 0.4)' }}
+                      >
+                        <img src={hotelLogo} alt="Hotel Logo" className="w-6 h-6 object-contain" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold leading-none" style={{ color: 'hsl(38 80% 65%)' }}>Hotel Drona Palace</p>
+                        <p className="text-xs leading-tight mt-0.5" style={{ color: 'hsl(38 30% 42%)' }}>A Unit of SR Leisure Inn</p>
+                      </div>
+                    </div>
+                    <p className="text-xs" style={{ color: 'hsl(38 30% 42%)' }}>
+                      {new Date(ticket.issued_at ?? Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'numeric', year: 'numeric' })}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">{mobile}</p>
                 </div>
-
-                <div className="pt-3 border-t border-border/40 text-xs text-muted-foreground font-mono truncate text-center">
-                  {ticket.qr_text.slice(0, 30)}...
-                </div>
-              </GlassCard>
-            ))}
+              );
+            })}
 
             {/* WhatsApp share — prominent green CTA */}
             <button
@@ -1178,10 +1632,10 @@ export default function RegisterPage() {
             </button>
 
             <GlassButton variant="ghost" size="lg" className="w-full no-print" onClick={() => window.print()}>
-              🖨️ Print Tickets
+              🖨️ Print Passes
             </GlassButton>
 
-            {/* Support footer on ticket page */}
+            {/* Support footer */}
             <div className="rounded-xl bg-muted/20 border border-border p-4 text-center space-y-2">
               <p className="text-xs font-semibold text-foreground">Need Help?</p>
               <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
