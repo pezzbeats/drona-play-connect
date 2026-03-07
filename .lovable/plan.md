@@ -1,103 +1,53 @@
 
-## What We're Building
+## Root Cause — Found
 
-After a successful booking (step 3), automatically open WhatsApp with a pre-filled confirmation message directed to the customer's own number (`wa.me/91{mobile}?text=...`). This reuses the exact same deep-link pattern already in `Ticket.tsx`'s `buildReminderLink` function.
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-**Why `wa.me/91{mobile}` and not a server-side send**: WhatsApp's free API is client-side only. The existing codebase already uses `https://wa.me/91{order.purchaser_mobile}?text=...` in `Ticket.tsx` — this opens WhatsApp on the customer's phone with a pre-filled message they can send to themselves as a reminder. That's the pattern we extend here.
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
----
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-## Implementation Plan
-
-### Single file: `src/pages/Register.tsx`
-
-**1. Add a `buildConfirmationWALink` helper** (alongside `buildTicketShape`):
-
-```typescript
-const buildConfirmationWALink = (): string => {
-  const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${mobile}`;
-  const matchName = activeMatch?.name ?? 'T20 Fan Night';
-  const matchOpp = activeMatch?.opponent ? ` vs ${activeMatch.opponent}` : '';
-  const matchVenue = activeMatch?.venue ?? '';
-  const matchDate = activeMatch?.start_time
-    ? new Date(activeMatch.start_time).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : '';
-  const paidLine = paymentMethod === 'pay_at_hotel'
-    ? `💳 Payment: Pay ₹${priceQuote?.total ?? ''} at the venue`
-    : `✅ Payment: ₹${priceQuote?.total ?? ''} Confirmed`;
-  const seatNos = tickets.map(t => `Seat ${t.seat_index + 1}`).join(', ');
-
-  const lines = [
-    `🎟️ Booking Confirmed — Hotel Drona Palace`,
-    ``,
-    `Hi ${fullName}! Your T20 Fan Night pass${tickets.length > 1 ? 's are' : ' is'} ready.`,
-    ``,
-    `🏏 Match: ${matchName}${matchOpp}`,
-    matchVenue ? `📍 Venue: ${matchVenue}` : null,
-    matchDate  ? `🗓️ Date: ${matchDate}` : null,
-    `🪑 Seats: ${seatNos}`,
-    paidLine,
-    ``,
-    `🎫 View passes anytime: ${ticketUrl}`,
-    ``,
-    `— Hotel Drona Palace`,
-  ].filter(Boolean).join('\n');
-
-  return `https://wa.me/91${mobile}?text=${encodeURIComponent(lines)}`;
-};
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-**2. Auto-open WhatsApp after step transitions to 3** — add inside the existing `useEffect` that runs on `step === 3`, after the download stagger completes:
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-```typescript
-// After all downloads finish, open WhatsApp confirmation
-const waLink = buildConfirmationWALink();
-window.open(waLink, '_blank');
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
 ```
 
-But since `buildConfirmationWALink` uses closure state and mobile/tickets/paymentMethod/priceQuote will all be set by the time step 3 loads, this works cleanly.
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
-**3. Add a "Send WhatsApp Confirmation" fallback button** on step 3 — for cases where the browser blocked the auto-open (mobile Safari sometimes blocks `window.open` in async contexts). Show a small "Didn't receive the WhatsApp? Tap to resend" button below the download CTA.
+## Why this is the correct fix
 
-```jsx
-<button
-  onClick={() => window.open(buildConfirmationWALink(), '_blank')}
-  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm ..."
->
-  Resend WhatsApp Confirmation
-</button>
-```
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
----
-
-## Message Format (preview)
-
-```
-🎟️ Booking Confirmed — Hotel Drona Palace
-
-Hi Ravi! Your T20 Fan Night passes are ready.
-
-🏏 Match: T20 Night vs Challengers
-📍 Venue: Hotel Drona Palace Banquet
-🗓️ Date: 15 Mar 2025, 07:00 PM
-🪑 Seats: Seat 1, Seat 2
-✅ Payment: ₹1000 Confirmed
-
-🎫 View passes anytime: https://drona-play-connect.lovable.app/ticket?mobile=9876543210
-
-— Hotel Drona Palace
-```
-
----
-
-## Technical Notes
-
-- `window.open` in a `useEffect` (async context) may be blocked on iOS Safari — that's why we add the fallback button
-- The `useEffect` already has an 800ms delay before downloads start; we add the WhatsApp open **after** the loop (after all downloads finish or after the first one for instant feel)
-- No new files, no DB changes, no edge functions
-
-## Files to change
-
+## Files Changed
 | File | Change |
-|------|--------|
-| `src/pages/Register.tsx` | Add `buildConfirmationWALink` helper; trigger `window.open` to it in step-3 `useEffect` after downloads; add fallback "Resend WhatsApp" button on step 3 UI |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
