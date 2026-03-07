@@ -223,11 +223,12 @@ export default function AdminValidate() {
     } catch { /* non-blocking */ }
   };
 
-  const lookupTicket = useCallback(async (qrText: string) => {
+  const lookupTicket = useCallback(async (qrText: string, skipFeedbackReset?: boolean) => {
     const trimmed = qrText.trim();
     if (!trimmed) return;
     setScanFeedback('loading');
-    setTicketData(null); setGamePin(null); setVerifyResult(null);
+    // Don't reset gamePin here — it persists across re-fetches (e.g. after check-in)
+    setTicketData(null); setVerifyResult(null);
     setShowBlockForm(false); setBlockReason('');
     setCollectMethod(null); setCollectAmount(''); setCollectRef('');
     setNotFoundError(false);
@@ -267,9 +268,14 @@ export default function AdminValidate() {
       const balanceDue = Math.max(0, totalAmt - advancePd);
       setCollectAmount(balanceDue > 0 ? balanceDue.toString() : totalAmt.toString());
 
-      setScanFeedback(feedback);
+      // skipFeedbackReset is used after check-in so the caller can override with 'success'
+      if (!skipFeedbackReset) {
+        setScanFeedback(feedback);
+      }
     } catch (e: any) {
-      setScanFeedback('error');
+      if (!skipFeedbackReset) {
+        setScanFeedback('error');
+      }
       setNotFoundError(true);
       toast({ variant: 'destructive', title: 'Lookup failed', description: e.message });
     }
