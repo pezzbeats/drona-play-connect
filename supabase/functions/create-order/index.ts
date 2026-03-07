@@ -57,6 +57,7 @@ serve(async (req) => {
       seating_type, seats_count, payment_method, pricing_snapshot,
       created_source, admin_id,
       advance_paid, advance_payment_method,
+      discount_type, discount_value,
     } = body;
 
     // Basic validation
@@ -66,7 +67,24 @@ serve(async (req) => {
     if (!payment_method) return fail("payment_method is required", "VALIDATION_ERROR");
     if (!seats_count || seats_count < 1) return fail("seats_count must be at least 1", "VALIDATION_ERROR");
 
-    const totalAmount = pricing_snapshot?.total ?? 0;
+    // ── Discount computation ──
+    const subtotal = pricing_snapshot?.total ?? 0;
+    let discountAmount = 0;
+
+    if (discount_type && discount_value != null) {
+      const discountVal = parseFloat(discount_value) || 0;
+
+      if (discount_type === "flat") {
+        if (discountVal < 0) return fail("Discount cannot be negative", "VALIDATION_ERROR");
+        if (discountVal > subtotal) return fail(`Flat discount ₹${discountVal} cannot exceed subtotal ₹${subtotal}`, "VALIDATION_ERROR");
+        discountAmount = Math.floor(discountVal);
+      } else if (discount_type === "percent") {
+        if (discountVal < 0 || discountVal > 100) return fail("Percent discount must be between 0 and 100", "VALIDATION_ERROR");
+        discountAmount = Math.floor(subtotal * discountVal / 100);
+      }
+    }
+
+    const totalAmount = Math.max(0, subtotal - discountAmount);
     const advancePaidAmount = Math.min(Math.max(parseInt(advance_paid ?? 0) || 0, 0), totalAmount);
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -94,8 +112,6 @@ serve(async (req) => {
     }
 
     // Determine payment status
-    // If advance covers full amount → auto verify
-    // Otherwise stays unpaid (balance due at entry)
     const isFullyPaid = advancePaidAmount >= totalAmount && totalAmount > 0;
     const paymentStatus = isFullyPaid ? "paid_manual_verified" : "unpaid";
 
@@ -122,6 +138,9 @@ serve(async (req) => {
       created_by_admin_id: admin_id || null,
       advance_paid: advancePaidAmount,
       advance_payment_method: advancePaidAmount > 0 ? (advance_payment_method || null) : null,
+      discount_type: discountAmount > 0 ? (discount_type || null) : null,
+      discount_value: discountAmount > 0 ? (parseFloat(discount_value) || 0) : 0,
+      discount_amount: discountAmount,
       ...(isFullyPaid ? {
         payment_verified_at: new Date().toISOString(),
         payment_verified_by_admin_id: admin_id || null,
@@ -158,11 +177,18 @@ serve(async (req) => {
         collected_by_admin_id: admin_id,
         method: collectionMethod,
         amount: advancePaidAmount,
-        note: `Advance payment at booking (${advancePaidAmount < totalAmount ? `balance ₹${totalAmount - advancePaidAmount} due` : "full payment"})`,
+        note: `Advance payment at booking (${advancePaidAmount < totalAmount ? `balance ₹${totalAmount - advancePaidAmount} due` : "full payment"})${discountAmount > 0 ? ` · discount ₹${discountAmount} applied` : ""}`,
       } as any);
     }
 
-    return ok({ order_id: order.id, tickets, advance_paid: advancePaidAmount, balance_due: totalAmount - advancePaidAmount });
+    return ok({
+      order_id: order.id,
+      tickets,
+      advance_paid: advancePaidAmount,
+      balance_due: totalAmount - advancePaidAmount,
+      discount_amount: discountAmount,
+      final_total: totalAmount,
+    });
 
   } catch (e: any) {
     console.error("create-order unhandled error:", e);

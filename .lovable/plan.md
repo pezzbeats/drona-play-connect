@@ -1,99 +1,53 @@
 
-## Discount System for Admin Manual Booking
+## Root Cause — Found
 
-### What needs to happen
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-The `orders` table has no discount columns yet. We need to add `discount_type`, `discount_value`, and `discount_amount` columns to persist the discount, then wire up:
-1. **DB migration** — add 3 columns to `orders`
-2. **`create-order` edge function** — accept discount params, apply to `total_amount` before saving
-3. **`AdminManualBooking.tsx`** — UI for entering discount (toggle flat/percent, input, live preview in the price breakdown)
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
----
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-### Database migration
-Add to `public.orders`:
-```sql
-ALTER TABLE orders
-  ADD COLUMN IF NOT EXISTS discount_type  text    DEFAULT NULL,   -- 'flat' | 'percent'
-  ADD COLUMN IF NOT EXISTS discount_value numeric DEFAULT 0,      -- raw input (e.g. 200 or 15)
-  ADD COLUMN IF NOT EXISTS discount_amount integer DEFAULT 0;      -- resolved rupee amount
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-No enum needed — `text` is fine, kept nullable so existing rows are unaffected.
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
----
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-### Edge function (`create-order/index.ts`)
-Accept new body fields: `discount_type`, `discount_value`.
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
-```
-discount_amount = 
-  if discount_type === 'flat'    → Math.min(discount_value, original_total)
-  if discount_type === 'percent' → Math.floor(original_total * discount_value / 100)
-  else 0
+## Changes
 
-final_total = original_total - discount_amount
-```
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
 
-Persist `discount_type`, `discount_value`, `discount_amount` in the order row. The `pricing_snapshot` passed from UI will contain the pre-discount subtotal; the function computes and stores the final `total_amount` as `final_total`.
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
 
-Validation guards: percent must be 0–100, flat must not exceed total, discount must be non-negative.
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
 
-Also log discount in `admin_activity` meta.
-
----
-
-### UI changes (`AdminManualBooking.tsx`)
-
-Add discount state:
-```typescript
-const [discount, setDiscount] = useState({ type: 'flat', value: '' });
+// After:
+const [loading, setLoading] = useState(false);
 ```
 
-**Placement**: between the "Price Quote" card and the "Advance Payment" section. Only shown once a quote is fetched.
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
-**Discount UI block:**
-- Toggle buttons: `Flat (₹)` / `Percent (%)`
-- Number input
-- Real-time live display: "Subtotal ₹2997 − ₹200 discount = **₹2797**"
-- If percent: shows resolved amount in muted text ("= ₹449")
+## Why this is the correct fix
 
-**Price breakdown card** updates to show:
-```
-Seat #1 (new_customer)    ₹999
-Seat #2 (loyal_base)      ₹949
-─────────────────────────────
-Subtotal                 ₹1948
-Discount (10%)          −₹194
-─────────────────────────────
-Total                    ₹1754   ← green gradient
-```
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
-**Effective total** used for:
-- Advance paid max validation (`advancePaid <= effectiveTotal`)
-- Balance due calculation
-- "Create Booking" button label (`₹X at entry`)
-
-**Sending to backend:**
-```typescript
-body: {
-  ...existing fields,
-  discount_type: discount.value ? discount.type : null,
-  discount_value: parseFloat(discount.value) || 0,
-}
-```
-The edge function returns `{ order_id, tickets, advance_paid, balance_due }` — the discount has already been applied server-side in the stored `total_amount`.
-
----
-
-### File changes
-
+## Files Changed
 | File | Change |
-|------|--------|
-| New migration SQL | Add `discount_type`, `discount_value`, `discount_amount` to `orders` |
-| `supabase/functions/create-order/index.ts` | Accept discount params, compute `discount_amount`, store adjusted `total_amount` |
-| `src/pages/admin/AdminManualBooking.tsx` | Discount type toggle + value input, live breakdown, recalculated effective total wired to advance/balance logic |
-
-No changes to `pricing-quote` edge function — it returns the raw per-seat prices and subtotal; discount is a manual admin override applied on top.
-
-No changes to `AdminPayments.tsx` needed — the stored `total_amount` in the DB will already reflect the discounted price.
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
