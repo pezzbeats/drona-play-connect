@@ -358,24 +358,26 @@ export default function RegisterPage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
-  // Auto-download QR PNGs when step 3 loads
+  // Auto-download full pass PNGs when step 3 loads
   useEffect(() => {
-    if (step !== 3 || tickets.length === 0) return;
-    const timer = setTimeout(() => {
-      tickets.forEach((ticket) => {
-        const canvas = document.getElementById(`qr-auto-${ticket.id}`) as HTMLCanvasElement | null;
-        if (!canvas) return;
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `ticket-seat-${ticket.seat_index + 1}.png`;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-        });
-      });
-    }, 600);
+    if (step !== 3 || tickets.length === 0 || !activeMatch) return;
+    const timer = setTimeout(async () => {
+      for (const ticket of tickets) {
+        const shaped = buildTicketShape(ticket);
+        try {
+          const canvas = await buildPassCanvas(shaped);
+          canvas.toBlob((blob) => {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pass-seat-${ticket.seat_index + 1}.png`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+          });
+        } catch { /* silent */ }
+      }
+    }, 800);
     return () => clearTimeout(timer);
   }, [step, tickets]);
 
