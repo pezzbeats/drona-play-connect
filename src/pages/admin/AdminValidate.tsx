@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import jsQR from 'jsqr';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -16,7 +17,7 @@ import {
 import {
   ScanLine, QrCode, CheckCircle2, Upload, Copy, RefreshCw, Loader2,
   User, DollarSign, ShieldAlert, ShieldCheck, ShieldOff, AlertTriangle,
-  WifiOff, Banknote, Smartphone, CreditCard, XCircle,
+  WifiOff, Banknote, Smartphone, CreditCard, XCircle, Camera, X,
 } from 'lucide-react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -89,14 +90,25 @@ export default function AdminValidate() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>(loadOfflineQueue);
   const [matchFlags, setMatchFlags] = useState<any>(null);
-  // For inline error card
   const [notFoundError, setNotFoundError] = useState(false);
+
+  // Camera scanner state
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Camera refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
+  const scanningRef = useRef(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -120,6 +132,13 @@ export default function AdminValidate() {
     feedbackTimerRef.current = setTimeout(() => setScanFeedback('idle'), 1400);
     return () => clearTimeout(feedbackTimerRef.current);
   }, [scanFeedback]);
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      closeCamera();
+    };
+  }, []);
 
   const processOfflineQueue = useCallback(async () => {
     const queue = loadOfflineQueue();
@@ -175,7 +194,7 @@ export default function AdminValidate() {
     } catch { /* non-blocking */ }
   };
 
-  const lookupTicket = async (qrText: string) => {
+  const lookupTicket = useCallback(async (qrText: string) => {
     const trimmed = qrText.trim();
     if (!trimmed) return;
     setScanFeedback('loading');
@@ -186,7 +205,7 @@ export default function AdminValidate() {
     try {
       const { data, error } = await supabase
         .from('tickets')
-        .select('*, order:orders!order_id(purchaser_full_name, purchaser_mobile, payment_status, seats_count, total_amount, advance_paid, advance_payment_method, match_id, match:matches!match_id(name, venue))')
+        .select('*, order:orders!order_id(purchaser_full_name, purchaser_mobile, payment_status, payment_method, seats_count, total_amount, advance_paid, advance_payment_method, match_id, match:matches!match_id(name, venue))')
         .eq('qr_text', trimmed)
         .single();
 
@@ -213,7 +232,7 @@ export default function AdminValidate() {
       await logScanAttempt(trimmed, outcome, data.id, ticketMatchId);
       setTicketData(data);
 
-      // Pre-fill collect amount with balance due (total - advance already paid)
+      // Pre-fill collect amount: balance due or full total if nothing paid
       const totalAmt = ord?.total_amount ?? 0;
       const advancePd = ord?.advance_paid ?? 0;
       const balanceDue = Math.max(0, totalAmt - advancePd);
@@ -225,7 +244,125 @@ export default function AdminValidate() {
       setNotFoundError(true);
       toast({ variant: 'destructive', title: 'Lookup failed', description: e.message });
     }
+  }, [activeMatch, toast, user?.id]);
+
+  // ── Camera scanning ──────────────────────────────────────────────────────────
+
+  const closeCamera = useCallback(() => {
+    scanningRef.current = false;
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraOpen(false);
+    setCameraError(null);
+    setCameraReady(false);
+  }, []);
+
+  const startScanLoop = useCallback(() => {
+    scanningRef.current = true;
+
+    const tick = async () => {
+      if (!scanningRef.current) return;
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) {
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      try {
+        // Try native BarcodeDetector first (Chrome/Android — fast)
+        if ('BarcodeDetector' in window) {
+          const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+          const codes = await detector.detect(video);
+          if (codes.length > 0) {
+            handleCameraResult(codes[0].rawValue);
+            return;
+          }
+        } else {
+          // jsQR fallback — draw frame to offscreen canvas
+          const canvas = canvasRef.current;
+          if (!canvas) { rafRef.current = requestAnimationFrame(tick); return; }
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          if (!w || !h) { rafRef.current = requestAnimationFrame(tick); return; }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (!ctx) { rafRef.current = requestAnimationFrame(tick); return; }
+          ctx.drawImage(video, 0, 0, w, h);
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+          if (code?.data) {
+            handleCameraResult(code.data);
+            return;
+          }
+        }
+      } catch { /* decode errors are non-fatal, keep scanning */ }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const handleCameraResult = useCallback((qrText: string) => {
+    playBeep('success');
+    vibrate([120]);
+    closeCamera();
+    setQrInput(qrText);
+    lookupTicket(qrText);
+  }, [closeCamera, lookupTicket]);
+
+  // Called directly from button onClick — getUserMedia must be in the click chain
+  const openCamera = async () => {
+    setCameraError(null);
+    setCameraReady(false);
+    setCameraOpen(true);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera not supported in this browser. Please use Chrome or Safari.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
+      streamRef.current = stream;
+
+      // Wait for video element to be in the DOM (it's rendered once cameraOpen=true)
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play().then(() => {
+              setCameraReady(true);
+              startScanLoop();
+            }).catch((err) => {
+              setCameraError('Could not start video: ' + err.message);
+            });
+          };
+        }
+      });
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        setCameraError('Camera permission denied. Please allow camera access in your browser settings and try again.');
+      } else if (err.name === 'NotFoundError') {
+        setCameraError('No camera found on this device.');
+      } else {
+        setCameraError('Could not open camera: ' + (err.message || err.name));
+      }
+    }
   };
+
+  // ── ticket helpers ───────────────────────────────────────────────────────────
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pasted = e.clipboardData.getData('text').trim();
@@ -386,6 +523,117 @@ export default function AdminValidate() {
   return (
     <div className="px-4 py-4 space-y-4 w-full max-w-xl mx-auto md:mx-0">
 
+      {/* ── Camera Scanner Overlay ── */}
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          {/* Header bar */}
+          <div className="relative flex items-center justify-between px-4 pt-safe py-3 bg-black/80">
+            <div className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-primary" />
+              <span className="font-display font-bold text-foreground text-base">Scan QR Code</span>
+            </div>
+            <button
+              onClick={closeCamera}
+              className="p-2 rounded-full bg-muted/30 hover:bg-muted/60 transition-colors touch-target"
+              aria-label="Close camera"
+            >
+              <X className="h-5 w-5 text-foreground" />
+            </button>
+          </div>
+
+          {/* Video area */}
+          <div className="flex-1 relative overflow-hidden">
+            <video
+              ref={videoRef}
+              className="absolute inset-0 w-full h-full object-cover"
+              autoPlay
+              playsInline
+              muted
+            />
+
+            {/* Hidden canvas used by jsQR fallback */}
+            <canvas ref={canvasRef} className="hidden" />
+
+            {/* Dark overlay with viewfinder cut-out */}
+            {!cameraError && (
+              <div className="absolute inset-0 pointer-events-none">
+                {/* Semi-transparent overlay */}
+                <div className="absolute inset-0 bg-black/40" />
+
+                {/* Viewfinder — centered 260×260 */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="relative w-64 h-64">
+                    {/* Clear window */}
+                    <div className="absolute inset-0 bg-transparent" style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)' }} />
+
+                    {/* Corner brackets */}
+                    {/* Top-left */}
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-sm" />
+                    {/* Top-right */}
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-sm" />
+                    {/* Bottom-left */}
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-sm" />
+                    {/* Bottom-right */}
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-sm" />
+
+                    {/* Scanning laser line */}
+                    {cameraReady && (
+                      <div
+                        className="absolute left-1 right-1 h-0.5 bg-primary/80"
+                        style={{ animation: 'scan-line 2s ease-in-out infinite', top: '50%' }}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading spinner while camera initialises */}
+            {!cameraError && !cameraReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                <div className="text-center space-y-3">
+                  <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+                  <p className="text-foreground text-sm font-medium">Starting camera…</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {cameraError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-6">
+                <div className="text-center space-y-4 max-w-xs">
+                  <ShieldAlert className="h-12 w-12 text-destructive mx-auto" />
+                  <p className="text-foreground font-semibold text-base">Camera Error</p>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{cameraError}</p>
+                  <GlassButton variant="ghost" size="md" onClick={closeCamera} className="mx-auto">
+                    Close
+                  </GlassButton>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom instruction bar */}
+          {!cameraError && (
+            <div className="px-4 pb-safe py-4 bg-black/80 text-center">
+              <p className="text-muted-foreground text-sm">
+                {cameraReady
+                  ? 'Point camera at ticket QR code — auto-detects instantly'
+                  : 'Please allow camera access when prompted'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Scan-line keyframe */}
+      <style>{`
+        @keyframes scan-line {
+          0%, 100% { transform: translateY(-60px); opacity: 0.4; }
+          50% { transform: translateY(60px); opacity: 1; }
+        }
+      `}</style>
+
       {/* Reissue QR Confirmation Dialog */}
       <AlertDialog open={showReissueDialog} onOpenChange={setShowReissueDialog}>
         <AlertDialogContent className="glass-card-elevated border-border">
@@ -467,6 +715,17 @@ export default function AdminValidate() {
             autoComplete="off"
             spellCheck={false}
           />
+          {/* Camera button */}
+          <button
+            type="button"
+            onClick={openCamera}
+            className="shrink-0 h-14 w-14 rounded-xl flex items-center justify-center bg-muted/40 border border-input hover:bg-primary/10 hover:border-primary/50 transition-all duration-150 active:scale-95 touch-target"
+            title="Open camera to scan QR"
+            aria-label="Open camera"
+          >
+            <Camera className="h-5 w-5 text-foreground" />
+          </button>
+          {/* Scan button */}
           <GlassButton
             variant="primary"
             size="lg"
@@ -546,7 +805,7 @@ export default function AdminValidate() {
               <p className="text-muted-foreground text-sm ml-7">{order.purchaser_mobile}</p>
             </div>
 
-            {/* Balance due banner — shown if advance partially paid and not yet fully settled */}
+            {/* Balance due banner — shown for any unpaid/partial order */}
             {(() => {
               const totalAmt = order?.total_amount ?? 0;
               const advancePd = order?.advance_paid ?? 0;
@@ -583,6 +842,11 @@ export default function AdminValidate() {
               }`}>
                 {isCheckedIn ? '✅ CHECKED IN' : '⏳ NOT YET IN'}
               </div>
+              {order?.payment_method === 'pay_at_hotel' && (
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border-2 bg-primary/10 border-primary/40 text-primary">
+                  🏨 PAY AT GATE
+                </div>
+              )}
               {isBlocked && (
                 <div className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border-2 bg-destructive/15 border-destructive/50 text-destructive">
                   🚫 BLOCKED
@@ -638,7 +902,6 @@ export default function AdminValidate() {
                       Collect payment below first — check-in will unlock once payment is recorded
                     </div>
                   )}
-                  {/* Larger check-in button */}
                   <GlassButton
                     variant="success"
                     size="lg"
@@ -689,7 +952,7 @@ export default function AdminValidate() {
                 return <div className="mb-4" />;
               })()}
 
-              {/* Quick method buttons — large min-height */}
+              {/* Quick method buttons */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {([
                   { id: 'cash', label: 'Cash', icon: Banknote },
@@ -751,7 +1014,7 @@ export default function AdminValidate() {
                   </div>
 
                   <GlassButton variant="warning" size="lg" className="w-full h-14" loading={collecting} onClick={handleCollect} disabled={!collectAmount}>
-                    Record {collectMethod.toUpperCase()} Payment
+                    Record {collectMethod === 'upi_qr' ? 'UPI' : collectMethod.toUpperCase()} Payment
                   </GlassButton>
                 </div>
               )}
