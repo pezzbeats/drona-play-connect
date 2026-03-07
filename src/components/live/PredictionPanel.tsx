@@ -6,6 +6,41 @@ import { useToast } from '@/hooks/use-toast';
 import { Lock, CheckCircle2, Clock, AlertTriangle, PauseCircle, Loader2 } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
+// ── Standardised ball outcome set (mirrors AdminControl.BALL_OUTCOMES) ────────
+const BALL_OUTCOMES = [
+  { key: 'dot_ball',   label: 'Dot',      emoji: '•'  },
+  { key: 'runs_1',     label: '1',        emoji: '1'  },
+  { key: 'runs_2',     label: '2',        emoji: '2'  },
+  { key: 'runs_3',     label: '3',        emoji: '3'  },
+  { key: 'boundary_4', label: '4',        emoji: '4'  },
+  { key: 'six_6',      label: '6',        emoji: '6'  },
+  { key: 'wide',       label: 'Wide',     emoji: 'WD' },
+  { key: 'no_ball',    label: 'No Ball',  emoji: 'NB' },
+  { key: 'byes',       label: 'Byes',     emoji: 'B'  },
+  { key: 'leg_byes',   label: 'Leg Byes', emoji: 'LB' },
+  { key: 'wicket',     label: 'Wicket',   emoji: 'W'  },
+] as const;
+
+type BallKey = typeof BALL_OUTCOMES[number]['key'];
+
+// Per-key color classes (selected / resolved states)
+const KEY_COLORS: Record<string, { selected: string; correct: string; wrong: string; emoji: string }> = {
+  dot_ball:   { selected: 'border-muted-foreground/70 bg-muted/30 text-foreground',           correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-muted-foreground' },
+  runs_1:     { selected: 'border-foreground/60 bg-card/60 text-foreground',                  correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-foreground' },
+  runs_2:     { selected: 'border-foreground/60 bg-card/60 text-foreground',                  correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-foreground' },
+  runs_3:     { selected: 'border-foreground/60 bg-card/60 text-foreground',                  correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-foreground' },
+  boundary_4: { selected: 'border-warning/80 bg-warning/15 text-warning',                     correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-warning' },
+  six_6:      { selected: 'border-primary/80 bg-primary/20 text-primary shadow-glow-primary', correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-primary' },
+  wide:       { selected: 'border-warning/70 bg-warning/10 text-warning',                     correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-warning' },
+  no_ball:    { selected: 'border-warning/70 bg-warning/10 text-warning',                     correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-warning' },
+  byes:       { selected: 'border-muted-foreground/60 bg-muted/20 text-muted-foreground',     correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-muted-foreground' },
+  leg_byes:   { selected: 'border-muted-foreground/60 bg-muted/20 text-muted-foreground',     correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-muted-foreground' },
+  wicket:     { selected: 'border-destructive/80 bg-destructive/20 text-destructive',          correct: 'border-success bg-success/20 text-success',                         wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80',  emoji: 'text-destructive' },
+};
+
+// Fallback for legacy windows that may have non-standard keys
+const fallbackColor = { selected: 'border-primary/70 bg-primary/20 text-primary', correct: 'border-success bg-success/20 text-success', wrong: 'border-destructive/50 bg-destructive/10 text-destructive/80', emoji: 'text-primary' };
+
 interface PredictionWindow {
   id: string;
   match_id: string;
@@ -31,7 +66,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const [loading, setLoading] = useState(true);
   const [matchFlags, setMatchFlags] = useState<MatchFlags | null>(null);
   const [submittedWindows, setSubmittedWindows] = useState<Record<string, string>>({});
-  // submittingKey tracks the exact button being submitted: { windowId, optKey }
   const [submittingKey, setSubmittingKey] = useState<{ windowId: string; optKey: string } | null>(null);
   const [animatingWindowId, setAnimatingWindowId] = useState<string | null>(null);
   const prevOpenWindowIdRef = useRef<string | null>(null);
@@ -53,14 +87,11 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         .maybeSingle(),
     ]);
 
-    if (flagsRes.data) {
-      setMatchFlags(flagsRes.data as MatchFlags);
-    }
+    if (flagsRes.data) setMatchFlags(flagsRes.data as MatchFlags);
 
     if (windowsRes.data) {
       setWindows(windowsRes.data as any);
 
-      // Detect new open window → trigger stagger animation
       const newOpenId = (windowsRes.data as any[]).find(w => w.status === 'open')?.id ?? null;
       if (newOpenId && newOpenId !== prevOpenWindowIdRef.current) {
         setAnimatingWindowId(newOpenId);
@@ -77,9 +108,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
         if (myPreds) {
           const submitted: Record<string, string> = {};
-          for (const p of myPreds) {
-            submitted[p.window_id] = (p.prediction as any)?.key || '';
-          }
+          for (const p of myPreds) submitted[p.window_id] = (p.prediction as any)?.key || '';
           setSubmittedWindows(submitted);
         }
       }
@@ -89,34 +118,22 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   const subscriptions = useMemo<ChannelSubscription[]>(() => [
     {
-      event: '*',
-      schema: 'public',
-      table: 'prediction_windows',
+      event: '*', schema: 'public', table: 'prediction_windows',
       filter: `match_id=eq.${matchId}`,
       callback: (payload) => {
-        // Optimistic instant update — no waiting for async refetch
-        // This means the UI freezes the moment the window status changes server-side
         if (payload.new) {
           setWindows(prev => {
-            const updated = prev.map(w =>
-              w.id === (payload.new as any).id ? { ...w, ...(payload.new as any) } : w
-            );
-            // If it's a new window not yet in list, add it
+            const updated = prev.map(w => w.id === (payload.new as any).id ? { ...w, ...(payload.new as any) } : w);
             const exists = prev.some(w => w.id === (payload.new as any).id);
-            if (!exists && (payload.new as any).status === 'open') {
-              return [payload.new as any, ...updated];
-            }
+            if (!exists && (payload.new as any).status === 'open') return [payload.new as any, ...updated];
             return updated;
           });
         }
-        // Full refetch for correctness (catches deletes, resolved answers, etc.)
         fetchWindows();
       },
     },
     {
-      event: '*',
-      schema: 'public',
-      table: 'match_flags',
+      event: '*', schema: 'public', table: 'match_flags',
       filter: `match_id=eq.${matchId}`,
       callback: (payload) => {
         if (payload.new) {
@@ -129,16 +146,11 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
     },
   ], [matchId, fetchWindows]);
 
-  useRealtimeChannel(
-    `predictions-panel-${matchId}`,
-    subscriptions,
-    fetchWindows,
-  );
+  useRealtimeChannel(`predictions-panel-${matchId}`, subscriptions, fetchWindows);
 
-  // One-tap submit: called immediately when user taps an option
   const handleOptionTap = async (windowId: string, optKey: string) => {
-    if (submittedWindows[windowId]) return; // already submitted, ignore
-    if (submittingKey?.windowId === windowId) return; // submission in flight
+    if (submittedWindows[windowId]) return;
+    if (submittingKey?.windowId === windowId) return;
     if (matchFlags?.predictions_frozen) {
       toast({ variant: 'destructive', title: 'Guesses are paused by admin' });
       return;
@@ -153,7 +165,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       if (error || data?.error) {
         const code = data?.code;
         if (code === 'ALREADY_SUBMITTED') {
-          // Treat as success — sync local state
           setSubmittedWindows(prev => ({ ...prev, [windowId]: optKey }));
           toast({ title: '🎯 Guess already locked in!' });
         } else {
@@ -173,7 +184,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const openWindows = windows.filter(w => w.status === 'open');
   const closedWindows = windows.filter(w => w.status !== 'open');
 
-  /* ── Skeleton loading state ── */
   if (loading) {
     return (
       <div className="space-y-3">
@@ -190,9 +200,9 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
             <div className="h-3 w-28 skeleton rounded" />
           </div>
           <div className="h-4 w-3/4 skeleton rounded mb-4" />
-          <div className="grid grid-cols-2 gap-2.5 mb-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-[52px] skeleton rounded-xl" />
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-[68px] skeleton rounded-2xl" />
             ))}
           </div>
         </GlassCard>
@@ -203,7 +213,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
               <div className="h-3 w-10 skeleton rounded ml-auto" />
             </div>
             <div className="h-3 w-full skeleton rounded" />
-            <div className="h-3 w-2/3 skeleton rounded mt-1.5" />
           </GlassCard>
         ))}
       </div>
@@ -221,7 +230,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         </span>
       </div>
 
-      {/* Admin freeze banner */}
+      {/* Freeze banner */}
       {frozen && (
         <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-warning/40 bg-warning/10 text-warning text-sm font-medium">
           <PauseCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -244,9 +253,11 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       {openWindows.map(window => {
         const submitted = submittedWindows[window.id];
         const isThisWindowSubmitting = submittingKey?.windowId === window.id;
+        const shouldAnimate = animatingWindowId === window.id;
 
         return (
           <GlassCard key={window.id} className={`p-4 border ${frozen ? 'border-warning/30 opacity-75' : 'border-primary/30'}`} glow={!frozen}>
+            {/* Header */}
             <div className="flex items-center gap-2 mb-3">
               <div className={`w-2 h-2 rounded-full ${frozen ? 'bg-warning' : 'bg-primary animate-pulse'}`} />
               <span className={`text-xs font-bold uppercase tracking-wide ${frozen ? 'text-warning' : 'text-primary'}`}>
@@ -254,43 +265,56 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
               </span>
             </div>
 
-            <p className="text-foreground font-semibold text-sm mb-3">
+            <p className="text-foreground font-semibold text-sm mb-4">
               {window.question || 'What will happen on the next ball?'}
             </p>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            {/* Option cards — 4-column grid */}
+            <div className="grid grid-cols-4 gap-2">
               {(window.options || []).map((opt: any, optIdx: number) => {
                 const isSubmitted = submitted === opt.key;
                 const isThisSpinning = isThisWindowSubmitting && submittingKey?.optKey === opt.key;
                 const isDisabled = !!submitted || frozen || isThisWindowSubmitting;
-                const shouldAnimate = animatingWindowId === window.id;
+                const colors = KEY_COLORS[opt.key] || fallbackColor;
+
+                // Derive emoji from BALL_OUTCOMES lookup, fall back to opt.label first char
+                const outcomeData = BALL_OUTCOMES.find(o => o.key === opt.key);
+                const emoji = outcomeData?.emoji ?? opt.label.slice(0, 2);
+
+                let cardCls = '';
+                if (frozen && !isSubmitted) {
+                  cardCls = 'border-border/20 bg-muted/10 text-muted-foreground/40 cursor-not-allowed';
+                } else if (isThisSpinning) {
+                  cardCls = 'border-primary/60 bg-primary/10 text-primary cursor-wait';
+                } else if (isSubmitted) {
+                  cardCls = `${colors.selected} ring-2 ring-primary/40`;
+                } else if (isDisabled) {
+                  cardCls = 'border-border/20 bg-muted/10 text-muted-foreground/40 cursor-not-allowed opacity-50';
+                } else {
+                  cardCls = 'border-border/40 bg-card/50 text-foreground hover:border-primary/50 hover:bg-primary/8 hover:scale-105 active:scale-95';
+                }
 
                 return (
                   <button
                     key={opt.key}
-                    disabled={isDisabled}
+                    disabled={isDisabled && !isSubmitted}
                     onClick={() => handleOptionTap(window.id, opt.key)}
-                    className={`rounded-xl p-3.5 min-h-[52px] text-sm font-semibold transition-all border-2 active:scale-95 ${
+                    className={`flex flex-col items-center justify-center gap-1 rounded-2xl border-2 h-[72px] transition-all touch-manipulation select-none ${cardCls} ${
                       shouldAnimate ? 'animate-slide-up' : ''
-                    } ${
-                      frozen
-                        ? 'border-border/30 bg-muted/20 text-muted-foreground cursor-not-allowed'
-                        : isSubmitted
-                        ? 'border-primary bg-primary/20 text-primary'
-                        : isThisWindowSubmitting && !isThisSpinning
-                        ? 'border-border/30 bg-card/30 text-muted-foreground cursor-not-allowed opacity-50'
-                        : isThisSpinning
-                        ? 'border-primary/60 bg-primary/10 text-primary cursor-wait'
-                        : 'border-border bg-card/50 text-foreground hover:border-primary/40'
                     }`}
-                    style={shouldAnimate ? { animationDelay: `${optIdx * 60}ms`, animationFillMode: 'both' } as React.CSSProperties : undefined}
+                    style={shouldAnimate ? { animationDelay: `${optIdx * 50}ms`, animationFillMode: 'both' } as React.CSSProperties : undefined}
                   >
                     {isThisSpinning ? (
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                    ) : isSubmitted ? (
-                      <><CheckCircle2 className="h-3.5 w-3.5 inline mr-1" />{opt.label}</>
+                      <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
-                      opt.label
+                      <>
+                        <span className={`text-xl font-black leading-none ${isSubmitted ? '' : (KEY_COLORS[opt.key] || fallbackColor).emoji}`}>
+                          {isSubmitted ? <CheckCircle2 className="h-5 w-5" /> : emoji}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wide leading-none opacity-80">
+                          {opt.label}
+                        </span>
+                      </>
                     )}
                   </button>
                 );
@@ -298,7 +322,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
             </div>
 
             {submitted && (
-              <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium mt-3">
+              <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium mt-3 pt-3 border-t border-primary/20">
                 <CheckCircle2 className="h-4 w-4" />
                 Guess locked in — cannot be changed
               </div>
@@ -328,12 +352,30 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
               )}
             </div>
             <p className="text-xs text-foreground">{window.question}</p>
-            {submitted && (
+
+            {/* Compact resolved option chips */}
+            {isResolved && (window.options || []).length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {(window.options as any[]).map((opt: any) => {
+                  const isMyPick = submitted === opt.key;
+                  const isCorrectOpt = opt.key === correctKey;
+                  let chipCls = 'border-border/30 text-muted-foreground/50';
+                  if (isCorrectOpt) chipCls = 'border-success/60 bg-success/15 text-success font-bold';
+                  else if (isMyPick) chipCls = 'border-destructive/50 bg-destructive/10 text-destructive/80';
+                  return (
+                    <span key={opt.key} className={`text-[10px] px-2 py-0.5 rounded-full border ${chipCls}`}>
+                      {opt.label}
+                      {isMyPick && !isCorrectOpt && ' ✗'}
+                      {isCorrectOpt && ' ✓'}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {submitted && !isResolved && (
               <p className="text-xs text-muted-foreground mt-1">
-                Your guess: {(window.options as any[])?.find(o => o.key === submitted)?.label || submitted}
-                {isResolved && correctKey && (
-                  <> · Correct: {(window.options as any[])?.find(o => o.key === correctKey)?.label || correctKey}</>
-                )}
+                Your guess: {(window.options as any[])?.find((o: any) => o.key === submitted)?.label || submitted}
               </p>
             )}
           </GlassCard>

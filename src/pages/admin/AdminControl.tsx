@@ -22,6 +22,23 @@ import {
   List, Play, Square, Flag, Shield,
 } from 'lucide-react';
 
+// ── Shared Ball Outcomes ───────────────────────────────────────────────────────
+export const BALL_OUTCOMES = [
+  { key: 'dot_ball',   label: 'Dot',      emoji: '•',  colorCls: 'border-border/60 text-muted-foreground' },
+  { key: 'runs_1',     label: '1',        emoji: '1',  colorCls: 'border-border/60 text-foreground' },
+  { key: 'runs_2',     label: '2',        emoji: '2',  colorCls: 'border-border/60 text-foreground' },
+  { key: 'runs_3',     label: '3',        emoji: '3',  colorCls: 'border-border/60 text-foreground' },
+  { key: 'boundary_4', label: '4',        emoji: '4',  colorCls: 'border-warning/60 text-warning' },
+  { key: 'six_6',      label: '6',        emoji: '6',  colorCls: 'border-primary/70 text-primary' },
+  { key: 'wide',       label: 'Wide',     emoji: 'WD', colorCls: 'border-warning/50 text-warning' },
+  { key: 'no_ball',    label: 'No Ball',  emoji: 'NB', colorCls: 'border-warning/50 text-warning' },
+  { key: 'byes',       label: 'Byes',     emoji: 'B',  colorCls: 'border-muted text-muted-foreground' },
+  { key: 'leg_byes',   label: 'Leg Byes', emoji: 'LB', colorCls: 'border-muted text-muted-foreground' },
+  { key: 'wicket',     label: 'Wicket',   emoji: 'W',  colorCls: 'border-destructive/70 text-destructive' },
+] as const;
+
+export type BallOutcomeKey = typeof BALL_OUTCOMES[number]['key'];
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabId = 'command' | 'roster' | 'overs' | 'prediction' | 'super_over';
 
@@ -131,8 +148,8 @@ export default function AdminControl() {
   // Bowler override for over
   const [overBowler, setOverBowler] = useState('');
 
-  // Prediction window form
-  const [windowQuestion, setWindowQuestion] = useState('What will happen on the next ball?');
+  // Primary ball outcome selection (drives delivery form prefill)
+  const [selectedOutcome, setSelectedOutcome] = useState<BallOutcomeKey | null>(null);
 
   // ── Data fetch ─────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -369,6 +386,7 @@ export default function AdminControl() {
         is_wicket: false, wicket_type: '', out_player_id: '', fielder_id: '',
         free_hit: false, notes: '',
       }));
+      setSelectedOutcome(null);
       fetchAll();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed', description: e.message });
@@ -441,13 +459,28 @@ export default function AdminControl() {
   const handleOpenWindow = () => {
     if (!match) return;
     callFunction('resolve-prediction-window', {
-      action: 'open', match_id: match.id, question: windowQuestion,
-      options: [
-        { key: 'dot', label: 'Dot Ball' }, { key: '1', label: '1 Run' },
-        { key: '2', label: '2 Runs' }, { key: '4', label: '4 Boundary' },
-        { key: '6', label: '6 Sixer' }, { key: 'wicket', label: 'Wicket 🏏' },
-      ],
+      action: 'open',
+      match_id: match.id,
+      question: 'What will happen on the next ball?',
+      options: BALL_OUTCOMES.map(o => ({ key: o.key, label: o.label })),
     }, 'open-window');
+  };
+
+  const applyOutcomePrefill = (key: BallOutcomeKey) => {
+    setSelectedOutcome(key);
+    const prefill: Partial<typeof delivery> = {};
+    if (key === 'dot_ball')   { prefill.runs_off_bat = '0'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'runs_1') { prefill.runs_off_bat = '1'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'runs_2') { prefill.runs_off_bat = '2'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'runs_3') { prefill.runs_off_bat = '3'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'boundary_4') { prefill.runs_off_bat = '4'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'six_6')  { prefill.runs_off_bat = '6'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'wide')   { prefill.runs_off_bat = '0'; prefill.extras_type = 'wide'; prefill.extras_runs = '1'; prefill.is_wicket = false; }
+    else if (key === 'no_ball') { prefill.runs_off_bat = '0'; prefill.extras_type = 'no_ball'; prefill.extras_runs = '1'; prefill.is_wicket = false; }
+    else if (key === 'byes')   { prefill.runs_off_bat = '0'; prefill.extras_type = 'bye'; prefill.extras_runs = '0'; prefill.is_wicket = false; }
+    else if (key === 'leg_byes') { prefill.runs_off_bat = '0'; prefill.extras_type = 'leg_bye'; prefill.extras_runs = '0'; prefill.is_wicket = false; }
+    else if (key === 'wicket') { prefill.runs_off_bat = '0'; prefill.extras_type = 'none'; prefill.is_wicket = true; }
+    setDelivery(d => ({ ...d, ...prefill }));
   };
 
   const handleLockWindow = () => {
@@ -760,23 +793,13 @@ export default function AdminControl() {
                     <span className="text-xs font-bold text-success uppercase tracking-wide">Ready for next ball</span>
                   </div>
                   <p className="text-xs text-muted-foreground">Open the guess window so customers can predict before you record this ball.</p>
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <input
-                        className="glass-input w-full h-8 text-xs px-2 rounded-lg border border-border bg-muted/20 text-foreground placeholder:text-muted-foreground"
-                        value={windowQuestion}
-                        onChange={e => setWindowQuestion(e.target.value)}
-                        placeholder="What will happen on the next ball?"
-                      />
-                    </div>
-                    <GlassButton
-                      variant="success" size="sm"
-                      loading={actionLoading === 'open-window'}
-                      onClick={handleOpenWindow}
-                    >
-                      <Unlock className="h-3.5 w-3.5" /> Open Guesses
-                    </GlassButton>
-                  </div>
+                  <GlassButton
+                    variant="success" size="sm"
+                    loading={actionLoading === 'open-window'}
+                    onClick={handleOpenWindow}
+                  >
+                    <Unlock className="h-3.5 w-3.5" /> Open Guesses
+                  </GlassButton>
                 </div>
               )}
 
@@ -819,6 +842,35 @@ export default function AdminControl() {
                       </GlassButton>
                     </div>
                   )}
+
+                  {/* ── Primary Outcome Selector ── */}
+                  <div className="border border-primary/20 rounded-xl p-3 bg-card/40 space-y-2">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">What happened on this ball?</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {BALL_OUTCOMES.map(opt => {
+                        const isSelected = selectedOutcome === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            onClick={() => applyOutcomePrefill(opt.key)}
+                            className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border-2 h-14 transition-all active:scale-95 ${
+                              isSelected
+                                ? `${opt.colorCls} bg-card/80 shadow-md`
+                                : 'border-border/40 text-muted-foreground hover:border-border bg-card/20'
+                            }`}
+                          >
+                            <span className={`text-base font-black leading-none ${isSelected ? opt.colorCls.split(' ')[1] : 'text-foreground'}`}>{opt.emoji}</span>
+                            <span className="text-[9px] uppercase tracking-wide leading-none">{opt.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedOutcome && (
+                      <p className="text-[10px] text-muted-foreground">
+                        ✓ Fields prefilled for <strong className="text-foreground">{BALL_OUTCOMES.find(o => o.key === selectedOutcome)?.label}</strong> — adjust below if needed
+                      </p>
+                    )}
+                  </div>
 
                   {/* Players */}
                   <div className="grid grid-cols-3 gap-2">
@@ -1256,7 +1308,9 @@ export default function AdminControl() {
 
               {!activeWindow ? (
                 <div className="space-y-2">
-                  <Input className="glass-input text-sm" value={windowQuestion} onChange={e => setWindowQuestion(e.target.value)} placeholder="Prediction question..." />
+                  <div className="rounded-lg bg-muted/20 border border-border/40 px-3 py-2 text-xs text-muted-foreground">
+                    Fixed question: <span className="text-foreground font-medium">"What will happen on the next ball?"</span>
+                  </div>
                   <GlassButton
                     variant="primary" size="sm" loading={actionLoading === 'open-window'}
                     onClick={handleOpenWindow}
@@ -1284,21 +1338,15 @@ export default function AdminControl() {
 
               <div className="mt-4">
                 <p className="text-xs text-muted-foreground mb-2">Quick Resolve (for locked window):</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { key: 'dot', label: '• Dot', cls: 'bg-muted/30' },
-                    { key: '1', label: '1 Run', cls: '' },
-                    { key: '2', label: '2 Runs', cls: '' },
-                    { key: '4', label: '4️⃣ Four', cls: 'bg-accent/10 border-accent/30' },
-                    { key: '6', label: '6️⃣ Six', cls: 'bg-primary/10 border-primary/30' },
-                    { key: 'wicket', label: '🏏 Wicket', cls: 'bg-destructive/10 border-destructive/30' },
-                  ].map(opt => (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {BALL_OUTCOMES.map(opt => (
                     <button
                       key={opt.key}
                       onClick={() => handleResolveWindow(opt.key)}
-                      className={`px-2 py-3 text-xs rounded-xl border border-border hover:border-primary hover:bg-primary/10 text-foreground transition-all font-semibold ${opt.cls}`}
+                      className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl border-2 border-border/50 hover:border-primary/60 hover:bg-primary/10 text-foreground transition-all font-semibold h-14`}
                     >
-                      {opt.label}
+                      <span className={`text-base font-black leading-none ${opt.colorCls.split(' ')[1]}`}>{opt.emoji}</span>
+                      <span className="text-[9px] uppercase tracking-wide text-muted-foreground leading-none">{opt.label}</span>
                     </button>
                   ))}
                 </div>
