@@ -458,13 +458,28 @@ export default function AdminControl() {
   const handleOpenWindow = () => {
     if (!match) return;
     callFunction('resolve-prediction-window', {
-      action: 'open', match_id: match.id, question: windowQuestion,
-      options: [
-        { key: 'dot', label: 'Dot Ball' }, { key: '1', label: '1 Run' },
-        { key: '2', label: '2 Runs' }, { key: '4', label: '4 Boundary' },
-        { key: '6', label: '6 Sixer' }, { key: 'wicket', label: 'Wicket 🏏' },
-      ],
+      action: 'open',
+      match_id: match.id,
+      question: 'What will happen on the next ball?',
+      options: BALL_OUTCOMES.map(o => ({ key: o.key, label: o.label })),
     }, 'open-window');
+  };
+
+  const applyOutcomePrefill = (key: BallOutcomeKey) => {
+    setSelectedOutcome(key);
+    const prefill: Partial<typeof delivery> = {};
+    if (key === 'dot_ball')   { prefill.runs_off_bat = '0'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'runs_1') { prefill.runs_off_bat = '1'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'runs_2') { prefill.runs_off_bat = '2'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'runs_3') { prefill.runs_off_bat = '3'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'boundary_4') { prefill.runs_off_bat = '4'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'six_6')  { prefill.runs_off_bat = '6'; prefill.extras_type = 'none'; prefill.is_wicket = false; }
+    else if (key === 'wide')   { prefill.runs_off_bat = '0'; prefill.extras_type = 'wide'; prefill.extras_runs = '1'; prefill.is_wicket = false; }
+    else if (key === 'no_ball') { prefill.runs_off_bat = '0'; prefill.extras_type = 'no_ball'; prefill.extras_runs = '1'; prefill.is_wicket = false; }
+    else if (key === 'byes')   { prefill.runs_off_bat = '0'; prefill.extras_type = 'bye'; prefill.extras_runs = '0'; prefill.is_wicket = false; }
+    else if (key === 'leg_byes') { prefill.runs_off_bat = '0'; prefill.extras_type = 'leg_bye'; prefill.extras_runs = '0'; prefill.is_wicket = false; }
+    else if (key === 'wicket') { prefill.runs_off_bat = '0'; prefill.extras_type = 'none'; prefill.is_wicket = true; }
+    setDelivery(d => ({ ...d, ...prefill }));
   };
 
   const handleLockWindow = () => {
