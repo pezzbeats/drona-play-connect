@@ -104,6 +104,21 @@ export default function PlayPage() {
           <h1 className="font-display text-3xl font-bold gradient-text">Fan Game Login</h1>
           <p className="text-muted-foreground text-sm mt-2">Enter your mobile and gameplay PIN</p>
           <p className="text-xs text-muted-foreground mt-1">PIN is given at the gate after check-in</p>
+
+          {/* Realtime match status badge */}
+          {matchStatus !== 'unknown' && (
+            <div className={`inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs font-semibold border ${
+              matchStatus === 'live'
+                ? 'bg-success/15 border-success/40 text-success'
+                : matchStatus === 'ended'
+                ? 'bg-muted/30 border-border text-muted-foreground'
+                : 'bg-primary/10 border-primary/30 text-primary'
+            }`}>
+              {matchStatus === 'live' && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
+              {matchStatus === 'live' ? '● Match is LIVE' : matchStatus === 'ended' ? 'Match Ended' : '⏳ Match Coming Soon'}
+              {matchName && <span className="opacity-70">· {matchName}</span>}
+            </div>
+          )}
         </div>
 
         <GlassCard className="p-5" glow>
