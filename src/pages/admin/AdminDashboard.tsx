@@ -42,20 +42,19 @@ export default function AdminDashboard() {
       .not('checked_in_at', 'is', null)
       .gte('checked_in_at', today);
 
-    const balanceDueOrders = orders.filter(o => {
-      const isPaid = ['paid_verified', 'paid_manual_verified'].includes(o.payment_status);
-      return !isPaid && (o.advance_paid ?? 0) > 0;
-    });
+    const notPaidOrders = orders.filter(o =>
+      !['paid_verified', 'paid_manual_verified'].includes(o.payment_status)
+    );
 
     setStats({
       totalOrders: orders.length,
       paidOrders: orders.filter(o => ['paid_verified', 'paid_manual_verified'].includes(o.payment_status)).length,
-      unpaidOrders: orders.filter(o => o.payment_status === 'unpaid' && (o.advance_paid ?? 0) === 0).length,
+      unpaidOrders: notPaidOrders.length,
       pendingVerification: orders.filter(o => o.payment_status === 'pending_verification').length,
       checkedInToday: checkinCount || 0,
       totalSeats: orders.reduce((sum, o) => sum + (o.seats_count || 0), 0),
-      balanceDueCount: balanceDueOrders.length,
-      balanceDueTotal: balanceDueOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
+      balanceDueCount: notPaidOrders.length,
+      balanceDueTotal: notPaidOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
     });
     setLoading(false);
   };
