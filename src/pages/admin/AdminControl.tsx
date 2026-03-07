@@ -752,6 +752,34 @@ export default function AdminControl() {
                 </div>
               )}
 
+              {/* ── Open Guess Window shortcut (shown when no window is currently open) ── */}
+              {activeOver && !activeWindow && match?.predictions_enabled && !(matchFlags?.predictions_frozen) && !(matchFlags?.windows_locked) && (
+                <div className="border border-success/30 rounded-xl p-3 bg-success/5 space-y-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
+                    <span className="text-xs font-bold text-success uppercase tracking-wide">Ready for next ball</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Open the guess window so customers can predict before you record this ball.</p>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <input
+                        className="glass-input w-full h-8 text-xs px-2 rounded-lg border border-border bg-muted/20 text-foreground placeholder:text-muted-foreground"
+                        value={windowQuestion}
+                        onChange={e => setWindowQuestion(e.target.value)}
+                        placeholder="What will happen on the next ball?"
+                      />
+                    </div>
+                    <GlassButton
+                      variant="success" size="sm"
+                      loading={actionLoading === 'open-window'}
+                      onClick={handleOpenWindow}
+                    >
+                      <Unlock className="h-3.5 w-3.5" /> Open Guesses
+                    </GlassButton>
+                  </div>
+                </div>
+              )}
+
               {/* Delivery Form */}
               {activeOver && (
                 <div className="border border-primary/20 rounded-xl p-4 space-y-3">
