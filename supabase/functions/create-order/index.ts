@@ -52,7 +52,12 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { match_id, purchaser_full_name, purchaser_mobile, purchaser_email, seating_type, seats_count, payment_method, pricing_snapshot, created_source, admin_id } = body;
+    const {
+      match_id, purchaser_full_name, purchaser_mobile, purchaser_email,
+      seating_type, seats_count, payment_method, pricing_snapshot,
+      created_source, admin_id,
+      advance_paid, advance_payment_method,
+    } = body;
 
     // Basic validation
     if (!match_id) return fail("match_id is required", "VALIDATION_ERROR");
@@ -61,11 +66,13 @@ serve(async (req) => {
     if (!payment_method) return fail("payment_method is required", "VALIDATION_ERROR");
     if (!seats_count || seats_count < 1) return fail("seats_count must be at least 1", "VALIDATION_ERROR");
 
+    const totalAmount = pricing_snapshot?.total ?? 0;
+    const advancePaidAmount = Math.min(Math.max(parseInt(advance_paid ?? 0) || 0, 0), totalAmount);
+
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const hmacSecret = Deno.env.get("LOVABLE_API_KEY") || "fallback-secret";
 
     // ── Rate limiting: max 5 orders per mobile per 10 minutes ──
-    // Skip rate limiting for admin-created orders
     if (!admin_id && purchaser_mobile) {
       const limitKey = `order:${purchaser_mobile}`;
       const allowed = await checkRateLimit(supabase, limitKey, 5, 600_000);
@@ -86,7 +93,17 @@ serve(async (req) => {
       return fail(`Match not found: ${matchError?.message || "unknown error"}`, "MATCH_NOT_FOUND");
     }
 
-    const canGenerate = payment_method === "pay_at_hotel" || payment_method === "cash" || payment_method === "card";
+    // Determine payment status
+    // If advance covers full amount → auto verify
+    // Otherwise stays unpaid (balance due at entry)
+    const isFullyPaid = advancePaidAmount >= totalAmount && totalAmount > 0;
+    const paymentStatus = isFullyPaid ? "paid_manual_verified" : "unpaid";
+
+    const canGenerate = payment_method === "pay_at_hotel"
+      || payment_method === "cash"
+      || payment_method === "card"
+      || payment_method === "upi"
+      || isFullyPaid;
 
     // Create order
     const { data: order, error: orderError } = await supabase.from("orders").insert({
@@ -97,20 +114,26 @@ serve(async (req) => {
       purchaser_email: purchaser_email || null,
       seating_type: seating_type || "regular",
       seats_count,
-      total_amount: pricing_snapshot?.total ?? 0,
+      total_amount: totalAmount,
       pricing_model_snapshot: pricing_snapshot ?? {},
       payment_method,
-      payment_status: "unpaid",
+      payment_status: paymentStatus,
       created_source: created_source || "self_register",
       created_by_admin_id: admin_id || null,
-    }).select().single();
+      advance_paid: advancePaidAmount,
+      advance_payment_method: advancePaidAmount > 0 ? (advance_payment_method || null) : null,
+      ...(isFullyPaid ? {
+        payment_verified_at: new Date().toISOString(),
+        payment_verified_by_admin_id: admin_id || null,
+      } : {}),
+    } as any).select().single();
 
     if (orderError) {
       console.error("Order insert error:", orderError);
       return fail(`Failed to create order: ${orderError.message}`, "ORDER_INSERT_ERROR");
     }
 
-    // Generate HMAC-signed tickets only if pay_at_hotel / cash / card
+    // Generate HMAC-signed tickets for all manual-payment methods
     let tickets: any[] = [];
     if (canGenerate) {
       for (let i = 0; i < seats_count; i++) {
@@ -121,13 +144,25 @@ serve(async (req) => {
         }).select().single();
         if (ticketError) {
           console.error("Ticket insert error:", ticketError);
-          // Don't fail the whole order — log and continue
         }
         if (ticket) tickets.push(ticket);
       }
     }
 
-    return ok({ order_id: order.id, tickets });
+    // Record advance payment collection if advance was paid
+    if (advancePaidAmount > 0 && admin_id) {
+      const methodMap: Record<string, string> = { cash: "cash", card: "card", upi: "upi" };
+      const collectionMethod = methodMap[advance_payment_method] || "cash";
+      await supabase.from("payment_collections").insert({
+        order_id: order.id,
+        collected_by_admin_id: admin_id,
+        method: collectionMethod,
+        amount: advancePaidAmount,
+        note: `Advance payment at booking (${advancePaidAmount < totalAmount ? `balance ₹${totalAmount - advancePaidAmount} due` : "full payment"})`,
+      } as any);
+    }
+
+    return ok({ order_id: order.id, tickets, advance_paid: advancePaidAmount, balance_due: totalAmount - advancePaidAmount });
 
   } catch (e: any) {
     console.error("create-order unhandled error:", e);

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Loader2, ChevronRight, User, UserX, UserPlus } from 'lucide-react';
+import { Search, Loader2, ChevronRight, User, UserX, UserPlus, IndianRupee } from 'lucide-react';
 
 export default function AdminManualBooking() {
   const [searchMobile, setSearchMobile] = useState('');
@@ -19,7 +19,15 @@ export default function AdminManualBooking() {
   const [priceQuote, setPriceQuote] = useState<any>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash' });
+  const [form, setForm] = useState({
+    full_name: '',
+    email: '',
+    seats_count: '1',
+    seating_type: 'regular',
+    payment_method: 'cash',
+    advance_paid: '',
+    advance_payment_method: 'cash',
+  });
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -51,22 +59,57 @@ export default function AdminManualBooking() {
   const handleCreate = async () => {
     if (!form.full_name.trim()) return toast({ variant: 'destructive', title: 'Name required' });
     if (!priceQuote) return toast({ variant: 'destructive', title: 'Get quote first' });
+
+    const totalAmount = priceQuote.total ?? 0;
+    const advancePaid = parseInt(form.advance_paid) || 0;
+
+    if (advancePaid < 0) return toast({ variant: 'destructive', title: 'Advance cannot be negative' });
+    if (advancePaid > totalAmount) return toast({ variant: 'destructive', title: `Advance cannot exceed total ₹${totalAmount}` });
+
     setCreating(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-order', {
-        body: { match_id: activeMatch.id, purchaser_full_name: form.full_name, purchaser_mobile: searchMobile, purchaser_email: form.email || null, seating_type: form.seating_type, seats_count: parseInt(form.seats_count), payment_method: form.payment_method, pricing_snapshot: priceQuote, created_source: 'manual_booking', admin_id: user?.id }
+        body: {
+          match_id: activeMatch.id,
+          purchaser_full_name: form.full_name,
+          purchaser_mobile: searchMobile,
+          purchaser_email: form.email || null,
+          seating_type: form.seating_type,
+          seats_count: parseInt(form.seats_count),
+          payment_method: form.payment_method,
+          pricing_snapshot: priceQuote,
+          created_source: 'manual_booking',
+          admin_id: user?.id,
+          advance_paid: advancePaid,
+          advance_payment_method: advancePaid > 0 ? form.advance_payment_method : null,
+        }
       });
       if (error) throw error;
-      toast({ title: '✅ Order created', description: `Order ID: ${data.order_id}` });
-      await supabase.from('admin_activity').insert({ admin_id: user?.id, action: 'manual_booking', entity_type: 'order', entity_id: data.order_id, meta: { mobile: searchMobile, name: form.full_name } });
+
+      const balanceDue = data.balance_due ?? 0;
+      const successMsg = balanceDue > 0
+        ? `Order ID: ${data.order_id} · Balance due at entry: ₹${balanceDue}`
+        : `Order ID: ${data.order_id} · Fully paid`;
+
+      toast({ title: '✅ Order created', description: successMsg });
+      await supabase.from('admin_activity').insert({
+        admin_id: user?.id,
+        action: 'manual_booking',
+        entity_type: 'order',
+        entity_id: data.order_id,
+        meta: { mobile: searchMobile, name: form.full_name, advance_paid: advancePaid, balance_due: balanceDue },
+      });
       setExisting(null); setPriceQuote(null); setSearched(false);
-      setForm({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash' });
+      setForm({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash', advance_paid: '', advance_payment_method: 'cash' });
       handleSearch();
     } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
     setCreating(false);
   };
 
   const noCustomerFound = searched && !existing && searchMobile.length === 10 && activeMatch;
+  const advancePaidNum = parseInt(form.advance_paid) || 0;
+  const totalAmount = priceQuote?.total ?? 0;
+  const balanceDue = Math.max(0, totalAmount - advancePaidNum);
 
   return (
     <div className="px-4 py-5 space-y-4 max-w-lg mx-auto md:p-6">
@@ -108,6 +151,14 @@ export default function AdminManualBooking() {
           <p className="text-sm font-medium text-warning mb-2">⚠️ Existing registration found</p>
           <p className="text-foreground font-bold">{existing.purchaser_full_name}</p>
           <p className="text-sm text-muted-foreground">{existing.match?.name} · {existing.seats_count} seats · ₹{existing.total_amount}</p>
+          {existing.advance_paid > 0 && (
+            <div className="mt-1.5 flex items-center gap-3">
+              <span className="text-xs text-success font-medium">Advance: ₹{existing.advance_paid}</span>
+              {existing.total_amount - existing.advance_paid > 0 && (
+                <span className="text-xs text-warning font-bold">⚠ Balance: ₹{existing.total_amount - existing.advance_paid}</span>
+              )}
+            </div>
+          )}
           <StatusBadge status={existing.payment_status} className="mt-2" />
         </GlassCard>
       )}
@@ -162,7 +213,7 @@ export default function AdminManualBooking() {
               </div>
             </div>
             <div>
-              <Label className="text-foreground mb-1.5 block text-sm">Payment Method</Label>
+              <Label className="text-foreground mb-1.5 block text-sm">Primary Payment Method</Label>
               <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
                 <SelectTrigger className="glass-input h-12 text-base"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -174,6 +225,7 @@ export default function AdminManualBooking() {
               </Select>
             </div>
 
+            {/* Price Quote */}
             {quoteLoading ? (
               <div className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -199,8 +251,69 @@ export default function AdminManualBooking() {
               </GlassButton>
             )}
 
+            {/* Advance Payment section — only shown after quote */}
+            {priceQuote && (
+              <div className="space-y-3 pt-2 border-t border-border/50">
+                <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <IndianRupee className="h-4 w-4 text-warning" />
+                  Advance Payment <span className="text-muted-foreground font-normal">(optional)</span>
+                </p>
+                <p className="text-xs text-muted-foreground -mt-1">If a partial amount is collected now, the balance will be shown at entry.</p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-foreground mb-1.5 block text-sm">Advance Paid (₹)</Label>
+                    <Input
+                      className="glass-input h-12 text-base font-semibold"
+                      type="number"
+                      min={0}
+                      max={priceQuote.total}
+                      placeholder="0"
+                      value={form.advance_paid}
+                      onChange={e => setForm(f => ({ ...f, advance_paid: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-foreground mb-1.5 block text-sm">Advance Mode</Label>
+                    <Select
+                      value={form.advance_payment_method}
+                      onValueChange={v => setForm(f => ({ ...f, advance_payment_method: v }))}
+                      disabled={!form.advance_paid || parseInt(form.advance_paid) === 0}
+                    >
+                      <SelectTrigger className="glass-input h-12 text-base"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="card">Card</SelectItem>
+                        <SelectItem value="upi">UPI</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Balance summary */}
+                {advancePaidNum > 0 && (
+                  <div className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 ${
+                    balanceDue === 0
+                      ? 'bg-success/10 border-success/40 text-success'
+                      : 'bg-warning/10 border-warning/40 text-warning'
+                  }`}>
+                    {balanceDue === 0 ? (
+                      <span className="font-bold text-sm">✅ Fully Paid</span>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium">Advance: ₹{advancePaidNum}</span>
+                        <span className="font-display font-bold text-base">Balance Due: ₹{balanceDue}</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <GlassButton variant="primary" size="lg" className="w-full h-14 text-base" loading={creating} onClick={handleCreate} disabled={!priceQuote}>
-              Create Booking
+              {advancePaidNum > 0 && balanceDue > 0
+                ? `Create Booking · ₹${balanceDue} at entry`
+                : 'Create Booking'}
             </GlassButton>
           </div>
         </GlassCard>
