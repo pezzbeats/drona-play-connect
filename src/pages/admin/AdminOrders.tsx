@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Shield, Banknote } from 'lucide-react';
 
 type OverrideTarget = { orderId: string; verdict: 'paid_manual_verified' | 'paid_rejected' } | null;
 type AdvanceFormState = { orderId: string; amount: string; method: string } | null;
