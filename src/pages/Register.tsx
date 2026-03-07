@@ -303,6 +303,7 @@ export default function RegisterPage() {
 
   // Eligibility check state
   const [eligibilityStatus, setEligibilityStatus] = useState<'idle' | 'checking' | 'eligible' | 'standard'>('idle');
+  const [eligibleSeats, setEligibleSeats] = useState<number>(0);
 
 
   // Step 2
