@@ -55,6 +55,33 @@ function validateMobile(raw: string): { valid: boolean; normalized: string; erro
 
 // ── Professional Pass Card ────────────────────────────────────────────────────
 
+function buildReminderLink(ticket: TicketData): string {
+  const order = ticket.order as any;
+  const match = order?.match;
+  const balanceDue = Math.max(0, (order?.total_amount ?? 0) - (order?.advance_paid ?? 0));
+  const isPartiallyPaid = (order?.advance_paid ?? 0) > 0;
+  const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${order?.purchaser_mobile}`;
+
+  const lines = [
+    `Hi ${order?.purchaser_full_name}! 🙏 Your T20 Fan Night Pass (Seat ${ticket.seat_index + 1} of ${order?.seats_count}) is confirmed with Hotel Drona Palace.`,
+    ``,
+    `💰 Balance Due: ₹${balanceDue}`,
+    isPartiallyPaid ? `✅ Advance Paid: ₹${order?.advance_paid}` : null,
+    ``,
+    match?.name ? `🏏 Match: ${match.name}${match?.opponent ? ` vs ${match.opponent}` : ''}` : null,
+    match?.venue ? `📍 Venue: ${match.venue}` : null,
+    match?.start_time ? `🗓️ Date: ${new Date(match.start_time).toLocaleString('en-IN')}` : null,
+    ``,
+    `Please pay the remaining amount at the hotel on arrival.`,
+    ``,
+    `🎫 View your pass: ${ticketUrl}`,
+    ``,
+    `— Hotel Drona Palace`,
+  ].filter(l => l !== null).join('\n');
+
+  return `https://wa.me/91${order?.purchaser_mobile}?text=${encodeURIComponent(lines)}`;
+}
+
 function PassCard({
   ticket,
   order,
@@ -62,6 +89,7 @@ function PassCard({
   paidStatus,
   onDownload,
   onShare,
+  onRemind,
 }: {
   ticket: TicketData;
   order: TicketData['order'];
@@ -69,6 +97,7 @@ function PassCard({
   paidStatus: boolean;
   onDownload: (t: TicketData) => void;
   onShare: (t: TicketData) => void;
+  onRemind?: () => void;
 }) {
   const balanceDue = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
   const hasBalance = !paidStatus && balanceDue > 0;
@@ -248,6 +277,23 @@ function PassCard({
             <Share2 className="h-4 w-4" /> Share
           </button>
         </div>
+
+        {/* WhatsApp Balance Reminder Button */}
+        {hasBalance && onRemind && (
+          <button
+            onClick={onRemind}
+            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl text-sm font-semibold transition-all active:scale-95 mt-3 no-print"
+            style={{
+              background: 'linear-gradient(135deg, hsl(142 60% 20%), hsl(142 50% 25%))',
+              border: '1px solid hsl(142 60% 35% / 0.6)',
+              color: 'hsl(142 80% 78%)',
+              boxShadow: '0 0 16px hsl(142 60% 35% / 0.25)',
+            }}
+          >
+            <MessageCircle className="h-4 w-4" />
+            Send Balance Reminder · ₹{balanceDue} due
+          </button>
+        )}
       </div>
 
       {/* ── Footer ── */}
@@ -820,6 +866,21 @@ export default function TicketPage() {
           <GlassButton variant="ghost" size="sm" className="flex-1" onClick={() => whatsappShare(currentTicket)}>
             <MessageCircle className="h-4 w-4" /> WhatsApp
           </GlassButton>
+          {!paidTickets && Math.max(0, (currentTicket?.order as any)?.total_amount - (currentTicket?.order as any)?.advance_paid) > 0 && (
+            <a
+              href={buildReminderLink(currentTicket)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-xl text-xs font-semibold transition-all active:scale-95 px-3"
+              style={{
+                background: 'linear-gradient(135deg, hsl(142 60% 18%), hsl(142 50% 23%))',
+                border: '1px solid hsl(142 60% 32% / 0.7)',
+                color: 'hsl(142 80% 75%)',
+              }}
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> Remind
+            </a>
+          )}
         </div>
 
         {/* Multi-ticket navigation */}
@@ -851,6 +912,11 @@ export default function TicketPage() {
                 paidStatus={paidTickets}
                 onDownload={downloadPassAsPng}
                 onShare={whatsappShare}
+                onRemind={
+                  !paidTickets && Math.max(0, (ticket.order as any)?.total_amount - (ticket.order as any)?.advance_paid) > 0
+                    ? () => window.open(buildReminderLink(ticket), '_blank')
+                    : undefined
+                }
               />
             </div>
           ))}
