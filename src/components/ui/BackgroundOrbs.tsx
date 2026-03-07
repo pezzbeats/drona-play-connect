@@ -4,7 +4,8 @@ interface BackgroundOrbsProps {
   variant?: 'default' | 'admin';
 }
 
-export const BackgroundOrbs = ({ variant = 'default' }: BackgroundOrbsProps) => (
+export const BackgroundOrbs = React.forwardRef<HTMLDivElement, BackgroundOrbsProps>(
+  ({ variant = 'default' }, ref) => (
   <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
     {/* Crimson orb — scoreboard red glow, top-right */}
     <div
