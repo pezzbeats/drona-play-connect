@@ -1,71 +1,53 @@
 
-## Plan: Fix Dashboard Stats + Delete Test Bookings
+## Root Cause — Found
 
-### Two separate things to fix:
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
----
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-### 1. Dashboard stat bugs
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-**Current broken logic in `AdminDashboard.tsx`:**
-
-- `unpaidOrders` counts only: `payment_status === 'unpaid' && advance_paid === 0`  
-  → This misses partially-paid orders, `pay_at_hotel` with no advance, `paid_rejected`, etc.
-
-- `balanceDueOrders` filters: `!isPaid && advance_paid > 0`  
-  → This only catches partial-advance orders — misses fully-unpaid `pay_at_hotel`, `upi_qr` unpaid, `razorpay` unpaid, `paid_rejected`, etc.  
-  → The label also says "with advance paid" which is wrong
-
-**Correct logic:**
-
-```
-// "Unpaid" stat = all orders that are NOT fully paid
-unpaidOrders = orders where payment_status NOT IN ('paid_verified', 'paid_manual_verified')
-
-// "Balance Outstanding" = total receivable from ALL non-fully-paid orders
-// = SUM of (total_amount - advance_paid) for all unpaid/partial orders
-balanceDueOrders = all non-paid-verified orders
-balanceDueTotal = SUM(total_amount - advance_paid) across all those orders
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-The "Pending" stat card currently shows `pending_verification` which is correct and stays separate.
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-The "Unpaid" stat card should be renamed to **"Not Paid"** (or "Outstanding") to reflect it covers all non-fully-paid statuses.
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-**Balance Outstanding alert:**
-- Change subtitle from "across N orders with advance paid" → "across N unpaid/partial orders"
-- Amount will now correctly reflect the entire receivable
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
----
+## Changes
 
-### 2. Delete test bookings via DB migration
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
 
-The 5 test orders (Shekhar, Test User, Abhishek Balodi, Test Booking, Pramod Negi) and their related tickets need to be hard-deleted via SQL migration since the RLS policy on `orders` and `tickets` has no DELETE permission for client-side calls.
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
 
-Order IDs to delete:
-- `35f41f49` — Shekhar
-- `5ff160be` — Test User  
-- `532f1f8a` — Abhishek Balodi
-- `9b350841` — Test Booking
-- `bfe4c1e6` — Pramod Negi
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
 
-Related data to clean:
-- `tickets` (3 records exist for Shekhar, Test User, Test Booking)
-- `payment_collections` (if any — query showed none)
-- `admin_activity` referencing these order IDs
-- `payment_proofs` (if any)
-- Then `orders` themselves
+// After:
+const [loading, setLoading] = useState(false);
+```
 
-Migration order: tickets → payment_proofs → admin_activity → orders (due to FK constraints)
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
----
+## Why this is the correct fix
 
-### Files changed
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
-| What | Where |
-|------|--------|
-| Fix `unpaidOrders` count to include all non-fully-paid | `src/pages/admin/AdminDashboard.tsx` |
-| Fix `balanceDueOrders` to include all non-paid-verified orders | `src/pages/admin/AdminDashboard.tsx` |
-| Fix balance card subtitle text | `src/pages/admin/AdminDashboard.tsx` |
-| Rename "Unpaid" stat label | `src/pages/admin/AdminDashboard.tsx` |
-| Delete 5 test order rows + related tickets/proofs | DB migration SQL |
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |

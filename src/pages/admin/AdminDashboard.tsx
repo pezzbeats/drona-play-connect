@@ -42,20 +42,19 @@ export default function AdminDashboard() {
       .not('checked_in_at', 'is', null)
       .gte('checked_in_at', today);
 
-    const balanceDueOrders = orders.filter(o => {
-      const isPaid = ['paid_verified', 'paid_manual_verified'].includes(o.payment_status);
-      return !isPaid && (o.advance_paid ?? 0) > 0;
-    });
+    const notPaidOrders = orders.filter(o =>
+      !['paid_verified', 'paid_manual_verified'].includes(o.payment_status)
+    );
 
     setStats({
       totalOrders: orders.length,
       paidOrders: orders.filter(o => ['paid_verified', 'paid_manual_verified'].includes(o.payment_status)).length,
-      unpaidOrders: orders.filter(o => o.payment_status === 'unpaid' && (o.advance_paid ?? 0) === 0).length,
+      unpaidOrders: notPaidOrders.length,
       pendingVerification: orders.filter(o => o.payment_status === 'pending_verification').length,
       checkedInToday: checkinCount || 0,
       totalSeats: orders.reduce((sum, o) => sum + (o.seats_count || 0), 0),
-      balanceDueCount: balanceDueOrders.length,
-      balanceDueTotal: balanceDueOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
+      balanceDueCount: notPaidOrders.length,
+      balanceDueTotal: notPaidOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
     });
     setLoading(false);
   };
@@ -63,7 +62,7 @@ export default function AdminDashboard() {
   const statCards = stats ? [
     { icon: Users,        label: 'Registrations',  value: stats.totalOrders,          color: 'text-primary',     bg: 'bg-primary/10' },
     { icon: CheckCircle2, label: 'Paid',            value: stats.paidOrders,           color: 'text-success',     bg: 'bg-success/10' },
-    { icon: DollarSign,   label: 'Unpaid',          value: stats.unpaidOrders,         color: 'text-destructive', bg: 'bg-destructive/10' },
+    { icon: DollarSign,   label: 'Not Paid',        value: stats.unpaidOrders,         color: 'text-destructive', bg: 'bg-destructive/10' },
     { icon: TrendingUp,   label: 'Pending',         value: stats.pendingVerification,  color: 'text-warning',     bg: 'bg-warning/10' },
     { icon: ScanLine,     label: 'Check-ins Today', value: stats.checkedInToday,       color: 'text-secondary',   bg: 'bg-secondary/10' },
     { icon: Ticket,       label: 'Total Seats',     value: stats.totalSeats,           color: 'text-accent',      bg: 'bg-accent/10' },
@@ -147,7 +146,7 @@ export default function AdminDashboard() {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-warning text-sm leading-tight">Balance Outstanding</p>
                 <p className="text-foreground font-bold text-lg leading-tight">₹{stats.balanceDueTotal.toLocaleString('en-IN')}</p>
-                <p className="text-xs text-muted-foreground">across {stats.balanceDueCount} order{stats.balanceDueCount !== 1 ? 's' : ''} with advance paid</p>
+                <p className="text-xs text-muted-foreground">across {stats.balanceDueCount} unpaid/partial order{stats.balanceDueCount !== 1 ? 's' : ''}</p>
               </div>
               <ArrowRight className="h-4 w-4 text-warning shrink-0" />
             </div>
