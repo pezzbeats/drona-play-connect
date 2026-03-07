@@ -1,53 +1,62 @@
 
-## Root Cause — Found
+## Plan: "Save Pass" — Download Full Ticket Card as PNG
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+### The problem
+Currently `downloadQr` grabs a hidden `<QRCodeCanvas>` element and downloads just the raw QR code pixels. The user wants the entire styled pass card (status banner, name, match info, seat number, QR, footer with logo) rendered as a beautiful PNG — exactly like what they see on screen.
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+### Approach: Canvas-rendered pass (no html2canvas needed)
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+`html2canvas` is not installed and has well-known issues with CSS gradients, `WebkitTextFillColor`, and cross-origin images. Instead, the pass will be **drawn programmatically on a `<canvas>` element** — this is reliable, fast, and produces a pixel-perfect 2× retina result every time.
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
-```
+The `downloadPassAsPng` function will:
+1. Create an offscreen `canvas` (e.g. 750×1080 px at 2× scale)
+2. Draw every section of the card in exact order:
+   - Status banner (gradient fill + text: "☑ PAID — Entry Confirmed" or the unpaid/advance variant)
+   - Main body background
+   - Purchaser name (large bold), match name, datetime, venue, seating type
+   - Seat badge on the right ("SEAT" label + large number + "of N")
+   - Dashed divider line
+   - QR code (pulled from the existing hidden `QRCodeCanvas`, rendered as an image into the pass canvas with white-padded rounded rect)
+   - Mobile number + truncated QR text below
+   - Balance Due pill if applicable
+   - Footer: logo image + hotel name + legal sub-line + issue date
+3. Trigger a `.png` download
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+The existing hidden `QRCodeCanvas` (`id="qr-canvas-{id}"`) is already 600×600 — it will be read via `canvas.drawImage()` so no QR regeneration is needed.
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+### Hotel logo
+The logo is imported as an ES6 module (`hotelLogo` string). An `Image` element will be pre-loaded before drawing to guarantee it's available synchronously when `ctx.drawImage()` is called.
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+### Files changed
 
-## Changes
-
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
-```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
-```
-
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
-
-## Why this is the correct fix
-
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
-
-## Files Changed
 | File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+|------|--------|
+| `src/pages/Ticket.tsx` | Replace `downloadQr` with `downloadPassAsPng` that draws the full pass on canvas. No new dependency needed. Update the "Save QR" button label to "Save Pass". |
+
+### Key function outline
+
+```typescript
+const downloadPassAsPng = async (ticket: TicketData) => {
+  const W = 750, H = 1100, DPR = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(DPR, DPR);
+
+  // 1. Card background
+  // 2. Status banner (green/amber gradient + text)
+  // 3. Name, match, datetime, venue, seating
+  // 4. Seat badge (right side)
+  // 5. Dashed divider
+  // 6. White QR box + drawImage from hidden QRCodeCanvas
+  // 7. Mobile + qr_text snippet
+  // 8. Balance Due pill (if applicable)
+  // 9. Footer divider + logo circle + hotel name + date
+
+  canvas.toBlob(blob => { /* trigger download */ });
+};
+```
+
+The "Share" button will continue using the same canvas image for Web Share API / WhatsApp fallback — it will also be updated to use the full pass image.
+
+### No new packages required — pure Canvas 2D API only.
