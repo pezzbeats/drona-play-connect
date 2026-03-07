@@ -55,6 +55,33 @@ function validateMobile(raw: string): { valid: boolean; normalized: string; erro
 
 // ── Professional Pass Card ────────────────────────────────────────────────────
 
+function buildReminderLink(ticket: TicketData): string {
+  const order = ticket.order as any;
+  const match = order?.match;
+  const balanceDue = Math.max(0, (order?.total_amount ?? 0) - (order?.advance_paid ?? 0));
+  const isPartiallyPaid = (order?.advance_paid ?? 0) > 0;
+  const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${order?.purchaser_mobile}`;
+
+  const lines = [
+    `Hi ${order?.purchaser_full_name}! 🙏 Your T20 Fan Night Pass (Seat ${ticket.seat_index + 1} of ${order?.seats_count}) is confirmed with Hotel Drona Palace.`,
+    ``,
+    `💰 Balance Due: ₹${balanceDue}`,
+    isPartiallyPaid ? `✅ Advance Paid: ₹${order?.advance_paid}` : null,
+    ``,
+    match?.name ? `🏏 Match: ${match.name}${match?.opponent ? ` vs ${match.opponent}` : ''}` : null,
+    match?.venue ? `📍 Venue: ${match.venue}` : null,
+    match?.start_time ? `🗓️ Date: ${new Date(match.start_time).toLocaleString('en-IN')}` : null,
+    ``,
+    `Please pay the remaining amount at the hotel on arrival.`,
+    ``,
+    `🎫 View your pass: ${ticketUrl}`,
+    ``,
+    `— Hotel Drona Palace`,
+  ].filter(l => l !== null).join('\n');
+
+  return `https://wa.me/91${order?.purchaser_mobile}?text=${encodeURIComponent(lines)}`;
+}
+
 function PassCard({
   ticket,
   order,
@@ -62,6 +89,7 @@ function PassCard({
   paidStatus,
   onDownload,
   onShare,
+  onRemind,
 }: {
   ticket: TicketData;
   order: TicketData['order'];
@@ -69,6 +97,7 @@ function PassCard({
   paidStatus: boolean;
   onDownload: (t: TicketData) => void;
   onShare: (t: TicketData) => void;
+  onRemind?: () => void;
 }) {
   const balanceDue = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
   const hasBalance = !paidStatus && balanceDue > 0;
