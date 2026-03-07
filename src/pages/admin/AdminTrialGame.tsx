@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   FlaskConical, Loader2, Trash2, Play, Lock, CheckCircle2,
-  AlertTriangle, RefreshCw, Zap, Circle,
+  AlertTriangle, RefreshCw, Zap, Circle, Users, Copy, ExternalLink,
 } from 'lucide-react';
 import { BALL_OUTCOMES, BallOutcomeKey, deriveOutcomeKey } from './AdminControl';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,20 @@ const DUMMY_BATTERS_B = ['Trial Batter 6', 'Trial Batter 7', 'Trial Batter 8'];
 const DUMMY_BOWLERS_A = ['Trial Bowler A1', 'Trial Bowler A2'];
 const DUMMY_BOWLERS_B = ['Trial Bowler B1', 'Trial Bowler B2', 'Trial Bowler B3'];
 
+// Dummy customer mobile numbers — use obvious patterns that staff won't confuse with real data
+const DUMMY_CUSTOMERS = [
+  { mobile: '9000000001', name: 'Trial Staff A' },
+  { mobile: '9000000002', name: 'Trial Staff B' },
+  { mobile: '9000000003', name: 'Trial Staff C' },
+];
+const TRIAL_PIN = '1234';
+
 type WindowStatus = 'open' | 'locked' | 'resolved' | 'none';
+
+async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 function BallPill({ delivery }: { delivery: any }) {
   const isWide = delivery.extras_type === 'wide';
@@ -61,6 +74,7 @@ export default function AdminTrialGame() {
   const [recentDeliveries, setRecentDeliveries] = useState<any[]>([]);
   const [selectedOutcome, setSelectedOutcome] = useState<BallOutcomeKey | null>(null);
   const [players, setPlayers] = useState<any[]>([]);
+  const [dummyCustomers, setDummyCustomers] = useState<{ mobile: string; name: string; hasAccess: boolean }[]>([]);
 
   const [setupLoading, setSetupLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -87,6 +101,7 @@ export default function AdminTrialGame() {
         setWindowStatus('none');
         setRecentDeliveries([]);
         setPlayers([]);
+        setDummyCustomers([]);
         return;
       }
 
@@ -105,7 +120,6 @@ export default function AdminTrialGame() {
       if (windowOpenRes.data) {
         setActiveWindow(windowOpenRes.data);
         setWindowStatus('open');
-        // Count predictions for this window
         const { count } = await supabase.from('predictions').select('*', { count: 'exact', head: true }).eq('window_id', windowOpenRes.data.id);
         setPredictionCount(count || 0);
       } else if (windowLockedRes.data) {
@@ -125,7 +139,6 @@ export default function AdminTrialGame() {
           .from('deliveries').select('*').eq('over_id', overRes.data.id).order('delivery_no');
         setRecentDeliveries(dels || []);
       } else {
-        // Last 6 across overs
         const { data: dels } = await supabase
           .from('deliveries').select('*').eq('match_id', matchData.id).order('created_at', { ascending: false }).limit(6);
         setRecentDeliveries((dels || []).reverse());
@@ -137,6 +150,15 @@ export default function AdminTrialGame() {
       if (lineup && lineup.length > 0) {
         setPlayers(lineup.filter((l: any) => l.players).map((l: any) => l.players));
       }
+
+      // Check game_access for dummy customers
+      const { data: accessRows } = await supabase
+        .from('game_access')
+        .select('mobile')
+        .eq('match_id', matchData.id)
+        .in('mobile', DUMMY_CUSTOMERS.map(c => c.mobile));
+      const activeMobiles = new Set((accessRows || []).map((r: any) => r.mobile));
+      setDummyCustomers(DUMMY_CUSTOMERS.map(c => ({ ...c, hasAccess: activeMobiles.has(c.mobile) })));
     } finally {
       setPageLoading(false);
     }
@@ -148,7 +170,7 @@ export default function AdminTrialGame() {
   const handleSetupTrial = async () => {
     setSetupLoading(true);
     try {
-      // 1. Get the first active event
+      // 1. Get first active event
       const { data: eventData, error: eventError } = await supabase
         .from('events').select('id').eq('is_active', true).limit(1).maybeSingle();
       if (eventError || !eventData) throw new Error('No active event found. Create an event first.');
@@ -172,7 +194,7 @@ export default function AdminTrialGame() {
         teamBId = tb.id;
       }
 
-      // 3. Create dummy players (delete existing trial players first to avoid duplicates)
+      // 3. Create dummy players
       await supabase.from('players').delete().eq('team_id', teamAId);
       await supabase.from('players').delete().eq('team_id', teamBId);
       const playersToInsert = [
@@ -241,7 +263,39 @@ export default function AdminTrialGame() {
         body: { action: 'create_over', match_id: matchId, innings_no: 1, bowler_id: openBowler },
       });
 
-      toast({ title: '⚗️ Trial match created!', description: 'All dummy data seeded. Ready to test.' });
+      // 11. Seed dummy customer orders + tickets + game_access
+      const pinHash = await sha256Hex(TRIAL_PIN);
+      for (const customer of DUMMY_CUSTOMERS) {
+        // Create order via edge function to get proper ticket generation (HMAC-signed QR)
+        const { data: orderResult } = await supabase.functions.invoke('create-order', {
+          body: {
+            match_id: matchId,
+            purchaser_full_name: customer.name,
+            purchaser_mobile: customer.mobile,
+            seats_count: 1,
+            payment_method: 'cash',
+            seating_type: 'regular',
+            pricing_snapshot: { total: 0, seats: [{ seat_index: 0, price: 0, reason: 'standard' }] },
+            created_source: 'manual_booking',
+            admin_id: user?.id,
+            advance_paid: 0,
+          },
+        });
+
+        const ticketId = orderResult?.tickets?.[0]?.id;
+        if (!ticketId) continue;
+
+        // Create game_access entry with known PIN
+        await supabase.from('game_access').insert({
+          match_id: matchId,
+          mobile: customer.mobile,
+          pin_hash: pinHash,
+          ticket_id: ticketId,
+          is_active: true,
+        });
+      }
+
+      toast({ title: '⚗️ Trial match created!', description: 'Dummy teams, players & 3 test customer accounts ready.' });
       await fetchTrial();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Setup failed', description: e.message });
@@ -300,7 +354,6 @@ export default function AdminTrialGame() {
     }
     setActionLoading('record-ball');
     try {
-      // Derive delivery fields from outcome key
       const deliveryFields: any = {
         match_id: trialMatch.id,
         over_id: activeOver.id,
@@ -394,6 +447,7 @@ export default function AdminTrialGame() {
       setWindowStatus('none');
       setRecentDeliveries([]);
       setPlayers([]);
+      setDummyCustomers([]);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Wipe failed', description: e.message });
     } finally {
@@ -401,8 +455,13 @@ export default function AdminTrialGame() {
     }
   };
 
-  // ── Derived ────────────────────────────────────────────────────────────────
   const isLoading = (key: string) => actionLoading === key;
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: 'Copied!', description: text });
+    });
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (pageLoading) {
@@ -460,6 +519,7 @@ export default function AdminTrialGame() {
             <p className="font-medium text-foreground">What gets created:</p>
             <p>• 2 dummy teams (Team Alpha & Team Beta)</p>
             <p>• 10 dummy players seeded into lineup</p>
+            <p>• 3 dummy customer accounts (PIN: <strong className="text-foreground font-mono">{TRIAL_PIN}</strong>)</p>
             <p>• Match live state + first over ready to go</p>
             <p>• Status: draft, not visible to customers</p>
           </div>
@@ -477,6 +537,59 @@ export default function AdminTrialGame() {
       {/* ── ACTIVE PHASE ────────────────────────────────────────────────────── */}
       {trialMatch && (
         <div className="space-y-4">
+
+          {/* ── DUMMY CUSTOMER CREDENTIALS ──────────────────────────────────── */}
+          <GlassCard className="p-4 space-y-3 border-primary/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">Test Customer Logins</h3>
+              </div>
+              <a
+                href="/play"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+              >
+                Open /play <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Open <strong>/play</strong> in another tab and log in as one of these to test the customer-side prediction experience. All use PIN&nbsp;
+              <button
+                onClick={() => copyToClipboard(TRIAL_PIN)}
+                className="font-mono font-bold text-foreground bg-muted/40 px-1.5 py-0.5 rounded border border-border/40 hover:bg-muted/60 transition-colors inline-flex items-center gap-1"
+              >
+                {TRIAL_PIN} <Copy className="h-2.5 w-2.5" />
+              </button>
+            </p>
+            <div className="space-y-2">
+              {dummyCustomers.map(c => (
+                <div key={c.mobile} className="flex items-center justify-between gap-3 rounded-lg border border-border/30 bg-muted/15 px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-medium text-foreground">{c.name}</p>
+                    <p className="text-[11px] text-muted-foreground font-mono">{c.mobile}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0.5 h-auto', c.hasAccess ? 'border-success/40 text-success bg-success/5' : 'border-muted text-muted-foreground')}>
+                      {c.hasAccess ? 'Active' : 'No access'}
+                    </Badge>
+                    <button
+                      onClick={() => copyToClipboard(c.mobile)}
+                      className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                      title="Copy mobile"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Note: The /play page shows the <em>active registration match</em>. These customers can access the trial match directly via the game PIN verification, but the scoreboard/guesses will use the trial match data.
+            </p>
+          </GlassCard>
+
           {/* Status Bar */}
           <GlassCard className="px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -509,26 +622,11 @@ export default function AdminTrialGame() {
           {/* Step Guide */}
           <GlassCard className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground overflow-x-auto">
-              <StepBadge
-                num={1}
-                label="Open Guesses"
-                done={windowStatus !== 'none'}
-                active={windowStatus === 'none'}
-              />
+              <StepBadge num={1} label="Open Guesses" done={windowStatus !== 'none'} active={windowStatus === 'none'} />
               <span className="text-border flex-shrink-0">→</span>
-              <StepBadge
-                num={2}
-                label="Lock Window"
-                done={windowStatus === 'locked'}
-                active={windowStatus === 'open'}
-              />
+              <StepBadge num={2} label="Lock Window" done={windowStatus === 'locked'} active={windowStatus === 'open'} />
               <span className="text-border flex-shrink-0">→</span>
-              <StepBadge
-                num={3}
-                label="Record Ball"
-                done={false}
-                active={windowStatus === 'locked' || windowStatus === 'none'}
-              />
+              <StepBadge num={3} label="Record Ball" done={false} active={windowStatus === 'locked' || windowStatus === 'none'} />
             </div>
           </GlassCard>
 
@@ -664,7 +762,7 @@ export default function AdminTrialGame() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-destructive">Wipe Trial Data</p>
                 <p className="text-xs text-muted-foreground mt-0.5 mb-3">
-                  Permanently deletes this trial match and all associated data (predictions, windows, deliveries, overs, leaderboard, teams, players).
+                  Permanently deletes this trial match and all associated data (predictions, windows, deliveries, overs, leaderboard, dummy orders, test accounts, teams, players).
                 </p>
                 <Button
                   size="sm"
@@ -690,7 +788,7 @@ export default function AdminTrialGame() {
               <Trash2 className="h-5 w-5" /> Wipe All Trial Data?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the trial match, all dummy teams/players, every delivery recorded, all prediction windows, and all leaderboard entries. This cannot be undone.
+              This will permanently delete the trial match, all dummy teams/players, every delivery recorded, all prediction windows, dummy orders, test customer accounts, and all leaderboard entries. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

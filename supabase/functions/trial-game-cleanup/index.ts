@@ -49,6 +49,10 @@ Deno.serve(async (req) => {
     const { data: rosterRows } = await supabase.from('match_roster').select('team_id').eq('match_id', match_id);
     const teamIds = (rosterRows || []).map((r: any) => r.team_id).filter(Boolean);
 
+    // Collect order IDs for seat pricing cleanup
+    const { data: orderRows } = await supabase.from('orders').select('id').eq('match_id', match_id);
+    const orderIds = (orderRows || []).map((r: any) => r.id).filter(Boolean);
+
     // Delete in dependency order
     await supabase.from('predictions').delete().eq('match_id', match_id);
     await supabase.from('leaderboard').delete().eq('match_id', match_id);
@@ -62,9 +66,20 @@ Deno.serve(async (req) => {
     await supabase.from('match_lineup').delete().eq('match_id', match_id);
     await supabase.from('match_roster').delete().eq('match_id', match_id);
     await supabase.from('match_assets').delete().eq('match_id', match_id);
+
+    // Cleanup orders and related data
+    if (orderIds.length > 0) {
+      await supabase.from('ticket_scan_log').delete().in('match_id', [match_id]);
+      await supabase.from('tickets').delete().eq('match_id', match_id);
+      await supabase.from('order_seat_pricing').delete().in('order_id', orderIds);
+      await supabase.from('orders').delete().eq('match_id', match_id);
+    } else {
+      await supabase.from('tickets').delete().eq('match_id', match_id);
+    }
+
     await supabase.from('matches').delete().eq('id', match_id);
 
-    // Delete dummy players + teams (only if they are trial teams — name starts with [TRIAL])
+    // Delete dummy players + teams (only trial teams — name starts with [TRIAL])
     if (teamIds.length > 0) {
       const { data: teamRows } = await supabase.from('teams').select('id, name').in('id', teamIds);
       const trialTeamIds = (teamRows || []).filter((t: any) => t.name.startsWith('[TRIAL]')).map((t: any) => t.id);
