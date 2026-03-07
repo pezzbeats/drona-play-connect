@@ -1,77 +1,53 @@
 
-## What Needs to Change
+## Root Cause — Found
 
-Currently in `AdminControl.tsx`, when a prediction window is open (`activeWindow` is not null):
-- A warning box shows "lock it before recording" 
-- But "Record Ball" is still **fully clickable** with a label "Record Ball (will auto-lock)"
-- The `record-delivery` edge function will auto-lock as a backend safety net, but the admin UI allows bypassing the lock step
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-### The Required Change: Hard Block on "Record Ball"
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-The delivery form's "Record Ball" button (lines ~1031-1039) must be **disabled** when `activeWindow` is present. The admin must explicitly hit "Lock Window Now" before the record button becomes active.
-
-### Changes to `src/pages/admin/AdminControl.tsx`
-
-**1. Disable the Record Ball button when window is open**
-
-Change the button at ~line 1032-1039:
-```tsx
-// BEFORE
-<GlassButton
-  variant="primary" size="md"
-  className={`w-full transition-all ${activeWindow ? 'border-2 border-warning/60' : ''}`}
-  loading={actionLoading === 'record-delivery'}
-  onClick={handleRecordDelivery}
->
-  🏏 {activeWindow ? 'Record Ball (will auto-lock)' : 'Record Ball'}
-</GlassButton>
-```
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
 ```tsx
-// AFTER
-<GlassButton
-  variant="primary" size="md"
-  className="w-full"
-  loading={actionLoading === 'record-delivery'}
-  onClick={handleRecordDelivery}
-  disabled={!!activeWindow}
->
-  🏏 Record Ball
-</GlassButton>
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-**2. Update the warning box copy** (lines ~996-1028) to make it clear the record button is now blocked, not just a suggestion. Update the text from:
-- "Recording will auto-lock if you proceed anyway." 
-to:
-- "You must lock the window before you can record this ball."
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-Also make the warning box visually stronger — change border/bg from `warning/8` hint to a more prominent blocker-style style.
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-**3. Also track "locked" windows** — the `activeWindow` state only tracks `open` status windows (line 167). But after lock, `activeWindow` becomes null, which is correct — the record button unblocks. However, we need to also show the locked window in the Command tab so admin knows to go resolve it after recording. Currently the Predict tab handles this. No change needed here — the flow works: lock → `activeWindow` becomes null → record button enabled.
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
-### Summary of changes
+## Changes
 
-| Location | What | Before | After |
-|---|---|---|---|
-| Line ~1032 | Record Ball button `disabled` | Never disabled | `disabled={!!activeWindow}` |
-| Line ~1032 | Record Ball button label | "Record Ball (will auto-lock)" | "Record Ball" |
-| Line ~1032 | Record Ball button className | Has warning border when open | Normal always |
-| Line ~1003-1004 | Warning box body text | "Recording will auto-lock if you proceed anyway" | "You must lock the window before recording." |
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
 
-**That's it.** No backend changes, no schema changes, no other files. The `record-delivery` edge function already auto-locks as a safety net — this just enforces it at the UI layer too. The lock-first, record-second ordering becomes the only possible path.
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
 
-### Visual Flow After Change
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
 
-```text
-[Over active] 
-    ↓
-[Open Guesses button] → window opens → customers guess
-    ↓
-[Warning box with LOCK button — Record Ball greyed out]
-    ↓  admin taps "Lock Window Now"
-[window locked → activeWindow = null → Record Ball enabled]
-    ↓  admin selects outcome + taps "Record Ball"
-[delivery recorded]
-    ↓
-[Predict tab → resolve window → points awarded]
+// After:
+const [loading, setLoading] = useState(false);
 ```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
