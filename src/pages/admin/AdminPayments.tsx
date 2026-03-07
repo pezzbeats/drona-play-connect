@@ -47,11 +47,11 @@ function CopyBtn({ text }: { text: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    paid_verified: 'bg-green-500/15 text-green-400 border-green-500/30',
-    paid_manual_verified: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
-    pending_verification: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-    unpaid: 'bg-muted text-muted-foreground border-border',
-    paid_rejected: 'bg-red-500/15 text-red-400 border-red-500/30',
+    paid_verified:        'bg-success/15 text-success border-success/30',
+    paid_manual_verified: 'bg-success/10 text-success border-success/20',
+    pending_verification: 'bg-warning/15 text-warning border-warning/30',
+    unpaid:               'bg-muted text-muted-foreground border-border',
+    paid_rejected:        'bg-destructive/15 text-destructive border-destructive/30',
   };
   return (
     <span className={`inline-block text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] ?? 'bg-muted text-muted-foreground border-border'}`}>
