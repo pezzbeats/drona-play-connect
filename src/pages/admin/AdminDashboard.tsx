@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { SkeletonStatCard } from '@/components/ui/SkeletonCard';
-import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight } from 'lucide-react';
+import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight, AlertTriangle } from 'lucide-react';
 
 interface Stats {
   totalOrders: number;
