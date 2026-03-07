@@ -62,7 +62,7 @@ export default function AdminDashboard() {
   const statCards = stats ? [
     { icon: Users,        label: 'Registrations',  value: stats.totalOrders,          color: 'text-primary',     bg: 'bg-primary/10' },
     { icon: CheckCircle2, label: 'Paid',            value: stats.paidOrders,           color: 'text-success',     bg: 'bg-success/10' },
-    { icon: DollarSign,   label: 'Unpaid',          value: stats.unpaidOrders,         color: 'text-destructive', bg: 'bg-destructive/10' },
+    { icon: DollarSign,   label: 'Not Paid',        value: stats.unpaidOrders,         color: 'text-destructive', bg: 'bg-destructive/10' },
     { icon: TrendingUp,   label: 'Pending',         value: stats.pendingVerification,  color: 'text-warning',     bg: 'bg-warning/10' },
     { icon: ScanLine,     label: 'Check-ins Today', value: stats.checkedInToday,       color: 'text-secondary',   bg: 'bg-secondary/10' },
     { icon: Ticket,       label: 'Total Seats',     value: stats.totalSeats,           color: 'text-accent',      bg: 'bg-accent/10' },
