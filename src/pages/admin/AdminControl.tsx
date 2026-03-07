@@ -1278,7 +1278,9 @@ export default function AdminControl() {
 
               {!activeWindow ? (
                 <div className="space-y-2">
-                  <Input className="glass-input text-sm" value={windowQuestion} onChange={e => setWindowQuestion(e.target.value)} placeholder="Prediction question..." />
+                  <div className="rounded-lg bg-muted/20 border border-border/40 px-3 py-2 text-xs text-muted-foreground">
+                    Fixed question: <span className="text-foreground font-medium">"What will happen on the next ball?"</span>
+                  </div>
                   <GlassButton
                     variant="primary" size="sm" loading={actionLoading === 'open-window'}
                     onClick={handleOpenWindow}
@@ -1306,21 +1308,15 @@ export default function AdminControl() {
 
               <div className="mt-4">
                 <p className="text-xs text-muted-foreground mb-2">Quick Resolve (for locked window):</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { key: 'dot', label: '• Dot', cls: 'bg-muted/30' },
-                    { key: '1', label: '1 Run', cls: '' },
-                    { key: '2', label: '2 Runs', cls: '' },
-                    { key: '4', label: '4️⃣ Four', cls: 'bg-accent/10 border-accent/30' },
-                    { key: '6', label: '6️⃣ Six', cls: 'bg-primary/10 border-primary/30' },
-                    { key: 'wicket', label: '🏏 Wicket', cls: 'bg-destructive/10 border-destructive/30' },
-                  ].map(opt => (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {BALL_OUTCOMES.map(opt => (
                     <button
                       key={opt.key}
                       onClick={() => handleResolveWindow(opt.key)}
-                      className={`px-2 py-3 text-xs rounded-xl border border-border hover:border-primary hover:bg-primary/10 text-foreground transition-all font-semibold ${opt.cls}`}
+                      className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl border-2 border-border/50 hover:border-primary/60 hover:bg-primary/10 text-foreground transition-all font-semibold h-14`}
                     >
-                      {opt.label}
+                      <span className={`text-base font-black leading-none ${opt.colorCls.split(' ')[1]}`}>{opt.emoji}</span>
+                      <span className="text-[9px] uppercase tracking-wide text-muted-foreground leading-none">{opt.label}</span>
                     </button>
                   ))}
                 </div>
