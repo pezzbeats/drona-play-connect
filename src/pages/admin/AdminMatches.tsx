@@ -40,6 +40,8 @@ export default function AdminMatches() {
   const [creating, setCreating] = useState(false);
   const [settingActive, setSettingActive] = useState<string | null>(null);
   const [confirmActivateMatch, setConfirmActivateMatch] = useState<Match | null>(null);
+  const [confirmDeactivateMatch, setConfirmDeactivateMatch] = useState<Match | null>(null);
+  const [activeEventId, setActiveEventId] = useState<string>('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -48,7 +50,12 @@ export default function AdminMatches() {
     start_time: '', status: 'draft'
   });
 
-  useEffect(() => { fetchMatches(); }, []);
+  useEffect(() => {
+    fetchMatches();
+    // Fetch real event_id dynamically
+    supabase.from('events').select('id').eq('is_active', true).limit(1).maybeSingle()
+      .then(({ data }) => { if (data?.id) setActiveEventId(data.id); });
+  }, []);
 
   const fetchMatches = async () => {
     setLoading(true);
@@ -62,7 +69,7 @@ export default function AdminMatches() {
     setCreating(true);
     try {
       const { error } = await supabase.from('matches').insert({
-        event_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        event_id: activeEventId,
         name: form.name,
         opponent: form.opponent || null,
         match_type: form.match_type as any,
@@ -220,7 +227,7 @@ export default function AdminMatches() {
                     loading={settingActive === match.id}
                     onClick={() => {
                       if (match.is_active_for_registration) {
-                        handleSetActive(match.id, true);
+                        setConfirmDeactivateMatch(match);
                       } else {
                         setConfirmActivateMatch(match);
                       }
@@ -258,6 +265,34 @@ export default function AdminMatches() {
               }}
             >
               Activate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm deactivation dialog */}
+      <AlertDialog open={!!confirmDeactivateMatch} onOpenChange={open => !open && setConfirmDeactivateMatch(null)}>
+        <AlertDialogContent className="glass-card-elevated border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-foreground">⚠️ Deactivate Registration?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This will <strong>close registrations</strong> for{' '}
+              <strong className="text-foreground">{confirmDeactivateMatch?.name}</strong>.
+              No new bookings will be possible until you reactivate a match.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (confirmDeactivateMatch) {
+                  handleSetActive(confirmDeactivateMatch.id, true);
+                  setConfirmDeactivateMatch(null);
+                }
+              }}
+            >
+              Deactivate
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

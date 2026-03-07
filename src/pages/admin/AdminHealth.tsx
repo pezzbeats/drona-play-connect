@@ -229,16 +229,23 @@ export default function AdminHealth() {
           <div className="space-y-2">
             {recentActivity.map((row, i) => (
               <div key={i} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="w-2 h-2 rounded-full bg-primary/50 flex-shrink-0" />
                   <span className="font-mono text-foreground">{row.action}</span>
                   {row.entity_type && (
                     <span className="text-muted-foreground">on {row.entity_type}</span>
                   )}
                 </div>
-                <span className="text-muted-foreground flex-shrink-0 ml-2">
-                  {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
-                </span>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  {row.admin_id && (
+                    <span className="font-mono text-[10px] text-muted-foreground/70 hidden sm:inline" title={row.admin_id}>
+                      {row.admin_id.slice(0, 8)}
+                    </span>
+                  )}
+                  <span className="text-muted-foreground">
+                    {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
+                  </span>
+                </div>
               </div>
             ))}
           </div>

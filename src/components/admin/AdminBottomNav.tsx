@@ -147,6 +147,11 @@ export function AdminBottomNav() {
             {user && (
               <p className="text-xs text-muted-foreground px-1 truncate">{user.email}</p>
             )}
+            {role && (
+              <span className="inline-block text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary ml-1">
+                {role.replace('_', ' ')}
+              </span>
+            )}
             <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition-colors font-medium"

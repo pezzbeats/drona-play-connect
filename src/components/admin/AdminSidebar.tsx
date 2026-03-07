@@ -8,6 +8,7 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type NavItem = {
   icon: React.ElementType;
@@ -62,80 +63,105 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
   });
 
   return (
-    <aside
-      className={cn(
-        'fixed left-0 top-0 h-screen z-40 hidden md:flex flex-col transition-all duration-300',
-        'border-r border-sidebar-border',
-        'bg-[hsl(var(--sidebar-background))] backdrop-blur-xl',
-        collapsed ? 'w-16' : 'w-60'
-      )}
-    >
-      {/* Logo */}
-      <div className={cn('flex items-center gap-3 p-4 border-b border-sidebar-border', collapsed && 'justify-center')}>
-        <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0">
-          <Zap className="h-4 w-4 text-primary-foreground" />
-        </div>
-        {!collapsed && (
-          <div>
-            <p className="font-display font-bold text-sidebar-foreground text-sm leading-tight">T20 Ops</p>
-            <p className="text-xs text-muted-foreground">Hotel Drona Palace</p>
-          </div>
+    <TooltipProvider delayDuration={300}>
+      <aside
+        className={cn(
+          'fixed left-0 top-0 h-screen z-40 hidden md:flex flex-col transition-all duration-300',
+          'border-r border-sidebar-border',
+          'bg-[hsl(var(--sidebar-background))] backdrop-blur-xl',
+          collapsed ? 'w-16' : 'w-60'
         )}
-      </div>
+      >
+        {/* Logo */}
+        <div className={cn('flex items-center gap-3 p-4 border-b border-sidebar-border', collapsed && 'justify-center')}>
+          <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0">
+            <Zap className="h-4 w-4 text-primary-foreground" />
+          </div>
+          {!collapsed && (
+            <div>
+              <p className="font-display font-bold text-sidebar-foreground text-sm leading-tight">T20 Ops</p>
+              <p className="text-xs text-muted-foreground">Hotel Drona Palace</p>
+            </div>
+          )}
+        </div>
 
-      {/* Nav Items */}
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-        {visibleItems.map(({ icon: Icon, label, to }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) => cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150',
-              collapsed ? 'justify-center' : '',
-              isActive
-                ? 'bg-primary/15 text-sidebar-primary font-medium shadow-glow-primary'
-                : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+        {/* Nav Items */}
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+          {visibleItems.map(({ icon: Icon, label, to }) => (
+            collapsed ? (
+              <Tooltip key={to}>
+                <TooltipTrigger asChild>
+                  <NavLink
+                    to={to}
+                    className={({ isActive }) => cn(
+                      'flex items-center justify-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150',
+                      isActive
+                        ? 'bg-primary/15 text-sidebar-primary font-medium shadow-glow-primary'
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                    )}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                  </NavLink>
+                </TooltipTrigger>
+                <TooltipContent side="right">{label}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) => cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150',
+                  isActive
+                    ? 'bg-primary/15 text-sidebar-primary font-medium shadow-glow-primary'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4 flex-shrink-0" />
+                <span>{label}</span>
+              </NavLink>
+            )
+          ))}
+        </nav>
+
+        {/* Role badge + User + Sign Out */}
+        <div className="p-2 border-t border-sidebar-border space-y-1">
+          {!collapsed && (
+            <div className="px-3 py-2 space-y-0.5">
+              {user && <p className="text-xs text-muted-foreground truncate">{user.email}</p>}
+              {role && (
+                <span className="inline-block text-xs font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                  {role.replace('_', ' ')}
+                </span>
+              )}
+            </div>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleSignOut}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors',
+                  collapsed ? 'justify-center' : ''
+                )}
+              >
+                <LogOut className={cn('flex-shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+                {!collapsed && <span>Sign Out</span>}
+              </button>
+            </TooltipTrigger>
+            {collapsed && <TooltipContent side="right">Sign Out</TooltipContent>}
+          </Tooltip>
+          <button
+            onClick={onToggle}
+            className={cn(
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent transition-colors',
+              collapsed ? 'justify-center' : 'justify-end'
             )}
           >
-            <Icon className={cn('flex-shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-            {!collapsed && <span>{label}</span>}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Role badge + User + Sign Out */}
-      <div className="p-2 border-t border-sidebar-border space-y-1">
-        {!collapsed && (
-          <div className="px-3 py-2 space-y-0.5">
-            {user && <p className="text-xs text-muted-foreground truncate">{user.email}</p>}
-            {role && (
-              <span className="inline-block text-xs font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                {role.replace('_', ' ')}
-              </span>
-            )}
-          </div>
-        )}
-        <button
-          onClick={handleSignOut}
-          className={cn(
-            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors',
-            collapsed ? 'justify-center' : ''
-          )}
-        >
-          <LogOut className={cn('flex-shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
-        <button
-          onClick={onToggle}
-          className={cn(
-            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent transition-colors',
-            collapsed ? 'justify-center' : 'justify-end'
-          )}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!collapsed && <span className="text-xs">Collapse</span>}
-        </button>
-      </div>
-    </aside>
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {!collapsed && <span className="text-xs">Collapse</span>}
+          </button>
+        </div>
+      </aside>
+    </TooltipProvider>
   );
 }

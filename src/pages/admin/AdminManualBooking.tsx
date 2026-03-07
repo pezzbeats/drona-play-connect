@@ -59,6 +59,15 @@ export default function AdminManualBooking() {
     setQuoteLoading(false);
   };
 
+  // Auto-clear stale quote when seat count or seating type changes
+  useEffect(() => {
+    if (priceQuote) {
+      setPriceQuote(null);
+      setDiscount({ type: 'flat', value: '' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.seats_count, form.seating_type]);
+
   // ── Discount calculations ──
   const subtotal = priceQuote?.total ?? 0;
   const discountValue = parseFloat(discount.value) || 0;
@@ -134,6 +143,21 @@ export default function AdminManualBooking() {
           discount_amount: discApplied,
         },
       });
+
+      // WhatsApp share after booking success
+      const matchName = activeMatch?.name ?? 'T20 Fan Night';
+      const ticketUrl = `${window.location.origin}/ticket?mobile=${searchMobile}`;
+      const waMsg = [
+        `🎟️ Booking Confirmed — Hotel Drona Palace`,
+        ``,
+        `Hi ${form.full_name}! Your pass is ready.`,
+        `🏏 Match: ${matchName}`,
+        finalBalance > 0 ? `💳 Balance due at entry: ₹${finalBalance}` : `✅ Fully paid`,
+        ``,
+        `🎫 View pass: ${ticketUrl}`,
+      ].join('\n');
+      window.open(`https://wa.me/91${searchMobile}?text=${encodeURIComponent(waMsg)}`, '_blank');
+
       setExisting(null); setPriceQuote(null); setSearched(false);
       setDiscount({ type: 'flat', value: '' });
       setForm({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash', advance_paid: '', advance_payment_method: 'cash' });

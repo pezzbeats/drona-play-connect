@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -22,42 +22,54 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeMatch, setActiveMatch] = useState<any>(null);
 
-  useEffect(() => { fetchData(); }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    const [matchRes, ordersRes] = await Promise.all([
-      supabase.from('matches').select('*').eq('is_active_for_registration', true).single(),
-      supabase.from('orders').select('id, payment_status, seats_count, created_at, advance_paid, total_amount'),
-    ]);
+    try {
+      const [matchRes, ordersRes] = await Promise.all([
+        supabase.from('matches').select('*').eq('is_active_for_registration', true).single(),
+        supabase.from('orders').select('id, payment_status, seats_count, created_at, advance_paid, total_amount'),
+      ]);
 
-    setActiveMatch(matchRes.data || null);
+      setActiveMatch(matchRes.data || null);
 
-    const orders = ordersRes.data || [];
-    const today = new Date().toISOString().split('T')[0];
+      const orders = ordersRes.data || [];
+      // IST-aware today date (UTC+5:30)
+      const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+      const today = nowIST.toISOString().split('T')[0];
 
-    const { count: checkinCount } = await supabase
-      .from('tickets')
-      .select('*', { count: 'exact', head: true })
-      .not('checked_in_at', 'is', null)
-      .gte('checked_in_at', today);
+      const { count: checkinCount } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .not('checked_in_at', 'is', null)
+        .gte('checked_in_at', today);
 
-    const notPaidOrders = orders.filter(o =>
-      !['paid_verified', 'paid_manual_verified'].includes(o.payment_status)
-    );
+      const notPaidOrders = orders.filter(o =>
+        !['paid_verified', 'paid_manual_verified'].includes(o.payment_status)
+      );
 
-    setStats({
-      totalOrders: orders.length,
-      paidOrders: orders.filter(o => ['paid_verified', 'paid_manual_verified'].includes(o.payment_status)).length,
-      unpaidOrders: notPaidOrders.length,
-      pendingVerification: orders.filter(o => o.payment_status === 'pending_verification').length,
-      checkedInToday: checkinCount || 0,
-      totalSeats: orders.reduce((sum, o) => sum + (o.seats_count || 0), 0),
-      balanceDueCount: notPaidOrders.length,
-      balanceDueTotal: notPaidOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
-    });
-    setLoading(false);
-  };
+      setStats({
+        totalOrders: orders.length,
+        paidOrders: orders.filter(o => ['paid_verified', 'paid_manual_verified'].includes(o.payment_status)).length,
+        unpaidOrders: notPaidOrders.length,
+        pendingVerification: orders.filter(o => o.payment_status === 'pending_verification').length,
+        checkedInToday: checkinCount || 0,
+        totalSeats: orders.reduce((sum, o) => sum + (o.seats_count || 0), 0),
+        balanceDueCount: notPaidOrders.length,
+        balanceDueTotal: notPaidOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
+      });
+    } catch {
+      // non-blocking — keep any existing stats visible
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load + 60-second auto-refresh
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const statCards = stats ? [
     { icon: Users,        label: 'Registrations',  value: stats.totalOrders,          color: 'text-primary',     bg: 'bg-primary/10' },
@@ -82,7 +94,7 @@ export default function AdminDashboard() {
           <h1 className="font-display text-2xl font-bold gradient-text-accent">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-0.5">T20 Fan Night Operations</p>
         </div>
-        <GlassButton variant="ghost" size="sm" onClick={fetchData}>Refresh</GlassButton>
+        <GlassButton variant="ghost" size="sm" loading={loading} onClick={fetchData}>Refresh</GlassButton>
       </div>
 
       {/* Active Match Banner */}

@@ -532,12 +532,28 @@ export default function AdminValidate() {
     setCheckingIn(false);
   };
 
-  const copyWhatsApp = () => {
+  const sendWhatsApp = () => {
     if (!ticketData || !gamePin) return;
     const ord = ticketData.order;
-    const msg = `🏏 T20 Fan Night - Hotel Drona Palace\nHello ${ord?.purchaser_full_name}!\n✅ Check-in confirmed for ${ord?.match?.name}\n🎮 Your Gameplay PIN: *${gamePin}*\nEnjoy the fun!`;
-    navigator.clipboard.writeText(msg);
-    toast({ title: '📋 Copied!', description: 'WhatsApp message copied' });
+    const msg = `🏏 T20 Fan Night - Hotel Drona Palace\nHello ${ord?.purchaser_full_name}!\n✅ Check-in confirmed for ${ord?.match?.name}\n🎮 Your Gameplay PIN: *${gamePin}*\nEnjoy the fan night!`;
+    navigator.clipboard?.writeText(msg);
+    window.open(`https://wa.me/91${ord?.purchaser_mobile}?text=${encodeURIComponent(msg)}`, '_blank');
+    toast({ title: '📲 WhatsApp opened!', description: 'Message pre-filled — tap Send' });
+  };
+
+  const handleScanNext = () => {
+    setQrInput('');
+    setTicketData(null);
+    setScanFeedback('idle');
+    setGamePin(null);
+    setNotFoundError(false);
+    setShowBlockForm(false);
+    setBlockReason('');
+    setCollectMethod(null);
+    setCollectAmount('');
+    setCollectRef('');
+    setVerifyResult(null);
+    inputRef.current?.focus();
   };
 
   const handleCollect = async () => {
@@ -1211,11 +1227,14 @@ export default function AdminValidate() {
                       <p className="font-display font-bold text-success tracking-[0.5em] text-7xl leading-none">{gamePin}</p>
                     </div>
                   )}
-                  <GlassButton variant="success" size="lg" className="w-full h-14" onClick={copyWhatsApp} disabled={!gamePin}>
-                    <Copy className="h-5 w-5" /> Copy WhatsApp Message
+                  <GlassButton variant="success" size="lg" className="w-full h-14" onClick={sendWhatsApp} disabled={!gamePin}>
+                    <Copy className="h-5 w-5" /> Send WhatsApp PIN
                   </GlassButton>
                   <GlassButton variant="ghost" size="md" className="w-full" loading={checkingIn} onClick={handleRegenPin}>
                     <RefreshCw className="h-4 w-4" /> Regenerate PIN
+                  </GlassButton>
+                  <GlassButton variant="primary" size="lg" className="w-full h-14" onClick={handleScanNext}>
+                    <ScanLine className="h-5 w-5" /> Scan Next →
                   </GlassButton>
                 </div>
               )}
@@ -1312,7 +1331,7 @@ export default function AdminValidate() {
           )}
 
           {/* ── Admin controls ── */}
-          {(isPaid || isBlocked) && (
+          {ticketData && (
             <GlassCard className="p-5">
               <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-primary" /> Admin Controls
