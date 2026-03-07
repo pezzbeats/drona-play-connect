@@ -518,7 +518,7 @@ export default function AdminControl() {
       match_id: match.id,
       question: 'What will happen on the next ball?',
       options: BALL_OUTCOMES.map(o => ({ key: o.key, label: o.label })),
-    }, 'open-window');
+    }, 'open-window', '🎯 Guess window opened');
   };
 
   const applyOutcomePrefill = (key: BallOutcomeKey) => {
