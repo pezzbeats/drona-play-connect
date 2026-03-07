@@ -1,53 +1,47 @@
 
-## Root Cause — Found
+## What We're Doing
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+The user wants the two large CTA buttons ("Reserve Your Seats Now" and "Already Booked? View Your Passes") moved to appear **directly above the `<GameLoginCard />`** (the "Play the Game" / "Already Checked In?" section).
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+Currently (lines 537–549), the two CTA buttons are rendered **after** the trust strip / features section and before the legal disclaimer — which puts them well below the GameLoginCard at line 434.
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+The image shows the exact desired style: large full-width buttons, crimson-to-orange gradient for "Reserve Your Seats Now", solid green for "Already Booked?".
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
+### Change: `src/pages/Index.tsx`
+
+**Move** the existing CTA block (lines 537–549) to sit **just before** the `<GameLoginCard />` at line 434. The two blocks to swap are:
+
+**Remove** from lines 537–549:
+```jsx
+{/* ─── PRIMARY CTA — always visible ─── */}
+<div className="mb-6 animate-slide-up" style={{ animationDelay: '0.27s' }}>
+  <Link to="/register" className="block mb-3">
+    <button className="w-full h-16 btn-gradient ...">Reserve Your Seats Now ...</button>
+  </Link>
+  <Link to="/ticket" className="block">
+    <button className="w-full h-12 bg-success ...">Already Booked? View Your Passes ...</button>
+  </Link>
+</div>
 ```
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+**Insert** that same block (with slightly adjusted animation delay to match position) **above** line 433 (`{/* ─── FAN GAME LOGIN ─── */}`), i.e. directly after the match highlight card closes at line 431.
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+The buttons already have the correct styling matching the screenshot. We just need to reorder them in the JSX. The button height should also be bumped to match the screenshot's tall chunky look — increase "Already Booked" button to `h-16` to match "Reserve Your Seats".
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+### Result layout (top to bottom):
+1. Banner
+2. Match Highlight Card + Countdown
+3. **Reserve Your Seats Now** (crimson→orange, tall)
+4. **Already Booked? View Your Passes** (green, tall)
+5. GameLoginCard (Fan Game Login / "Play the Game")
+6. Event Experience / Features grid
+7. Pricing Card
+8. Trust Strip
+9. Legal Disclaimer
+10. Business Trust Block
 
-## Changes
+### Files to change
 
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
-```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
-```
-
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
-
-## Why this is the correct fix
-
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
-
-## Files Changed
 | File | Change |
 |---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+| `src/pages/Index.tsx` | Remove CTA block from lines 537–549; insert it above `<GameLoginCard />` at ~line 433, with both buttons at `h-16` |
