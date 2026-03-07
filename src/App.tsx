@@ -110,6 +110,7 @@ const App = () => (
               <Route path="activity" element={<ProtectedRoute requiredRole="super_admin"><AdminActivity /></ProtectedRoute>} />
               <Route path="roles" element={<ProtectedRoute requiredRole="super_admin"><AdminRoles /></ProtectedRoute>} />
               <Route path="eligibility" element={<ProtectedRoute requiredRole="super_admin"><AdminEligibility /></ProtectedRoute>} />
+              <Route path="trial-game" element={<ProtectedRoute requiredRole="operator"><AdminTrialGame /></ProtectedRoute>} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
