@@ -632,6 +632,12 @@ export default function AdminValidate() {
                       Offline — check-in will be queued and synced when reconnected
                     </div>
                   )}
+                  {!isPaid && order?.payment_method === 'pay_at_hotel' && (
+                    <div className="mb-3 flex items-center gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg px-3 py-2">
+                      <DollarSign className="h-3.5 w-3.5 shrink-0" />
+                      Collect payment below first — check-in will unlock once payment is recorded
+                    </div>
+                  )}
                   {/* Larger check-in button */}
                   <GlassButton
                     variant="success"
