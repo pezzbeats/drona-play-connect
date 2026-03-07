@@ -620,21 +620,22 @@ export default function AdminValidate() {
               <span className="font-display font-bold text-foreground text-base">Scan QR Code</span>
             </div>
             <div className="flex items-center gap-2">
-              {/* Torch toggle — only shown if device supports it */}
-              {cameraReady && torchSupportedRef.current && (
-                <button
-                  onClick={toggleTorch}
-                  className={`h-11 w-11 rounded-xl flex items-center justify-center border transition-all duration-150 active:scale-95 ${
-                    torchOn
+              {/* Torch toggle — always shown, disabled while camera initialises */}
+              <button
+                onClick={cameraReady ? toggleTorch : undefined}
+                disabled={!cameraReady}
+                className={`h-11 w-11 rounded-xl flex items-center justify-center border transition-all duration-150 active:scale-95 ${
+                  !cameraReady
+                    ? 'bg-muted/10 border-muted/20 text-muted-foreground/30 cursor-not-allowed'
+                    : torchOn
                       ? 'bg-warning/20 border-warning/60 text-warning shadow-[0_0_12px_hsl(38_95%_55%/0.4)]'
                       : 'bg-muted/30 border-muted/50 text-muted-foreground hover:bg-muted/50'
-                  }`}
-                  aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
-                  title={torchOn ? 'Flashlight On' : 'Flashlight Off'}
-                >
-                  {torchOn ? <Zap className="h-5 w-5 fill-warning" /> : <ZapOff className="h-5 w-5" />}
-                </button>
-              )}
+                }`}
+                aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                title={torchOn ? 'Flashlight On' : 'Flashlight Off'}
+              >
+                {torchOn ? <Zap className="h-5 w-5 fill-warning" /> : <ZapOff className="h-5 w-5" />}
+              </button>
               <button
                 onClick={closeCamera}
                 className="p-2 rounded-full bg-muted/30 hover:bg-muted/60 transition-colors"
