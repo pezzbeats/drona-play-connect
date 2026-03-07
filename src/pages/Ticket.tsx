@@ -336,6 +336,8 @@ function PassCard({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function TicketPage() {
+  const { role } = useAuth();
+  const isAdmin = role !== null;
   const [params] = useSearchParams();
   const orderId = params.get('order_id');
   const mobileParam = params.get('mobile');
