@@ -831,6 +831,16 @@ export default function AdminValidate() {
               <span className="text-foreground font-medium">{activeMatch.name}</span>
             </span>
           )}
+          {/* Quick-open camera button in card header */}
+          <button
+            type="button"
+            onClick={openCamera}
+            title="Open camera"
+            aria-label="Open camera scanner"
+            className="shrink-0 h-8 w-8 rounded-lg flex items-center justify-center bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 hover:border-primary/50 transition-all duration-150 active:scale-95 ml-1"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
         </div>
 
         {/* ── Primary CTA: big camera scan button ── */}
