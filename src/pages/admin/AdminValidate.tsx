@@ -17,7 +17,7 @@ import {
 import {
   ScanLine, QrCode, CheckCircle2, Upload, Copy, RefreshCw, Loader2,
   User, DollarSign, ShieldAlert, ShieldCheck, ShieldOff, AlertTriangle,
-  WifiOff, Banknote, Smartphone, CreditCard, XCircle, Camera, X,
+  WifiOff, Banknote, Smartphone, CreditCard, XCircle, Camera, X, Zap, ZapOff,
 } from 'lucide-react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
