@@ -753,24 +753,77 @@ export default function AdminValidate() {
 
       {/* ── Large scan zone ── */}
       <GlassCard
-        className={`p-6 transition-all duration-300 border-2 ${feedbackBorder[scanFeedback]} ${feedbackGlow[scanFeedback]}`}
+        className={`p-5 transition-all duration-300 border-2 ${feedbackBorder[scanFeedback]} ${feedbackGlow[scanFeedback]}`}
       >
         <div className="flex items-center gap-2 mb-4">
           <QrCode className="h-6 w-6 text-primary" />
           <h2 className="font-display text-xl font-bold text-foreground">Scan Zone</h2>
           {activeMatch && (
-            <span className="ml-auto text-xs text-muted-foreground">
-              Active: <span className="text-foreground font-medium">{activeMatch.name}</span>
+            <span className="ml-auto text-xs text-muted-foreground truncate max-w-[120px]">
+              <span className="text-foreground font-medium">{activeMatch.name}</span>
             </span>
           )}
         </div>
 
+        {/* ── Primary CTA: big camera scan button ── */}
+        <button
+          type="button"
+          onClick={openCamera}
+          disabled={scanFeedback === 'loading'}
+          className={`
+            w-full h-20 rounded-2xl flex items-center justify-center gap-4
+            font-display font-bold text-lg tracking-wide
+            border-2 transition-all duration-200 active:scale-[0.98]
+            select-none touch-manipulation
+            ${scanFeedback === 'success'
+              ? 'bg-success/20 border-success/60 text-success shadow-glow-success'
+              : scanFeedback === 'error' || scanFeedback === 'blocked'
+              ? 'bg-destructive/15 border-destructive/50 text-destructive'
+              : scanFeedback === 'mismatch'
+              ? 'bg-warning/15 border-warning/50 text-warning'
+              : scanFeedback === 'loading'
+              ? 'bg-primary/10 border-primary/30 text-primary cursor-wait'
+              : 'bg-gradient-primary border-primary/50 text-primary-foreground shadow-glow-primary hover:shadow-[0_0_30px_hsl(355_80%_55%/0.5)] hover:-translate-y-px'
+            }
+          `}
+          aria-label="Open camera to scan QR code"
+        >
+          {scanFeedback === 'loading' ? (
+            <Loader2 className="h-8 w-8 animate-spin shrink-0" />
+          ) : scanFeedback === 'success' ? (
+            <CheckCircle2 className="h-8 w-8 shrink-0" />
+          ) : (
+            <Camera className="h-8 w-8 shrink-0" />
+          )}
+          <div className="text-left">
+            <div className="text-xl leading-tight">
+              {scanFeedback === 'loading' ? 'Looking up…' :
+               scanFeedback === 'success' ? 'Ticket Found' :
+               scanFeedback === 'error' ? 'Not Found — Tap to Retry' :
+               scanFeedback === 'blocked' ? 'Ticket Blocked' :
+               scanFeedback === 'mismatch' ? 'Wrong Match' :
+               'TAP TO SCAN QR CODE'}
+            </div>
+            <div className="text-sm font-body font-normal opacity-80 mt-0.5">
+              {scanFeedback === 'idle' ? 'Hardware scanner also ready below' : ''}
+            </div>
+          </div>
+        </button>
+
+        {/* ── OR divider ── */}
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-widest">or type / paste</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* ── Secondary: hardware scanner / paste input ── */}
         <div className="flex gap-2">
           <input
             ref={inputRef}
-            className="flex-1 h-14 px-4 rounded-lg font-mono bg-muted/40 border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
+            className="flex-1 h-12 px-4 rounded-lg font-mono bg-muted/40 border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors text-sm"
             style={{ fontSize: '16px' }}
-            placeholder="Paste / scan QR code here…"
+            placeholder="Paste or scan QR code here…"
             value={qrInput}
             onChange={e => setQrInput(e.target.value)}
             onPaste={handlePaste}
@@ -778,28 +831,19 @@ export default function AdminValidate() {
             autoComplete="off"
             spellCheck={false}
           />
-          {/* Camera button */}
-          <button
-            type="button"
-            onClick={openCamera}
-            className="shrink-0 h-14 w-14 rounded-xl flex items-center justify-center bg-muted/40 border border-input hover:bg-primary/10 hover:border-primary/50 transition-all duration-150 active:scale-95 touch-target"
-            title="Open camera to scan QR"
-            aria-label="Open camera"
-          >
-            <Camera className="h-5 w-5 text-foreground" />
-          </button>
-          {/* Scan button */}
           <GlassButton
-            variant="primary"
-            size="lg"
+            variant="ghost"
+            size="sm"
             loading={scanFeedback === 'loading'}
             onClick={() => lookupTicket(inputRef.current?.value ?? qrInput)}
-            className="shrink-0 h-14"
+            className="shrink-0 h-12 px-4 border border-border"
+            aria-label="Submit QR code"
           >
-            <ScanLine className="h-5 w-5" />
+            <ScanLine className="h-4 w-4" />
           </GlassButton>
         </div>
 
+        {/* Status line */}
         <div className="mt-3 h-5 text-sm font-medium">
           {scanFeedback === 'success' && <span className="text-success">✓ Ticket found</span>}
           {scanFeedback === 'error' && <span className="text-destructive">✗ Not found or already used</span>}
