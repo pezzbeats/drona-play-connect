@@ -6,7 +6,6 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { LandingFooter } from '@/components/ui/LandingFooter';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
   MapPin, Calendar, Trophy, Star, ChevronRight,
