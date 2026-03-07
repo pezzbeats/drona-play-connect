@@ -866,6 +866,21 @@ export default function TicketPage() {
           <GlassButton variant="ghost" size="sm" className="flex-1" onClick={() => whatsappShare(currentTicket)}>
             <MessageCircle className="h-4 w-4" /> WhatsApp
           </GlassButton>
+          {!paidTickets && Math.max(0, (currentTicket?.order as any)?.total_amount - (currentTicket?.order as any)?.advance_paid) > 0 && (
+            <a
+              href={buildReminderLink(currentTicket)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-xl text-xs font-semibold transition-all active:scale-95 px-3"
+              style={{
+                background: 'linear-gradient(135deg, hsl(142 60% 18%), hsl(142 50% 23%))',
+                border: '1px solid hsl(142 60% 32% / 0.7)',
+                color: 'hsl(142 80% 75%)',
+              }}
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> Remind
+            </a>
+          )}
         </div>
 
         {/* Multi-ticket navigation */}
