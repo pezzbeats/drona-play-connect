@@ -1,0 +1,1 @@
+ALTER TABLE public.semifinal_eligibility ADD COLUMN IF NOT EXISTS eligible_seats integer NOT NULL DEFAULT 0;
