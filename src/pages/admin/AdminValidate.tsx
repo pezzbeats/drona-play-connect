@@ -687,7 +687,7 @@ export default function AdminValidate() {
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {([
                   { id: 'cash', label: 'Cash', icon: Banknote },
-                  { id: 'upi', label: 'UPI', icon: Smartphone },
+                  { id: 'upi_qr', label: 'UPI', icon: Smartphone },
                   { id: 'card', label: 'Card', icon: CreditCard },
                 ] as const).map(({ id, label, icon: Icon }) => (
                   <button
@@ -722,7 +722,7 @@ export default function AdminValidate() {
                   {collectMethod !== 'cash' && (
                     <Input
                       className="glass-input h-12 text-base"
-                      placeholder={collectMethod === 'upi' ? 'UTR / Transaction ID *' : 'Card ref / last 4 digits *'}
+                      placeholder={collectMethod === 'upi_qr' ? 'UTR / Transaction ID *' : 'Card ref / last 4 digits *'}
                       value={collectRef}
                       onChange={e => setCollectRef(e.target.value)}
                     />
