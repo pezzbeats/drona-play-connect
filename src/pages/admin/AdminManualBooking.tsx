@@ -246,7 +246,7 @@ export default function AdminManualBooking() {
       )}
 
       {/* Booking form */}
-      {showBookingForm && (priceQuote !== undefined || priceQuote === undefined) && (
+      {showBookingForm && !lastBooking && (priceQuote !== undefined || priceQuote === undefined) && (
         <GlassCard variant="elevated" className="p-4">
           <h2 className="font-display text-base font-bold text-foreground mb-4 flex items-center gap-2">
             <User className="h-4 w-4 text-primary" />New Booking
