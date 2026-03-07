@@ -24,6 +24,8 @@ export default function AdminOrders() {
   const [overrideTarget, setOverrideTarget] = useState<OverrideTarget>(null);
   const [overrideReason, setOverrideReason] = useState('');
   const [viewingProof, setViewingProof] = useState<string | null>(null);
+  const [advanceForm, setAdvanceForm] = useState<AdvanceFormState>(null);
+  const [savingAdvance, setSavingAdvance] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
