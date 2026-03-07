@@ -12,6 +12,7 @@ import {
   Clock, ShieldCheck, BadgeCheck, QrCode, Tv2, Utensils, Target,
   Phone, Mail, X, Gamepad2, Lock,
 } from 'lucide-react';
+import { CountdownTimer } from '@/components/ui/CountdownTimer';
 import hotelLogo from '@/assets/hotel-logo.png';
 
 // ─── Inline Fan Game Login Card ───────────────────────────────────────────────
