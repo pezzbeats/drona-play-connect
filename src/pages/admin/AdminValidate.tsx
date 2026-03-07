@@ -551,12 +551,15 @@ export default function AdminValidate() {
               const totalAmt = order?.total_amount ?? 0;
               const advancePd = order?.advance_paid ?? 0;
               const balanceDue = Math.max(0, totalAmt - advancePd);
-              if (advancePd > 0 && balanceDue > 0 && !isPaid) {
+              if (balanceDue > 0 && !isPaid) {
                 return (
                   <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 bg-warning/10 border-warning/50 text-warning">
                     <div>
                       <p className="font-bold text-base">⚠ BALANCE DUE: ₹{balanceDue}</p>
-                      <p className="text-xs text-warning/80 mt-0.5">Advance paid: ₹{advancePd} via {order.advance_payment_method || 'cash'}</p>
+                      {advancePd > 0
+                        ? <p className="text-xs text-warning/80 mt-0.5">Advance paid: ₹{advancePd} via {order.advance_payment_method || 'cash'}</p>
+                        : <p className="text-xs text-warning/80 mt-0.5">No advance paid — collect full amount at gate</p>
+                      }
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs text-muted-foreground">Total</p>
