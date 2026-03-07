@@ -624,32 +624,330 @@ export default function RegisterPage() {
     ? `upi://pay?pa=${payeeVpa}&pn=${encodeURIComponent(payeeName)}&am=${priceQuote.total}&cu=INR&tn=${encodeURIComponent(`${fullName}_${seatsCount}_${mobile}`)}`
     : '';
 
+  // ── Pass canvas helpers ───────────────────────────────────────────────────
+  const loadImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+  const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  };
+
+  /** Build a TicketData-compatible shape from local Register state */
+  const buildTicketShape = (ticket: any): TicketData => ({
+    id: ticket.id,
+    seat_index: ticket.seat_index,
+    qr_text: ticket.qr_text,
+    status: ticket.status ?? 'active',
+    issued_at: ticket.issued_at ?? new Date().toISOString(),
+    order: {
+      purchaser_full_name: fullName,
+      purchaser_mobile: mobile,
+      payment_status: paymentMethod === 'pay_at_hotel' ? 'unpaid' : 'paid_manual_verified',
+      seats_count: seatsCount,
+      total_amount: priceQuote?.total ?? 0,
+      seating_type: seatingType,
+      advance_paid: 0,
+      match: {
+        name: activeMatch!.name,
+        venue: activeMatch!.venue,
+        start_time: activeMatch!.start_time ?? null,
+        opponent: activeMatch!.opponent ?? null,
+      },
+    },
+  });
+
+  const buildPassCanvas = async (ticket: TicketData): Promise<HTMLCanvasElement> => {
+    const order = ticket.order as any;
+    const match = order?.match;
+    const paidStatus = isPaid(order?.payment_status);
+    const balanceDue = Math.max(0, (order?.total_amount ?? 0) - (order?.advance_paid ?? 0));
+    const hasBalance = !paidStatus && balanceDue > 0;
+    const isPartiallyPaid = (order?.advance_paid ?? 0) > 0 && !paidStatus;
+
+    const W = 750;
+    const BANNER_H = 52;
+    const BODY_TOP = BANNER_H;
+    const PAD = 40;
+    const QR_SIZE = 260;
+    const FOOTER_H = 72;
+
+    let contentH = 0;
+    contentH += 20;
+    contentH += 30;
+    contentH += 26;
+    contentH += 22;
+    contentH += 22;
+    contentH += 22;
+    if (hasBalance) contentH += 36;
+    contentH += 24;
+    contentH += 1;
+    contentH += 28;
+    contentH += QR_SIZE + 28 + 2;
+    contentH += 30;
+    contentH += 26;
+    contentH += 32;
+    const H = BANNER_H + contentH + FOOTER_H;
+
+    const DPR = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(DPR, DPR);
+
+    roundRect(ctx, 0, 0, W, H, 20);
+    ctx.fillStyle = '#17100a';
+    ctx.fill();
+
+    roundRect(ctx, 0.5, 0.5, W - 1, H - 1, 20);
+    ctx.strokeStyle = paidStatus ? 'hsla(142,60%,35%,0.5)' : 'hsla(38,60%,35%,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
+    if (paidStatus) {
+      bannerGrad.addColorStop(0, 'hsl(142,60%,22%)');
+      bannerGrad.addColorStop(1, 'hsl(142,50%,28%)');
+    } else {
+      bannerGrad.addColorStop(0, 'hsl(38,80%,28%)');
+      bannerGrad.addColorStop(1, 'hsl(38,70%,34%)');
+    }
+    ctx.save();
+    roundRect(ctx, 0, 0, W, BANNER_H, 20);
+    ctx.clip();
+    ctx.fillStyle = bannerGrad as any;
+    ctx.fillRect(0, 0, W, BANNER_H);
+    ctx.restore();
+    ctx.strokeStyle = paidStatus ? 'hsla(142,60%,40%,0.6)' : 'hsla(38,80%,45%,0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, BANNER_H); ctx.lineTo(W, BANNER_H); ctx.stroke();
+
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.fillStyle = paidStatus ? 'hsl(142,80%,80%)' : 'hsl(38,90%,85%)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const bannerText = paidStatus
+      ? '☑  PAID — Entry Confirmed'
+      : isPartiallyPaid
+        ? '⚠  ADVANCE PAID — Balance Due at Entry'
+        : '⚠  UNPAID — Pay at Hotel on Arrival';
+    ctx.fillText(bannerText, W / 2, BANNER_H / 2 + 1);
+
+    let y = BODY_TOP + 28;
+    const leftX = PAD;
+    const rightX = W - PAD;
+    const seatBadgeW = 120;
+    const textRightBound = rightX - seatBadgeW - 16;
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 30px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,90%,88%)';
+    ctx.fillText(order?.purchaser_full_name ?? '', leftX, y, textRightBound - leftX);
+    y += 36;
+
+    ctx.font = '500 20px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,60%,65%)';
+    const matchTitle = `${match?.name ?? ''}${match?.opponent ? ` vs ${match.opponent}` : ''}`;
+    ctx.fillText(matchTitle, leftX, y, textRightBound - leftX);
+    y += 26;
+
+    if (match?.start_time) {
+      ctx.font = '400 17px system-ui, sans-serif';
+      ctx.fillStyle = 'hsl(38,40%,55%)';
+      ctx.fillText(new Date(match.start_time).toLocaleString('en-IN'), leftX, y);
+      y += 24;
+    }
+
+    ctx.font = '400 17px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,40%,55%)';
+    ctx.fillText(match?.venue ?? '', leftX, y);
+    y += 24;
+
+    if (order?.seating_type) {
+      const sType = order.seating_type.charAt(0).toUpperCase() + order.seating_type.slice(1);
+      ctx.font = '600 17px system-ui, sans-serif';
+      ctx.fillStyle = 'hsl(38,80%,65%)';
+      ctx.fillText(`${sType} Seating`, leftX, y);
+      y += 24;
+    }
+
+    if (hasBalance) {
+      const pillText = `⚠  Balance Due: ₹${balanceDue}${isPartiallyPaid ? `  (Adv: ₹${order?.advance_paid})` : ''}`;
+      ctx.font = 'bold 15px system-ui, sans-serif';
+      const pillW = ctx.measureText(pillText).width + 28;
+      const pillH = 30;
+      const pillY = y;
+      roundRect(ctx, leftX, pillY, pillW, pillH, 15);
+      ctx.fillStyle = 'hsla(38,80%,45%,0.18)';
+      ctx.fill();
+      roundRect(ctx, leftX, pillY, pillW, pillH, 15);
+      ctx.strokeStyle = 'hsla(38,80%,50%,0.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'hsl(38,90%,72%)';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pillText, leftX + 14, pillY + pillH / 2);
+      ctx.textBaseline = 'top';
+      y += 42;
+    }
+
+    const seatTopY = BODY_TOP + 28;
+    ctx.textAlign = 'center';
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,50%,50%)';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SEAT', rightX - seatBadgeW / 2, seatTopY);
+
+    const seatNumGrad = ctx.createLinearGradient(rightX - seatBadgeW, seatTopY + 18, rightX, seatTopY + 90);
+    seatNumGrad.addColorStop(0, 'hsl(38,95%,65%)');
+    seatNumGrad.addColorStop(1, 'hsl(38,80%,50%)');
+    ctx.font = 'bold 80px system-ui, sans-serif';
+    ctx.fillStyle = seatNumGrad as any;
+    ctx.textBaseline = 'top';
+    ctx.fillText(String(ticket.seat_index + 1), rightX - seatBadgeW / 2, seatTopY + 18);
+
+    ctx.font = '400 15px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,40%,50%)';
+    ctx.fillText(`of ${order?.seats_count}`, rightX - seatBadgeW / 2, seatTopY + 108);
+    ctx.textAlign = 'left';
+
+    y += 8;
+    ctx.save();
+    ctx.setLineDash([8, 8]);
+    ctx.strokeStyle = 'hsl(38,30%,25%)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+    ctx.restore();
+    y += 28;
+
+    const qrCanvas = document.getElementById(`qr-canvas-${ticket.id}`) as HTMLCanvasElement | null;
+    if (qrCanvas) {
+      const qrBoxPad = 14;
+      const qrBoxSize = QR_SIZE + qrBoxPad * 2;
+      const qrBoxX = (W - qrBoxSize) / 2;
+      const qrBoxY = y;
+      ctx.save();
+      roundRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 14);
+      ctx.shadowColor = paidStatus ? 'hsla(142,60%,45%,0.5)' : 'hsla(38,80%,50%,0.45)';
+      ctx.shadowBlur = 28;
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+      ctx.drawImage(qrCanvas, qrBoxX + qrBoxPad, qrBoxY + qrBoxPad, QR_SIZE, QR_SIZE);
+      y += qrBoxSize + 22;
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = '600 18px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,70%,65%)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(order?.purchaser_mobile ?? '', W / 2, y);
+    y += 26;
+
+    ctx.font = '400 13px monospace, system-ui';
+    ctx.fillStyle = 'hsl(38,30%,42%)';
+    ctx.fillText(`${ticket.qr_text.slice(0, 28)}…`, W / 2, y);
+    ctx.textAlign = 'left';
+
+    const footerY = H - FOOTER_H;
+    ctx.strokeStyle = 'hsl(38,25%,18%)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, footerY); ctx.lineTo(W, footerY); ctx.stroke();
+    ctx.fillStyle = 'hsl(30,18%,6%)';
+    ctx.fillRect(0, footerY, W, FOOTER_H);
+
+    const logoCircleR = 22;
+    const logoCircleX = PAD + logoCircleR;
+    const logoCircleY = footerY + FOOTER_H / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(logoCircleX, logoCircleY, logoCircleR, 0, Math.PI * 2);
+    ctx.fillStyle = 'hsl(38,60%,10%)';
+    ctx.fill();
+    ctx.strokeStyle = 'hsla(38,60%,30%,0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.clip();
+    try {
+      const logoImg = await loadImage(hotelLogo);
+      const logoSize = logoCircleR * 1.4;
+      ctx.drawImage(logoImg, logoCircleX - logoSize / 2, logoCircleY - logoSize / 2, logoSize, logoSize);
+    } catch { /* logo unavailable */ }
+    ctx.restore();
+
+    const textX = PAD + logoCircleR * 2 + 14;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,80%,65%)';
+    ctx.fillText('Hotel Drona Palace', textX, logoCircleY - 9);
+    ctx.font = '400 13px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,30%,42%)';
+    ctx.fillText('A Unit of SR Leisure Inn', textX, logoCircleY + 10);
+
+    ctx.textAlign = 'right';
+    ctx.font = '400 13px system-ui, sans-serif';
+    ctx.fillStyle = 'hsl(38,30%,42%)';
+    ctx.fillText(
+      new Date(ticket.issued_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'numeric', year: 'numeric' }),
+      W - PAD,
+      logoCircleY
+    );
+
+    return canvas;
+  };
+
+  const downloadPassAsPng = async (ticket: TicketData) => {
+    const canvas = await buildPassCanvas(ticket);
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pass-seat-${ticket.seat_index + 1}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+  };
+
   const handleWhatsAppShare = async () => {
     const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${mobile}`;
     const matchName = activeMatch?.name || 'T20 Fan Night';
     const text = `🎫 My T20 Fan Night Pass — ${matchName} — ${tickets.length} seat${tickets.length > 1 ? 's' : ''}\nView tickets: ${ticketUrl}`;
 
-    // Try native share with PNG files on mobile
     if (navigator.canShare && tickets.length > 0) {
       try {
         const files: File[] = [];
         for (const ticket of tickets) {
-          const canvas = document.getElementById(`qr-auto-${ticket.id}`) as HTMLCanvasElement | null;
-          if (!canvas) continue;
-          const blob = await new Promise<Blob | null>(res => canvas.toBlob(res));
+          const shaped = buildTicketShape(ticket);
+          const passCanvas = await buildPassCanvas(shaped);
+          const blob = await new Promise<Blob | null>(res => passCanvas.toBlob(res));
           if (blob) {
-            files.push(new File([blob], `ticket-seat-${ticket.seat_index + 1}.png`, { type: 'image/png' }));
+            files.push(new File([blob], `pass-seat-${ticket.seat_index + 1}.png`, { type: 'image/png' }));
           }
         }
         if (files.length > 0 && navigator.canShare({ files })) {
-          await navigator.share({ files, title: 'My T20 Fan Night Tickets', text });
+          await navigator.share({ files, title: 'My T20 Fan Night Passes', text });
           return;
         }
-      } catch {
-        // fall through to wa.me
-      }
+      } catch { /* fall through */ }
     }
-    // Desktop / fallback: open wa.me deep-link
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
