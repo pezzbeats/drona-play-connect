@@ -277,6 +277,23 @@ function PassCard({
             <Share2 className="h-4 w-4" /> Share
           </button>
         </div>
+
+        {/* WhatsApp Balance Reminder Button */}
+        {hasBalance && onRemind && (
+          <button
+            onClick={onRemind}
+            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl text-sm font-semibold transition-all active:scale-95 mt-3 no-print"
+            style={{
+              background: 'linear-gradient(135deg, hsl(142 60% 20%), hsl(142 50% 25%))',
+              border: '1px solid hsl(142 60% 35% / 0.6)',
+              color: 'hsl(142 80% 78%)',
+              boxShadow: '0 0 16px hsl(142 60% 35% / 0.25)',
+            }}
+          >
+            <MessageCircle className="h-4 w-4" />
+            Send Balance Reminder · ₹{balanceDue} due
+          </button>
+        )}
       </div>
 
       {/* ── Footer ── */}
