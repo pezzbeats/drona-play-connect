@@ -170,7 +170,7 @@ serve(async (req) => {
 
     // Record advance payment collection if advance was paid
     if (advancePaidAmount > 0 && admin_id) {
-      const methodMap: Record<string, string> = { cash: "cash", card: "card", upi: "upi" };
+      const methodMap: Record<string, string> = { cash: "cash", card: "card", upi_qr: "upi_qr" };
       const collectionMethod = methodMap[advance_payment_method] || "cash";
       await supabase.from("payment_collections").insert({
         order_id: order.id,

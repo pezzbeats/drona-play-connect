@@ -1,27 +1,53 @@
 
-## Fix: Replace "upi" with "upi_qr" in Manual Booking Form
+## Root Cause — Found
 
-### Root Cause
-The `payment_method_enum` in the database has the value `"upi_qr"` (not `"upi"`). The manual booking form (`AdminManualBooking.tsx`) uses `"upi"` as both:
-1. A `SelectItem` value for **Primary Payment Method** dropdown
-2. A `SelectItem` value for **Advance Mode** dropdown
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-When submitted, both `payment_method` and `advance_payment_method` are passed to the `create-order` edge function, which inserts them directly into the `orders` table column typed as `payment_method_enum`. Postgres rejects `"upi"` since it's not a valid enum value.
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-The `create-order` edge function also has a `methodMap` that maps `"upi" → "upi"` for `payment_collections`, which would also fail.
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-### Fix — `src/pages/admin/AdminManualBooking.tsx` only
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
+```
 
-1. Change `<SelectItem value="upi">UPI</SelectItem>` → `<SelectItem value="upi_qr">UPI</SelectItem>` in the **Primary Payment Method** dropdown
-2. Change `<SelectItem value="upi">UPI</SelectItem>` → `<SelectItem value="upi_qr">UPI</SelectItem>` in the **Advance Mode** dropdown
-3. Update the default value in state: `advance_payment_method: 'cash'` stays the same (cash is fine), but verify the `payment_method` default is also safe
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-That's the complete fix — two `SelectItem` value changes. The display label "UPI" stays the same, only the underlying value passed to the DB changes from `"upi"` to `"upi_qr"`.
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-No edge function changes needed — `create-order` already passes the value through directly and the `methodMap` for `payment_collections` can also be corrected (it maps `upi → upi` but the collection method column is also `payment_method_enum`).
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
-### Files
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
+```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
 | File | Change |
-|------|--------|
-| `src/pages/admin/AdminManualBooking.tsx` | Two `SelectItem` value fixes: `"upi"` → `"upi_qr"` |
-| `supabase/functions/create-order/index.ts` | Fix `methodMap` entry `upi: "upi"` → `upi_qr: "upi_qr"` |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
