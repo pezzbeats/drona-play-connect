@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -7,14 +6,52 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Gamepad2, Lock } from 'lucide-react';
+import { Gamepad2, Lock, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 export default function PlayPage() {
   const [mobile, setMobile] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const [matchStatus, setMatchStatus] = useState<'unknown' | 'live' | 'upcoming' | 'ended'>('unknown');
+  const [matchName, setMatchName] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Fetch and track active match status in realtime
+  const fetchMatchStatus = useCallback(async () => {
+    const { data } = await supabase
+      .from('matches')
+      .select('id, name, status')
+      .eq('is_active_for_registration', true)
+      .maybeSingle();
+    if (data) {
+      setMatchName(data.name);
+      if (data.status === 'live') setMatchStatus('live');
+      else if (data.status === 'ended') setMatchStatus('ended');
+      else setMatchStatus('upcoming');
+    } else {
+      setMatchStatus('unknown');
+      setMatchName(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMatchStatus();
+
+    // Realtime subscription: update status badge when match changes
+    const ch = supabase
+      .channel('play-page-match')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        fetchMatchStatus();
+      })
+      .subscribe();
+    channelRef.current = ch;
+
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+    };
+  }, [fetchMatchStatus]);
 
   const handleLogin = async () => {
     if (!/^\d{10}$/.test(mobile)) {
