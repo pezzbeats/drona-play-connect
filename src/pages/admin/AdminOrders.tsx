@@ -371,7 +371,8 @@ export default function AdminOrders() {
                 </div>
               )}
             </GlassCard>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
