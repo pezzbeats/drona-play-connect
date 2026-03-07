@@ -136,6 +136,25 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Balance Due Alert Card */}
+      {stats && stats.balanceDueCount > 0 && (
+        <Link to="/admin/orders">
+          <GlassCard className="p-4 border border-warning/40 bg-warning/5 hover:border-warning/60 transition-colors cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-warning text-sm leading-tight">Balance Outstanding</p>
+                <p className="text-foreground font-bold text-lg leading-tight">₹{stats.balanceDueTotal.toLocaleString('en-IN')}</p>
+                <p className="text-xs text-muted-foreground">across {stats.balanceDueCount} order{stats.balanceDueCount !== 1 ? 's' : ''} with advance paid</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-warning shrink-0" />
+            </div>
+          </GlassCard>
+        </Link>
+      )}
+
       {/* Quick Actions */}
       <div>
         <p className="section-title mb-3">Quick Actions</p>
