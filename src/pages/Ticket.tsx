@@ -826,9 +826,22 @@ export default function TicketPage() {
           <p className="text-muted-foreground text-sm mb-5">
             {fetchError || 'No passes found for that number. Double-check and try again.'}
           </p>
-          <GlassButton variant="ghost" size="sm" onClick={() => { setPhase('input'); setFetchError(null); }}>
-            <ArrowLeft className="h-4 w-4" /> Try Again
-          </GlassButton>
+          <div className="flex flex-col gap-3">
+            <GlassButton variant="ghost" size="sm" onClick={() => { setPhase('input'); setFetchError(null); }}>
+              <ArrowLeft className="h-4 w-4" /> Try Again
+            </GlassButton>
+            <Link
+              to="/register"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
+              style={{
+                background: 'hsl(var(--primary) / 0.12)',
+                border: '1px solid hsl(var(--primary) / 0.35)',
+                color: 'hsl(var(--primary))',
+              }}
+            >
+              Book Seats →
+            </Link>
+          </div>
         </GlassCard>
       </div>
     );

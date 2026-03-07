@@ -358,27 +358,35 @@ export default function RegisterPage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
-  // Auto-download full pass PNGs when step 3 loads
+  // Auto-download full pass PNGs when step 3 loads (staggered to avoid browser blocking)
   useEffect(() => {
     if (step !== 3 || tickets.length === 0 || !activeMatch) return;
-    const timer = setTimeout(async () => {
+    let cancelled = false;
+    const run = async () => {
+      await new Promise(r => setTimeout(r, 800));
       for (const ticket of tickets) {
+        if (cancelled) return;
         const shaped = buildTicketShape(ticket);
         try {
           const canvas = await buildPassCanvas(shaped);
-          canvas.toBlob((blob) => {
-            if (!blob) return;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `pass-seat-${ticket.seat_index + 1}.png`;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 2000);
+          await new Promise<void>((resolve) => {
+            canvas.toBlob((blob) => {
+              if (!blob) { resolve(); return; }
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `pass-seat-${ticket.seat_index + 1}.png`;
+              a.click();
+              setTimeout(() => { URL.revokeObjectURL(url); resolve(); }, 2000);
+            });
           });
+          // Stagger each download by 350ms so the browser doesn't block them
+          if (tickets.length > 1) await new Promise(r => setTimeout(r, 350));
         } catch { /* silent */ }
       }
-    }, 800);
-    return () => clearTimeout(timer);
+    };
+    run();
+    return () => { cancelled = true; };
   }, [step, tickets]);
 
   useEffect(() => {
@@ -648,28 +656,37 @@ export default function RegisterPage() {
   };
 
   /** Build a TicketData-compatible shape from local Register state */
-  const buildTicketShape = (ticket: any): TicketData => ({
-    id: ticket.id,
-    seat_index: ticket.seat_index,
-    qr_text: ticket.qr_text,
-    status: ticket.status ?? 'active',
-    issued_at: ticket.issued_at ?? new Date().toISOString(),
-    order: {
-      purchaser_full_name: fullName,
-      purchaser_mobile: mobile,
-      payment_status: paymentMethod === 'pay_at_hotel' ? 'unpaid' : 'paid_manual_verified',
-      seats_count: seatsCount,
-      total_amount: priceQuote?.total ?? 0,
-      seating_type: seatingType,
-      advance_paid: 0,
-      match: {
-        name: activeMatch!.name,
-        venue: activeMatch!.venue,
-        start_time: activeMatch!.start_time ?? null,
-        opponent: activeMatch!.opponent ?? null,
+  const buildTicketShape = (ticket: any): TicketData => {
+    // Map payment method to the correct status for pass banner colour:
+    // razorpay → paid_verified (green), upi_qr → paid_manual_verified (green),
+    // pay_at_hotel → unpaid (amber)
+    const paymentStatus =
+      paymentMethod === 'razorpay' ? 'paid_verified' :
+      paymentMethod === 'pay_at_hotel' ? 'unpaid' :
+      'paid_manual_verified';
+    return {
+      id: ticket.id,
+      seat_index: ticket.seat_index,
+      qr_text: ticket.qr_text,
+      status: ticket.status ?? 'active',
+      issued_at: ticket.issued_at ?? new Date().toISOString(),
+      order: {
+        purchaser_full_name: fullName,
+        purchaser_mobile: mobile,
+        payment_status: paymentStatus,
+        seats_count: seatsCount,
+        total_amount: priceQuote?.total ?? 0,
+        seating_type: seatingType,
+        advance_paid: 0,
+        match: {
+          name: activeMatch!.name,
+          venue: activeMatch!.venue,
+          start_time: activeMatch!.start_time ?? null,
+          opponent: activeMatch!.opponent ?? null,
+        },
       },
-    },
-  });
+    };
+  };
 
   const buildPassCanvas = async (ticket: TicketData): Promise<HTMLCanvasElement> => {
     const order = ticket.order as any;
@@ -1044,7 +1061,7 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <Label className="text-foreground mb-1.5 block text-center">Full Name *</Label>
+                <Label className="text-foreground mb-1.5 block">Full Name *</Label>
                 <Input ref={nameRef} className={`glass-input ${nameError ? 'border-destructive' : ''}`}
                   placeholder="Enter your full name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" />
                 {nameError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Please enter your full name</p>}
@@ -1054,10 +1071,15 @@ export default function RegisterPage() {
                   <Label className="text-foreground">Mobile Number *</Label>
                   <span className={`text-xs font-mono flex-shrink-0 ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>{mobile.length}/10</span>
                 </div>
-                <Input className={`glass-input ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
-                  placeholder="10-digit mobile number" value={mobile}
-                  onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  inputMode="numeric" type="tel" autoComplete="tel" />
+                <div className="flex gap-2">
+                  <div className="flex items-center justify-center px-3 rounded-md border border-border bg-muted/40 text-sm text-muted-foreground font-medium select-none flex-shrink-0">
+                    +91
+                  </div>
+                  <Input className={`glass-input flex-1 ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
+                    placeholder="98765 43210" value={mobile}
+                    onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    inputMode="numeric" type="tel" autoComplete="tel" />
+                </div>
                 {mobileError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Enter a valid 10-digit number</p>}
                 {mobileValid && <p className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Valid mobile number</p>}
                 {/* Eligibility badge */}
@@ -1083,7 +1105,7 @@ export default function RegisterPage() {
                 )}
               </div>
               <div>
-                <Label className="text-foreground mb-1.5 block text-center">Email (optional)</Label>
+                <Label className="text-foreground mb-1.5 block">Email (optional)</Label>
                 <Input className="glass-input" placeholder="your@email.com" type="email"
                   value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
               </div>
@@ -1127,10 +1149,10 @@ export default function RegisterPage() {
               <div>
                 <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Number of Seats</Label>
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setSeatsCount(Math.max(1, seatsCount - 1))}
+                  <button onClick={() => { setSeatsCount(Math.max(1, seatsCount - 1)); setPriceQuote(null); }}
                     className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all">−</button>
                   <span className="font-display text-3xl font-bold text-foreground w-12 text-center tabular-nums">{seatsCount}</span>
-                  <button onClick={() => setSeatsCount(Math.min(10, seatsCount + 1))}
+                  <button onClick={() => { setSeatsCount(Math.min(10, seatsCount + 1)); setPriceQuote(null); }}
                     className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all">+</button>
                   <span className="text-sm text-muted-foreground">seat{seatsCount > 1 ? 's' : ''}</span>
                 </div>
@@ -1139,7 +1161,7 @@ export default function RegisterPage() {
                 <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Seating Type</Label>
                 <div className="grid grid-cols-2 gap-3">
                   {(['regular', 'family'] as const).map(type => (
-                    <button key={type} onClick={() => setSeatingType(type)}
+                    <button key={type} onClick={() => { setSeatingType(type); setPriceQuote(null); }}
                       className={`p-4 rounded-xl border-2 text-sm font-semibold transition-all active:scale-95 ${
                         seatingType === type ? 'border-primary bg-primary/15 text-primary shadow-glow-primary' : 'border-border bg-muted/20 text-muted-foreground hover:border-primary/40'
                       }`}>
@@ -1635,6 +1657,20 @@ export default function RegisterPage() {
               🖨️ Print Passes
             </GlassButton>
 
+            {/* View Passes CTA — prominent recovery path */}
+            <Link
+              to={`/ticket?mobile=${mobile}`}
+              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-display font-bold text-sm transition-all active:scale-[0.98] no-print"
+              style={{
+                background: 'hsl(var(--primary) / 0.12)',
+                border: '1px solid hsl(var(--primary) / 0.35)',
+                color: 'hsl(var(--primary))',
+              }}
+            >
+              <Download className="h-4 w-4" />
+              View / Retrieve Your Passes →
+            </Link>
+
             {/* Support footer */}
             <div className="rounded-xl bg-muted/20 border border-border p-4 text-center space-y-2">
               <p className="text-xs font-semibold text-foreground">Need Help?</p>
@@ -1642,9 +1678,10 @@ export default function RegisterPage() {
                 <a href="tel:7217016170" className="flex items-center gap-1 hover:text-primary transition-colors"><Phone className="h-3 w-3" /> 7217016170</a>
                 <a href="mailto:dronapalace@gmail.com" className="flex items-center gap-1 hover:text-primary transition-colors"><Mail className="h-3 w-3" /> dronapalace@gmail.com</a>
               </div>
-              <p className="text-xs text-muted-foreground">Also accessible at{' '}
-                <Link to="/ticket" className="text-primary underline">/ticket</Link> using your mobile ·{' '}
+              <p className="text-xs text-muted-foreground">
                 <Link to="/terms" target="_blank" className="text-muted-foreground underline">Event Terms</Link>
+                {' · '}
+                <Link to="/ticket" className="text-primary underline">Retrieve passes anytime</Link>
               </p>
             </div>
           </div>

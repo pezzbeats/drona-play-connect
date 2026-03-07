@@ -13,7 +13,10 @@ const HIDE_VOICE_AGENT_PATHS = ["/register", "/ticket", "/play", "/live"];
 
 function VoiceAgentGuard() {
   const location = useLocation();
-  if (HIDE_VOICE_AGENT_PATHS.includes(location.pathname)) return null;
+  if (
+    HIDE_VOICE_AGENT_PATHS.includes(location.pathname) ||
+    location.pathname.startsWith('/admin')
+  ) return null;
   return <VoiceAgent />;
 }
 
