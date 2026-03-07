@@ -421,6 +421,13 @@ export default function IndexPage() {
                   </div>
                 )}
               </div>
+
+              {/* ─── COUNTDOWN TIMER ─── */}
+              {match.start_time && (
+                <div className="mt-5 pt-4 border-t border-border/40">
+                  <CountdownTimer targetTime={match.start_time} variant="full" />
+                </div>
+              )}
             </GlassCard>
 
             {/* ─── FAN GAME LOGIN ─── */}
