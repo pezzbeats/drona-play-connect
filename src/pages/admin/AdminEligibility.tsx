@@ -481,17 +481,21 @@ export default function AdminEligibility() {
           </div>
         ) : (
           <div className="rounded-xl border border-border/50 overflow-hidden">
-            <div className="grid grid-cols-[1fr_1fr_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2.5 border-b border-border/30">
+            <div className="grid grid-cols-[1fr_1fr_auto_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2.5 border-b border-border/30">
               <span>Mobile</span>
               <span>Name</span>
+              <span className="text-center">Seats</span>
               <span>Label / Date</span>
               <span></span>
             </div>
             <div className="max-h-96 overflow-y-auto divide-y divide-border/20">
               {filtered.map(row => (
-                <div key={row.id} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center px-4 py-2.5 text-sm hover:bg-muted/20 transition-colors gap-2">
+                <div key={row.id} className="grid grid-cols-[1fr_1fr_auto_1fr_auto] items-center px-4 py-2.5 text-sm hover:bg-muted/20 transition-colors gap-2">
                   <span className="font-mono font-medium text-foreground">{row.mobile}</span>
                   <span className="text-xs text-muted-foreground truncate">{row.full_name || '—'}</span>
+                  <span className="text-xs font-semibold text-foreground text-center px-2">
+                    {row.eligible_seats > 0 ? row.eligible_seats : '∞'}
+                  </span>
                   <div>
                     <p className="text-xs text-foreground">{row.match_label || '—'}</p>
                     <p className="text-xs text-muted-foreground">{new Date(row.uploaded_at).toLocaleDateString('en-IN')}</p>
