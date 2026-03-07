@@ -1087,6 +1087,11 @@ export default function RegisterPage() {
               {activeMatch.venue} · {new Date(activeMatch.start_time).toLocaleString('en-IN')}
             </div>
           )}
+          {activeMatch.start_time && (
+            <div className="mt-3 pt-3 border-t border-border/40">
+              <CountdownTimer targetTime={activeMatch.start_time} variant="compact" />
+            </div>
+          )}
         </GlassCard>
 
         <StepBar step={step} />
