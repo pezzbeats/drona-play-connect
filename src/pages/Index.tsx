@@ -503,7 +503,16 @@ export default function IndexPage() {
 
       {/* ─── STICKY BOTTOM CTA BAR ─── */}
       {!barDismissed && (
-        <div className="fixed bottom-0 inset-x-0 z-[9000] pb-safe">
+        <div
+          className="fixed bottom-0 inset-x-0 z-[9000] pb-safe"
+          style={{ animation: 'bar-slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both', animationDelay: '0.6s' }}
+        >
+          <style>{`
+            @keyframes bar-slide-up {
+              from { transform: translateY(100%); opacity: 0; }
+              to   { transform: translateY(0);    opacity: 1; }
+            }
+          `}</style>
           <div className="backdrop-blur-md bg-background/80 border-t border-border/50 px-4 pt-2.5 pb-3">
             <div className="flex gap-2.5 max-w-2xl mx-auto items-center">
               <Link to="/register" className="flex-1">
