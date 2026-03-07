@@ -259,11 +259,13 @@ export default function AdminValidate() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    setPendingStream(null);
     setCameraOpen(false);
     setCameraError(null);
     setCameraReady(false);
   }, []);
 
+  // FIX Bug 1: use ref so startScanLoop never has a stale closure on handleCameraResult
   const startScanLoop = useCallback(() => {
     scanningRef.current = true;
 
@@ -281,7 +283,7 @@ export default function AdminValidate() {
           const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
           const codes = await detector.detect(video);
           if (codes.length > 0) {
-            handleCameraResult(codes[0].rawValue);
+            handleCameraResultRef.current(codes[0].rawValue);
             return;
           }
         } else {
@@ -299,7 +301,7 @@ export default function AdminValidate() {
           const imageData = ctx.getImageData(0, 0, w, h);
           const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
           if (code?.data) {
-            handleCameraResult(code.data);
+            handleCameraResultRef.current(code.data);
             return;
           }
         }
@@ -319,8 +321,13 @@ export default function AdminValidate() {
     lookupTicket(qrText);
   }, [closeCamera, lookupTicket]);
 
-  // Called directly from button onClick — getUserMedia must be in the click chain
-  const openCamera = async () => {
+  // FIX Bug 1: keep ref in sync so startScanLoop always calls the latest version
+  handleCameraResultRef.current = handleCameraResult;
+
+  // FIX Bug 2 + Bug 3: non-async openCamera keeps getUserMedia in the synchronous
+  // click chain; stream is stored in state so a useEffect attaches it after React
+  // has painted the <video> element into the DOM.
+  const openCamera = () => {
     setCameraError(null);
     setCameraReady(false);
     setCameraOpen(true);
@@ -330,40 +337,51 @@ export default function AdminValidate() {
       return;
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+    navigator.mediaDevices
+      .getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
-      });
-      streamRef.current = stream;
-
-      // Wait for video element to be in the DOM (it's rendered once cameraOpen=true)
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().then(() => {
-              setCameraReady(true);
-              startScanLoop();
-            }).catch((err) => {
-              setCameraError('Could not start video: ' + err.message);
-            });
-          };
+      })
+      .then(stream => {
+        streamRef.current = stream;
+        setPendingStream(stream);
+      })
+      .catch((err: any) => {
+        if (err.name === 'NotAllowedError') {
+          setCameraError('Camera permission denied. Please allow camera access in your browser settings and try again.');
+        } else if (err.name === 'NotFoundError') {
+          setCameraError('No camera found on this device.');
+        } else {
+          setCameraError('Could not open camera: ' + (err.message || err.name));
         }
       });
-    } catch (err: any) {
-      if (err.name === 'NotAllowedError') {
-        setCameraError('Camera permission denied. Please allow camera access in your browser settings and try again.');
-      } else if (err.name === 'NotFoundError') {
-        setCameraError('No camera found on this device.');
-      } else {
-        setCameraError('Could not open camera: ' + (err.message || err.name));
-      }
-    }
   };
+
+  // FIX Bug 2 + Bug 3: attach stream to video element only after React has rendered
+  // it; use addEventListener with {once:true} + readyState guard for iOS Safari.
+  useEffect(() => {
+    if (!cameraOpen || !pendingStream || !videoRef.current) return;
+    const video = videoRef.current;
+    video.srcObject = pendingStream;
+
+    const onReady = () => {
+      video.play()
+        .then(() => {
+          setCameraReady(true);
+          startScanLoop();
+        })
+        .catch((e: any) => setCameraError('Could not start video: ' + e.message));
+    };
+
+    video.addEventListener('loadedmetadata', onReady, { once: true });
+    // Safari may already be at readyState >= 1 by the time we attach the listener
+    if (video.readyState >= 1) onReady();
+
+    return () => video.removeEventListener('loadedmetadata', onReady);
+  }, [cameraOpen, pendingStream, startScanLoop]);
 
   // ── ticket helpers ───────────────────────────────────────────────────────────
 
