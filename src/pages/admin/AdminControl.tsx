@@ -571,9 +571,9 @@ export default function AdminControl() {
   const executeConfirmed = () => {
     if (!confirmDialog) return;
     if (confirmDialog.action === 'set_phase') {
-      callFunction('match-control', confirmDialog.body, `phase-${confirmDialog.body.phase}`);
+      callFunction('match-control', confirmDialog.body, `phase-${confirmDialog.body.phase}`, confirmDialog.successMsg);
     } else if (confirmDialog.action === 'update_over') {
-      callFunction('over-control', confirmDialog.body, 'update-over');
+      callFunction('over-control', confirmDialog.body, 'update-over', confirmDialog.successMsg);
     }
     setConfirmDialog(null);
   };
