@@ -9,12 +9,40 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {
-  CheckCircle2, ChevronRight, CreditCard, Smartphone, Users, MapPin,
+  CheckCircle2, ChevronRight, CreditCard, Smartphone,
   Upload, Loader2, AlertCircle, Star, Info, Zap, Shield, RefreshCw,
-  Phone, Mail, ArrowRight, XCircle, Clock, ArrowLeft
+  Phone, Mail, ArrowRight, XCircle, Clock, ArrowLeft, Download, Share2, MessageCircle, MapPin
 } from 'lucide-react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
+
+// ── Ticket data shape used by pass renderer ────────────────────────────────
+interface TicketData {
+  id: string;
+  seat_index: number;
+  qr_text: string;
+  status: string;
+  issued_at: string;
+  order: {
+    purchaser_full_name: string;
+    purchaser_mobile: string;
+    payment_status: string;
+    seats_count: number;
+    total_amount: number;
+    seating_type: string;
+    advance_paid: number;
+    match: {
+      name: string;
+      venue: string;
+      start_time: string | null;
+      opponent: string | null;
+    };
+  };
+}
+
+function isPaid(status: string) {
+  return ['paid_verified', 'paid_manual_verified'].includes(status);
+}
 
 declare global {
   interface Window { Razorpay: any; }
