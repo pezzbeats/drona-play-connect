@@ -1,53 +1,73 @@
 
-## Root Cause — Found
+## Audit Findings
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+### Critical Issues Found
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+**1. `GlassCard` missing `React.forwardRef` — console error on every render**
+The console logs show: `"Function components cannot be given refs"` pointing to `GlassCard` being used with a ref somewhere in `PredictionPanel`. The `GlassCard` component is a plain div wrapper that doesn't forward refs. It appears something in PredictionPanel (or its parent) is passing a ref to it. The fix: wrap `GlassCard` with `React.forwardRef`.
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+**2. `Scoreboard.tsx` uses its own raw channel (not `useRealtimeChannel`) — no auto-reconnect**
+The Scoreboard component has its own `subscribeRealtime()` using a raw `supabase.channel(...)` that sets `connected` to `false` on disconnect but never tries to reconnect. If the connection drops at any point during the match, the scoreboard silently goes offline and stays offline. The fix: migrate Scoreboard to use `useRealtimeChannel` with the shared reconnect hook.
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
+**3. `PredictionPanel.tsx` also uses its own raw channel — no reconnect**
+Same issue as Scoreboard. Uses `subscribeRealtime()` without `useRealtimeChannel`. If the realtime connection drops, no reconnect happens and new prediction windows are missed. The fix: migrate PredictionPanel to use `useRealtimeChannel`.
+
+**4. `match_flags.predictions_frozen` is NOT enforced on the customer `/live` page**
+The admin panel sets `predictions_frozen` in `match_flags` as an emergency freeze. But `PredictionPanel` on the `/live` page never fetches or subscribes to `match_flags`. It never checks `predictions_frozen`. Customers can still submit guesses even when the admin has frozen them. The fix: subscribe to `match_flags` in `PredictionPanel` (or in `Live.tsx`) and disable submission/display when frozen.
+
+**5. `Live.tsx` — `predictionsEnabled` is fetched only once at session init, never updated via realtime**
+If an admin toggles `predictions_enabled` on a match after users have already loaded the page, the tab doesn't appear/disappear dynamically. The fix: subscribe to `matches` table changes in `Live.tsx` to reactively update `predictionsEnabled`.
+
+**6. `Scoreboard` reconnect indicator shows "Connecting" as a static string but no reconnect attempt**
+The "Connecting" wifi icon at the top of the scoreboard component has no logic to re-attempt — it sets `connected = false` on CLOSED/ERROR but never calls subscribe again. Users during a long game will see "Connecting" forever after any dropout.
+
+### Files to Change
+- `src/components/ui/GlassCard.tsx` — add `React.forwardRef`
+- `src/components/live/Scoreboard.tsx` — migrate to `useRealtimeChannel`, add reconnect, add "Reconnecting" visual state
+- `src/components/live/PredictionPanel.tsx` — migrate to `useRealtimeChannel`, subscribe to `match_flags`, enforce `predictions_frozen` flag
+- `src/pages/Live.tsx` — subscribe to `matches` table changes to reactively update `predictionsEnabled` flag without page reload
+
+---
+
+## Plan
+
+### 1. Fix `GlassCard` ref forwarding (`GlassCard.tsx`)
+Change the export from a plain arrow function component to `React.forwardRef<HTMLDivElement, GlassCardProps>`. Pass the ref through to the inner `<div>`. This fixes the console warning that fires on every page render.
+
+```text
+Before: export const GlassCard = ({ ...props }) => <div ...>
+After:  export const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(({ ... }, ref) => <div ref={ref} ...>)
 ```
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+### 2. Migrate `Scoreboard.tsx` to `useRealtimeChannel`
+- Remove the manual `subscribeRealtime()` function and `channelRef`.
+- Convert `fetchInitialData` to a `useCallback` named `fetchData` (used as the `onReconnect` callback too).
+- Build a `subscriptions` array with `useMemo` for `match_live_state` and `super_over_rounds`.
+- Wire `useRealtimeChannel('scoreboard-${matchId}', subscriptions, fetchData)` to get `{ connected, reconnecting }`.
+- Update the connection indicator to show "Reconnecting..." with a spinner when `reconnecting === true`.
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+### 3. Migrate `PredictionPanel.tsx` to `useRealtimeChannel` + enforce `predictions_frozen`
+- Remove `subscribeRealtime()` and raw channel logic.
+- Convert `fetchWindows` to a stable `useCallback`.
+- Add `matchFlags` state; fetch `match_flags` on init alongside windows.
+- Extend `subscriptions` useMemo to include both `prediction_windows` and `match_flags`.
+- When `matchFlags?.predictions_frozen` is true:
+  - Show a warning banner: "⚠️ Guesses are temporarily paused by admin"
+  - Disable all submit buttons and option selects
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+### 4. Update `Live.tsx` — Realtime for `predictions_enabled` + match status
+- Add a `useEffect` that subscribes to the `matches` table for the active `matchId`.
+- On any UPDATE to the match row, re-fetch and update `predictionsEnabled` state.
+- This ensures the "Guess" tab appears/disappears without a page reload when an admin toggles it.
 
-## Changes
-
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
-```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
-```
-
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
-
-## Why this is the correct fix
-
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+---
 
 ## Files Changed
 | File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+|------|--------|
+| `src/components/ui/GlassCard.tsx` | Add `React.forwardRef` |
+| `src/components/live/Scoreboard.tsx` | Migrate to `useRealtimeChannel`, reconnecting state |
+| `src/components/live/PredictionPanel.tsx` | Migrate to `useRealtimeChannel`, add `match_flags` subscription, enforce `predictions_frozen` |
+| `src/pages/Live.tsx` | Add `matches` realtime subscription for reactive `predictionsEnabled` |
+
+No new dependencies. No database changes. No edge function changes.
