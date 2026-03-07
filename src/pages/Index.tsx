@@ -423,6 +423,9 @@ export default function IndexPage() {
               </div>
             </GlassCard>
 
+            {/* ─── FAN GAME LOGIN ─── */}
+            <GameLoginCard />
+
             {/* ─── EVENT EXPERIENCE ─── */}
             <div className="mb-6 animate-slide-up" style={{ animationDelay: '0.12s' } as React.CSSProperties}>
               <div className="text-center mb-5">
