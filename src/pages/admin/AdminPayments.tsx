@@ -732,17 +732,24 @@ export default function AdminPayments() {
         </div>
         <div>
           <h1 className="text-xl font-bold font-display text-foreground">Payments</h1>
-          <p className="text-xs text-muted-foreground">Razorpay transactions &amp; gateway settings</p>
+      <p className="text-xs text-muted-foreground">Razorpay transactions, partial payments &amp; gateway settings</p>
         </div>
       </div>
 
       <Tabs defaultValue="transactions">
         <TabsList className="bg-muted/40">
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
+          <TabsTrigger value="partial" className="flex items-center gap-1.5">
+            <Wallet className="h-3.5 w-3.5" />
+            Partial Payments
+          </TabsTrigger>
           <TabsTrigger value="settings">Gateway Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="transactions" className="mt-5">
           <TransactionsTab />
+        </TabsContent>
+        <TabsContent value="partial" className="mt-5">
+          <PartialPaymentsTab />
         </TabsContent>
         <TabsContent value="settings" className="mt-5">
           <GatewaySettingsTab />
