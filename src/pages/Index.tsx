@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { LandingFooter } from '@/components/ui/LandingFooter';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 import {
   MapPin, Calendar, Trophy, Star, ChevronRight,
   Clock, ShieldCheck, BadgeCheck, QrCode, Tv2, Utensils, Target,
-  Phone, Mail, X,
+  Phone, Mail, X, Gamepad2, Lock,
 } from 'lucide-react';
 import hotelLogo from '@/assets/hotel-logo.png';
 
