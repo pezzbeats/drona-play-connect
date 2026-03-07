@@ -1307,6 +1307,42 @@ export default function AdminControl() {
   );
 }
 
+// ── Live Prediction Count Badge ───────────────────────────────────────────────
+function PredictionCountBadge({ windowId, matchId }: { windowId: string; matchId: string }) {
+  const [count, setCount] = useState<number | null>(null);
+
+  const fetchCount = useCallback(async () => {
+    const { count: c } = await supabase
+      .from('predictions')
+      .select('id', { count: 'exact', head: true })
+      .eq('window_id', windowId);
+    setCount(c ?? 0);
+  }, [windowId]);
+
+  // Initial fetch
+  useEffect(() => { fetchCount(); }, [fetchCount]);
+
+  // Realtime subscription on new predictions for this window
+  useEffect(() => {
+    const channel = supabase
+      .channel(`pred-count-${windowId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'predictions', filter: `window_id=eq.${windowId}` },
+        () => setCount(prev => (prev ?? 0) + 1)
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [windowId]);
+
+  if (count === null) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/30 text-success text-xs font-semibold">
+      <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
+      <span><strong>{count}</strong> guess{count !== 1 ? 'es' : ''} received — lock before recording ball</span>
+    </div>
+  );
+}
+
 // ── Over Row Component ────────────────────────────────────────────────────────
 function OverRow({ over, statusColor, matchId, players, onStatusChange, actionLoading, bowlingPlayers }: any) {
   const [expanded, setExpanded] = useState(false);
