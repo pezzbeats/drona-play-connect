@@ -180,7 +180,11 @@ export default function AdminOrders() {
               <p className="text-muted-foreground text-sm mt-1">Try adjusting your search or filter</p>
             </GlassCard>
           )}
-          {filtered.map(order => (
+          {filtered.map(order => {
+            const balanceDue = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+            const hasAdvance = (order.advance_paid ?? 0) > 0;
+            const isPaidFully = ['paid_verified', 'paid_manual_verified'].includes(order.payment_status);
+            return (
             <GlassCard key={order.id} className="overflow-hidden">
               {/* Mobile-optimised row */}
               <button
@@ -196,6 +200,19 @@ export default function AdminOrders() {
                       {paymentMethodBadge(order.payment_method)}
                       <span className="text-xs text-muted-foreground truncate max-w-[120px]">{order.match?.name}</span>
                     </div>
+                    {/* Advance / balance chips */}
+                    {hasAdvance && !isPaidFully && (
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">
+                          Adv ₹{order.advance_paid}
+                        </span>
+                        {balanceDue > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-warning/15 text-warning border border-warning/40">
+                            ⚠ Due ₹{balanceDue}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="font-display font-bold text-primary text-base">₹{order.total_amount}</span>
