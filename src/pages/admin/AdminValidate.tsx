@@ -320,15 +320,21 @@ export default function AdminValidate() {
 
       try {
         // Try native BarcodeDetector first (Chrome/Android — fast)
+        let nativeFound = false;
         if ('BarcodeDetector' in window) {
-          const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-          const codes = await detector.detect(video);
-          if (codes.length > 0) {
-            handleCameraResultRef.current(codes[0].rawValue);
-            return;
-          }
-        } else {
-          // jsQR fallback — draw frame to offscreen canvas
+          try {
+            const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+            const codes = await detector.detect(video);
+            if (codes.length > 0) {
+              handleCameraResultRef.current(codes[0].rawValue);
+              return;
+            }
+            nativeFound = true; // BarcodeDetector ran OK but found nothing this frame
+          } catch { /* BarcodeDetector threw — fall through to jsQR */ }
+        }
+
+        // jsQR fallback — runs when BarcodeDetector is unavailable or threw an error
+        if (!nativeFound) {
           const canvas = canvasRef.current;
           if (!canvas) { rafRef.current = requestAnimationFrame(tick); return; }
           const w = video.videoWidth;
