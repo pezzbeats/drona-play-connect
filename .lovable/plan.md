@@ -1,86 +1,53 @@
 
-## Understanding
+## Root Cause — Found
 
-The user wants the eligibility list to store **how many seats** each mobile number is entitled to at ₹949. Currently, the `semifinal_eligibility` table has no seat count — and the pricing logic treats any eligible mobile as getting **all** requested seats at ₹949.
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-**Desired behavior:**
-- Admin uploads CSV with `mobile, full_name, eligible_seats, notes`
-- If mobile `9876543210` is in the list with `eligible_seats = 4`:
-  - Seats 1–4 → ₹949 each
-  - Seat 5+ → ₹999 each
-- If `eligible_seats` column is blank/0 → fall back to standard logic (no eligibility)
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-**What needs to change:**
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-### 1. Database migration
-Add `eligible_seats integer NOT NULL DEFAULT 0` to `semifinal_eligibility` table.
-
-### 2. `supabase/functions/pricing-quote/index.ts`
-Currently when an eligible entry is found:
-```js
-loyaltySeatCap = seats_count; // gives ALL seats the discount
-```
-Change to:
-```js
-loyaltySeatCap = eligibleEntry.eligible_seats; // cap = stored seat count
-```
-So seats beyond the cap are charged ₹999 (base_price_new).
-
-### 3. `src/pages/admin/AdminEligibility.tsx`
-- **Template CSV**: Add `eligible_seats` column → `mobile,full_name,eligible_seats,notes`
-- **CSV parsing**: Parse `eligible_seats` as integer (col index 2, notes shift to col 3)
-- **Preview table**: Add `Seats` column in header + rows
-- **Upload payload**: Include `eligible_seats` in upsert
-- **Eligibility list table**: Show `eligible_seats` column
-- **Quick Check result**: Show how many seats are eligible at ₹949
-- **`PreviewRow` interface**: Add `eligible_seats: number`
-- **`EligibilityRow` interface**: Add `eligible_seats: number`
-
-### Files to change
-1. DB migration — add `eligible_seats` column to `semifinal_eligibility`
-2. `supabase/functions/pricing-quote/index.ts` — use `eligible_seats` as the cap
-3. `src/pages/admin/AdminEligibility.tsx` — CSV template, parsing, preview, table, upload, quick-check display
-
-### Logic summary
-```text
-eligible_seats = 4 (stored in DB for this mobile)
-requested_seats = 6
-
-Seat 1: ₹949 (eligible)
-Seat 2: ₹949 (eligible)
-Seat 3: ₹949 (eligible)
-Seat 4: ₹949 (eligible)
-Seat 5: ₹999 (extra — beyond cap)
-Seat 6: ₹999 (extra — beyond cap)
-Total: 4×949 + 2×999 = ₹3,796 + ₹1,998 = ₹5,794
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-The `pricing-quote` edge function needs to select `eligible_seats` from the eligibility table instead of just `id`:
-```js
-const { data: eligibleEntry } = await supabase
-  .from("semifinal_eligibility")
-  .select("id, eligible_seats")
-  .eq("mobile", mobile)
-  .maybeSingle();
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-if (eligibleEntry) {
-  loyaltySeatCap = eligibleEntry.eligible_seats ?? seats_count;
-}
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
 ```
 
-If `eligible_seats` is 0 or null on a row, we can treat it as `seats_count` (backwards compatible — all seats get discount), or strictly 0 (no discount). Given the user's logic, 0 means not eligible. But if they uploaded without the column, we should default gracefully. We'll use: if `eligible_seats > 0`, cap = `eligible_seats`; else cap = `seats_count` (full discount as before, for backward compat with old rows).
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
-Actually re-reading: the user says "have a per mobile number of seats field" — so **0 means no specific cap, treat all as eligible**? No, the user's example is clear: 4 seats booked → 4 eligible. The field is mandatory. Old rows without it get 0 — which means they won't be eligible. That's a breaking change.
+## Why this is the correct fix
 
-Best approach: default `eligible_seats` to `0` in the DB but in the edge function, if `eligible_seats === 0`, fall back to giving all seats the discount (backward compat). This way existing rows still work, and new uploads with a number give a specific cap.
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
-Actually, simpler: `eligible_seats DEFAULT 0` means "no specific cap — all eligible seats". We update the template to include the column, and any new uploads will have a value. Old rows (eligible_seats = 0) → all seats get ₹949 (same as before). New rows with eligible_seats = 4 → only 4 seats at ₹949.
-
-Edge function logic:
-```js
-if (eligibleEntry.eligible_seats > 0) {
-  loyaltySeatCap = eligibleEntry.eligible_seats;
-} else {
-  loyaltySeatCap = seats_count; // no cap — all seats eligible (legacy)
-}
-```
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |

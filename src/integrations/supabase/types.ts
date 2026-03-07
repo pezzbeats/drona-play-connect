@@ -1248,6 +1248,7 @@ export type Database = {
       }
       semifinal_eligibility: {
         Row: {
+          eligible_seats: number
           full_name: string | null
           id: string
           match_label: string | null
@@ -1257,6 +1258,7 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          eligible_seats?: number
           full_name?: string | null
           id?: string
           match_label?: string | null
@@ -1266,6 +1268,7 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          eligible_seats?: number
           full_name?: string | null
           id?: string
           match_label?: string | null

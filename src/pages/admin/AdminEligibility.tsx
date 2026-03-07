@@ -23,11 +23,13 @@ interface EligibilityRow {
   notes: string | null;
   match_label: string | null;
   uploaded_at: string;
+  eligible_seats: number;
 }
 
 interface PreviewRow {
   mobile: string;
   full_name: string;
+  eligible_seats: number;
   notes: string;
   valid: boolean;
 }
@@ -76,10 +78,10 @@ export default function AdminEligibility() {
   // ── Download template ──────────────────────────────────────────────────────
   const handleDownloadTemplate = () => {
     const csv = [
-      'mobile,full_name,notes',
-      '9876543210,Sample Name,Semifinal attendee',
-      '9123456789,Another Name,Eligible for ₹949',
-      '# Add one number per row — remove this comment line',
+      'mobile,full_name,eligible_seats,notes',
+      '9876543210,Sample Name,4,Booked 4 seats for semifinal',
+      '9123456789,Another Name,2,Booked 2 seats for semifinal',
+      '# Add one row per number — eligible_seats = number of seats at ₹949 rate',
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -132,8 +134,9 @@ export default function AdminEligibility() {
         const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
         const mobile = cols[0]?.replace(/\D/g, '').slice(0, 10) ?? '';
         const full_name = cols[1] ?? '';
-        const notes = cols[2] ?? '';
-        parsed.push({ mobile, full_name, notes, valid: /^\d{10}$/.test(mobile) });
+        const eligible_seats = parseInt(cols[2] ?? '0', 10) || 0;
+        const notes = cols[3] ?? '';
+        parsed.push({ mobile, full_name, eligible_seats, notes, valid: /^\d{10}$/.test(mobile) });
       }
       setPreview(parsed);
     };
@@ -162,6 +165,7 @@ export default function AdminEligibility() {
     const payload = valid.map(p => ({
       mobile: p.mobile,
       full_name: p.full_name || null,
+      eligible_seats: p.eligible_seats,
       notes: p.notes || null,
       match_label: matchLabel || 'Semi Final',
       uploaded_by: user?.id ?? null,
@@ -301,6 +305,12 @@ export default function AdminEligibility() {
                     <p className="text-xs text-foreground mt-0.5">{(checkResult as EligibilityRow).full_name}</p>
                   )}
                   <p className="text-xs text-muted-foreground mt-0.5">
+                    {(checkResult as EligibilityRow).eligible_seats > 0
+                      ? <><span className="text-success font-semibold">{(checkResult as EligibilityRow).eligible_seats} seats at ₹949</span>{' — extra seats at ₹999'}</>
+                      : 'All seats at ₹949'
+                    }
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Label: {(checkResult as EligibilityRow).match_label || '—'} · 
                     Uploaded {new Date((checkResult as EligibilityRow).uploaded_at).toLocaleDateString('en-IN')}
                   </p>
@@ -321,8 +331,8 @@ export default function AdminEligibility() {
           <h2 className="font-display font-semibold text-foreground">Step 1: Download Template</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-3">
-          Download the CSV template with <code className="bg-muted/40 px-1 rounded text-xs">mobile,full_name,notes</code> columns.
-          Fill in the 10-digit mobile numbers, then upload below.
+          Download the CSV template with <code className="bg-muted/40 px-1 rounded text-xs">mobile,full_name,eligible_seats,notes</code> columns.
+          Enter the 10-digit mobile number and how many seats that number is entitled to at ₹949.
         </p>
         <button
           onClick={handleDownloadTemplate}
@@ -401,14 +411,15 @@ export default function AdminEligibility() {
                 </div>
               </div>
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_1fr_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2 border-b border-border/20">
-                <span>Mobile</span><span>Name</span><span>Notes</span><span></span>
+              <div className="grid grid-cols-[1fr_1fr_auto_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2 border-b border-border/20">
+                <span>Mobile</span><span>Name</span><span>Seats</span><span>Notes</span><span></span>
               </div>
               <div className="max-h-52 overflow-y-auto">
                 {preview.slice(0, 20).map((p, i) => (
-                  <div key={i} className={`grid grid-cols-[1fr_1fr_1fr_auto] items-center px-4 py-1.5 text-xs border-b border-border/20 last:border-0 gap-2 ${p.valid ? '' : 'bg-destructive/5'}`}>
+                  <div key={i} className={`grid grid-cols-[1fr_1fr_auto_1fr_auto] items-center px-4 py-1.5 text-xs border-b border-border/20 last:border-0 gap-2 ${p.valid ? '' : 'bg-destructive/5'}`}>
                     <span className={`font-mono ${p.valid ? 'text-foreground' : 'text-destructive'}`}>{p.mobile || '(empty)'}</span>
                     <span className="text-muted-foreground truncate">{p.full_name || '—'}</span>
+                    <span className="font-semibold text-foreground text-center">{p.eligible_seats || '—'}</span>
                     <span className="text-muted-foreground truncate">{p.notes || '—'}</span>
                     {p.valid
                       ? <CheckCircle2 className="h-3.5 w-3.5 text-success flex-shrink-0" />
@@ -470,17 +481,21 @@ export default function AdminEligibility() {
           </div>
         ) : (
           <div className="rounded-xl border border-border/50 overflow-hidden">
-            <div className="grid grid-cols-[1fr_1fr_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2.5 border-b border-border/30">
+            <div className="grid grid-cols-[1fr_1fr_auto_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2.5 border-b border-border/30">
               <span>Mobile</span>
               <span>Name</span>
+              <span className="text-center">Seats</span>
               <span>Label / Date</span>
               <span></span>
             </div>
             <div className="max-h-96 overflow-y-auto divide-y divide-border/20">
               {filtered.map(row => (
-                <div key={row.id} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center px-4 py-2.5 text-sm hover:bg-muted/20 transition-colors gap-2">
+                <div key={row.id} className="grid grid-cols-[1fr_1fr_auto_1fr_auto] items-center px-4 py-2.5 text-sm hover:bg-muted/20 transition-colors gap-2">
                   <span className="font-mono font-medium text-foreground">{row.mobile}</span>
                   <span className="text-xs text-muted-foreground truncate">{row.full_name || '—'}</span>
+                  <span className="text-xs font-semibold text-foreground text-center px-2">
+                    {row.eligible_seats > 0 ? row.eligible_seats : '∞'}
+                  </span>
                   <div>
                     <p className="text-xs text-foreground">{row.match_label || '—'}</p>
                     <p className="text-xs text-muted-foreground">{new Date(row.uploaded_at).toLocaleDateString('en-IN')}</p>

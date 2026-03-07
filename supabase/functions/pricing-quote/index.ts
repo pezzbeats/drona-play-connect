@@ -25,13 +25,13 @@ serve(async (req) => {
     // Priority 1: Check semifinal eligibility list (super admin uploaded)
     const { data: eligibleEntry } = await supabase
       .from("semifinal_eligibility")
-      .select("id")
+      .select("id, eligible_seats")
       .eq("mobile", mobile)
       .maybeSingle();
 
     if (eligibleEntry) {
-      // Eligible from semifinal upload — all seats get the returning rate
-      loyaltySeatCap = seats_count;
+      // Eligible from semifinal upload — cap by eligible_seats if set, else all seats
+      loyaltySeatCap = (eligibleEntry.eligible_seats > 0) ? eligibleEntry.eligible_seats : seats_count;
     } else if (loyaltyFromMatchId) {
       // Loyalty pricing: returning rate applies up to the number of seats from the linked match
       const { data: pastOrders } = await supabase
