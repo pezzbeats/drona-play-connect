@@ -756,6 +756,381 @@ function MatchRosterTab() {
   );
 }
 
+// ─── Match Lineup Tab ─────────────────────────────────────────────────────────
+
+type LineupRow = {
+  name: string;
+  role: 'batsman' | 'bowler' | 'all_rounder' | 'wicketkeeper';
+  jersey_number: string;
+  is_captain: boolean;
+  is_wk: boolean;
+  player_id?: string; // existing player id if already saved
+};
+
+const EMPTY_ROW = (): LineupRow => ({
+  name: '', role: 'batsman', jersey_number: '', is_captain: false, is_wk: false,
+});
+
+const ROLE_SHORT: Record<string, string> = {
+  batsman: 'BAT',
+  bowler: 'BWL',
+  all_rounder: 'AR',
+  wicketkeeper: 'WK',
+};
+
+function LineupTeamForm({
+  teamName, teamColor, shortCode, rows, onChange, onSave, saving,
+}: {
+  teamName: string;
+  teamColor: string | null;
+  shortCode: string;
+  rows: LineupRow[];
+  onChange: (rows: LineupRow[]) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const update = (i: number, patch: Partial<LineupRow>) => {
+    const next = rows.map((r, idx) => idx === i ? { ...r, ...patch } : r);
+    // Enforce only one captain per team
+    if (patch.is_captain) {
+      onChange(next.map((r, idx) => idx === i ? r : { ...r, is_captain: false }));
+    } else if (patch.is_wk) {
+      // Enforce only one WK
+      onChange(next.map((r, idx) => idx === i ? r : { ...r, is_wk: false }));
+    } else {
+      onChange(next);
+    }
+  };
+
+  const filledCount = rows.filter(r => r.name.trim()).length;
+
+  return (
+    <div className="flex-1 min-w-0">
+      {/* Team header */}
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+        <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: teamColor || '#888' }} />
+        <span className="font-display font-bold text-base">{teamName}</span>
+        <span className="text-xs text-muted-foreground font-mono">({shortCode})</span>
+        <Badge variant="outline" className="ml-auto text-xs">
+          {filledCount}/11
+        </Badge>
+      </div>
+
+      {/* Column headers */}
+      <div className="grid grid-cols-[1.5rem_1fr_4.5rem_3rem_1.5rem_1.5rem] gap-1 mb-1 px-1">
+        <span className="text-xs text-muted-foreground font-mono text-center">#</span>
+        <span className="text-xs text-muted-foreground">Player</span>
+        <span className="text-xs text-muted-foreground">Role</span>
+        <span className="text-xs text-muted-foreground text-center">Jersey</span>
+        <span className="text-xs text-muted-foreground text-center" title="Captain">⭐</span>
+        <span className="text-xs text-muted-foreground text-center" title="Wicketkeeper">🧤</span>
+      </div>
+
+      <div className="space-y-1">
+        {rows.map((row, i) => (
+          <div
+            key={i}
+            className={`grid grid-cols-[1.5rem_1fr_4.5rem_3rem_1.5rem_1.5rem] gap-1 items-center rounded-lg px-1 py-0.5 transition-colors ${row.name.trim() ? 'bg-muted/20' : ''}`}
+          >
+            {/* Position */}
+            <span className="text-xs font-mono text-muted-foreground text-center">{i + 1}</span>
+
+            {/* Name */}
+            <Input
+              value={row.name}
+              onChange={e => update(i, { name: e.target.value })}
+              placeholder={`Player ${i + 1}`}
+              className="h-7 text-xs px-2 bg-background/50"
+            />
+
+            {/* Role */}
+            <Select value={row.role} onValueChange={v => update(i, { role: v as LineupRow['role'] })}>
+              <SelectTrigger className="h-7 text-xs px-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="batsman">BAT</SelectItem>
+                <SelectItem value="bowler">BWL</SelectItem>
+                <SelectItem value="all_rounder">AR</SelectItem>
+                <SelectItem value="wicketkeeper">WK</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Jersey */}
+            <Input
+              type="number"
+              min={1}
+              max={999}
+              value={row.jersey_number}
+              onChange={e => update(i, { jersey_number: e.target.value })}
+              placeholder="—"
+              className="h-7 text-xs px-2 text-center bg-background/50"
+            />
+
+            {/* Captain */}
+            <button
+              onClick={() => update(i, { is_captain: !row.is_captain })}
+              title="Captain"
+              className={`h-6 w-6 rounded flex items-center justify-center transition-colors text-xs ${row.is_captain ? 'bg-warning/20 text-warning' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+            >
+              ⭐
+            </button>
+
+            {/* WK */}
+            <button
+              onClick={() => update(i, { is_wk: !row.is_wk })}
+              title="Wicketkeeper"
+              className={`h-6 w-6 rounded flex items-center justify-center transition-colors text-xs ${row.is_wk ? 'bg-primary/20 text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+            >
+              🧤
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <Button
+        size="sm"
+        className="w-full mt-3"
+        onClick={onSave}
+        disabled={saving || filledCount === 0}
+      >
+        {saving ? (
+          <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Saving…</>
+        ) : (
+          <><Save className="h-3.5 w-3.5 mr-1" /> Save {teamName} Lineup</>
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function MatchLineupTab() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [activeMatch, setActiveMatch] = useState<Match | null>(null);
+  const [roster, setRoster] = useState<Array<{ team_id: string; side: string; teams: Team }>>([]);
+  const [homeRows, setHomeRows] = useState<LineupRow[]>(Array.from({ length: 11 }, EMPTY_ROW));
+  const [awayRows, setAwayRows] = useState<LineupRow[]>(Array.from({ length: 11 }, EMPTY_ROW));
+  const [savingHome, setSavingHome] = useState(false);
+  const [savingAway, setSavingAway] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    const { data: matchData } = await supabase
+      .from('matches')
+      .select('id, name')
+      .eq('is_active_for_registration', true)
+      .maybeSingle();
+
+    if (!matchData) { setLoading(false); return; }
+    setActiveMatch(matchData);
+
+    const { data: rosterData } = await supabase
+      .from('match_roster')
+      .select('*, teams(*)')
+      .eq('match_id', matchData.id);
+
+    if (rosterData) setRoster(rosterData as any);
+
+    // Load existing lineup
+    const { data: lineupData } = await supabase
+      .from('match_lineup')
+      .select('*, players(*)')
+      .eq('match_id', matchData.id)
+      .order('batting_order');
+
+    if (lineupData && lineupData.length > 0 && rosterData) {
+      const homeTeamId = rosterData.find((r: any) => r.side === 'home')?.team_id;
+      const awayTeamId = rosterData.find((r: any) => r.side === 'away')?.team_id;
+
+      const buildRows = (teamId: string): LineupRow[] => {
+        const teamLineup = lineupData.filter((l: any) => l.team_id === teamId);
+        const rows: LineupRow[] = Array.from({ length: 11 }, EMPTY_ROW);
+        teamLineup.forEach((l: any) => {
+          const idx = l.batting_order - 1;
+          if (idx >= 0 && idx < 11 && l.players) {
+            rows[idx] = {
+              name: l.players.name,
+              role: l.players.role,
+              jersey_number: l.players.jersey_number?.toString() || '',
+              is_captain: l.is_captain,
+              is_wk: l.is_wk,
+              player_id: l.player_id,
+            };
+          }
+        });
+        return rows;
+      };
+
+      if (homeTeamId) setHomeRows(buildRows(homeTeamId));
+      if (awayTeamId) setAwayRows(buildRows(awayTeamId));
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const saveLineup = async (teamId: string, rows: LineupRow[], setSaving: (v: boolean) => void) => {
+    if (!activeMatch) return;
+    setSaving(true);
+
+    try {
+      // Upsert/create players for filled rows, then upsert lineup entries
+      const filledRows = rows
+        .map((r, i) => ({ ...r, batting_order: i + 1 }))
+        .filter(r => r.name.trim());
+
+      // 1. Delete existing lineup entries for this team+match
+      await supabase
+        .from('match_lineup')
+        .delete()
+        .eq('match_id', activeMatch.id)
+        .eq('team_id', teamId);
+
+      // 2. For each filled row, upsert the player and create lineup entry
+      for (const row of filledRows) {
+        let playerId = row.player_id;
+
+        // Upsert player: if we have an existing player_id, update them; else find by name+team or create
+        if (playerId) {
+          await supabase.from('players').update({
+            name: row.name.trim(),
+            role: row.role,
+            jersey_number: row.jersey_number ? parseInt(row.jersey_number) : null,
+            team_id: teamId,
+          }).eq('id', playerId);
+        } else {
+          // Try to find existing player by name in this team
+          const { data: existing } = await supabase
+            .from('players')
+            .select('id')
+            .eq('name', row.name.trim())
+            .eq('team_id', teamId)
+            .maybeSingle();
+
+          if (existing) {
+            playerId = existing.id;
+            await supabase.from('players').update({
+              role: row.role,
+              jersey_number: row.jersey_number ? parseInt(row.jersey_number) : null,
+            }).eq('id', playerId);
+          } else {
+            const { data: newPlayer } = await supabase
+              .from('players')
+              .insert({
+                name: row.name.trim(),
+                role: row.role,
+                jersey_number: row.jersey_number ? parseInt(row.jersey_number) : null,
+                team_id: teamId,
+              })
+              .select('id')
+              .single();
+            playerId = newPlayer?.id;
+          }
+        }
+
+        if (!playerId) continue;
+
+        // 3. Insert lineup entry
+        await supabase.from('match_lineup').insert({
+          match_id: activeMatch.id,
+          team_id: teamId,
+          player_id: playerId,
+          batting_order: row.batting_order,
+          is_captain: row.is_captain,
+          is_wk: row.is_wk,
+        });
+      }
+
+      toast({ title: '✅ Lineup saved!' });
+      fetchData(); // reload to get player IDs
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed to save', description: e.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>;
+
+  if (!activeMatch) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <Users className="mx-auto h-10 w-10 mb-3 opacity-40" />
+        <p className="font-medium">No active match</p>
+        <p className="text-sm mt-1">Activate a match and set up the Match Roster first, then enter lineups here.</p>
+      </div>
+    );
+  }
+
+  const homeEntry = roster.find((r: any) => r.side === 'home');
+  const awayEntry = roster.find((r: any) => r.side === 'away');
+
+  if (!homeEntry || !awayEntry) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <AlertCircle className="mx-auto h-10 w-10 mb-3 opacity-40 text-warning" />
+        <p className="font-medium">Match Roster not configured</p>
+        <p className="text-sm mt-1">Go to the <strong>Match Roster</strong> tab and assign both Home and Away teams first.</p>
+      </div>
+    );
+  }
+
+  const homeTeam: Team = (homeEntry as any).teams;
+  const awayTeam: Team = (awayEntry as any).teams;
+
+  return (
+    <div className="space-y-4">
+      {/* Active match banner */}
+      <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 flex items-center gap-3">
+        <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground">Active Match Lineup</p>
+          <p className="font-semibold text-sm truncate">{activeMatch.name}</p>
+        </div>
+        <div className="text-xs text-muted-foreground hidden sm:block">
+          Enter players in <strong>batting order</strong> (1 = opener)
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+        <span><span className="text-warning">⭐</span> Captain (click to toggle)</span>
+        <span><span className="text-primary">🧤</span> Wicketkeeper (click to toggle)</span>
+        <span>Role: <Badge variant="outline" className="text-xs py-0">BAT</Badge> <Badge variant="outline" className="text-xs py-0">BWL</Badge> <Badge variant="outline" className="text-xs py-0">AR</Badge> <Badge variant="outline" className="text-xs py-0">WK</Badge></span>
+      </div>
+
+      {/* Two-column lineup grid */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        <LineupTeamForm
+          teamName={homeTeam.name}
+          teamColor={homeTeam.color}
+          shortCode={homeTeam.short_code}
+          rows={homeRows}
+          onChange={setHomeRows}
+          onSave={() => saveLineup(homeTeam.id, homeRows, setSavingHome)}
+          saving={savingHome}
+        />
+        <div className="hidden lg:block w-px bg-border/50 self-stretch" />
+        <LineupTeamForm
+          teamName={awayTeam.name}
+          teamColor={awayTeam.color}
+          shortCode={awayTeam.short_code}
+          rows={awayRows}
+          onChange={setAwayRows}
+          onSave={() => saveLineup(awayTeam.id, awayRows, setSavingAway)}
+          saving={savingAway}
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        💡 Saving will create/update these players and feed them into Live Control dropdowns in batting order.
+      </p>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminTeams() {
@@ -763,19 +1138,21 @@ export default function AdminTeams() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-display font-bold">Teams &amp; Players</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage teams, players, and assign match rosters for Live Control.</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage teams, players, assign match rosters, and enter playing XI lineups for Live Control.</p>
       </div>
 
-      <Tabs defaultValue="teams">
+      <Tabs defaultValue="lineup">
         <TabsList className="mb-4">
+          <TabsTrigger value="lineup">🏏 Lineup</TabsTrigger>
+          <TabsTrigger value="roster">Match Roster</TabsTrigger>
           <TabsTrigger value="teams">Teams</TabsTrigger>
           <TabsTrigger value="players">Players</TabsTrigger>
-          <TabsTrigger value="roster">Match Roster</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="lineup"><MatchLineupTab /></TabsContent>
+        <TabsContent value="roster"><MatchRosterTab /></TabsContent>
         <TabsContent value="teams"><TeamsTab /></TabsContent>
         <TabsContent value="players"><PlayersTab /></TabsContent>
-        <TabsContent value="roster"><MatchRosterTab /></TabsContent>
       </Tabs>
     </div>
   );
