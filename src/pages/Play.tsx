@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -52,6 +52,13 @@ export default function PlayPage() {
       </div>
 
       <div className="relative z-10 w-full max-w-sm">
+        {/* Back link */}
+        <div className="mb-6 text-center">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            ← Back to Home
+          </Link>
+        </div>
+
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center mx-auto mb-4 shadow-glow-primary">
             <Gamepad2 className="h-8 w-8 text-primary-foreground" />
