@@ -133,6 +133,8 @@ export default function AdminValidate() {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const scanningRef = useRef(false);
+  const detectingRef = useRef(false);
+  const detectorRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Fix stale closure: always holds the latest handleCameraResult
   const handleCameraResultRef = useRef<(t: string) => void>(() => {});
@@ -309,44 +311,57 @@ export default function AdminValidate() {
   // FIX Bug 1: use ref so startScanLoop never has a stale closure on handleCameraResult
   const startScanLoop = useCallback(() => {
     scanningRef.current = true;
+    detectingRef.current = false;
+
+    // Hoist BarcodeDetector — create once, reuse every frame
+    if ('BarcodeDetector' in window) {
+      try { detectorRef.current = new (window as any).BarcodeDetector({ formats: ['qr_code'] }); }
+      catch { detectorRef.current = null; }
+    } else {
+      detectorRef.current = null;
+    }
+
+    const SCAN_RES = 480;
 
     const tick = async () => {
       if (!scanningRef.current) return;
+
+      // In-flight guard: skip frame if previous detect() call is still running
+      if (detectingRef.current) {
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
       const video = videoRef.current;
       if (!video || video.readyState < 2) {
         rafRef.current = requestAnimationFrame(tick);
         return;
       }
 
+      detectingRef.current = true;
       try {
-        // Try native BarcodeDetector first (Chrome/Android — fast)
-        let nativeFound = false;
-        if ('BarcodeDetector' in window) {
-          try {
-            const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-            const codes = await detector.detect(video);
-            if (codes.length > 0) {
-              handleCameraResultRef.current(codes[0].rawValue);
-              return;
-            }
-            nativeFound = true; // BarcodeDetector ran OK but found nothing this frame
-          } catch { /* BarcodeDetector threw — fall through to jsQR */ }
-        }
-
-        // jsQR fallback — runs when BarcodeDetector is unavailable or threw an error
-        if (!nativeFound) {
+        // Try native BarcodeDetector first (Chrome/Android — fast, hoisted instance)
+        if (detectorRef.current) {
+          const codes = await detectorRef.current.detect(video);
+          if (codes.length > 0) {
+            handleCameraResultRef.current(codes[0].rawValue);
+            return;
+          }
+        } else {
+          // jsQR fallback — downscaled to max 480px wide for speed
           const canvas = canvasRef.current;
-          if (!canvas) { rafRef.current = requestAnimationFrame(tick); return; }
+          if (!canvas) { detectingRef.current = false; rafRef.current = requestAnimationFrame(tick); return; }
           const w = video.videoWidth;
           const h = video.videoHeight;
-          if (!w || !h) { rafRef.current = requestAnimationFrame(tick); return; }
-          canvas.width = w;
-          canvas.height = h;
+          if (!w || !h) { detectingRef.current = false; rafRef.current = requestAnimationFrame(tick); return; }
+          const scale = Math.min(1, SCAN_RES / w);
+          canvas.width = Math.round(w * scale);
+          canvas.height = Math.round(h * scale);
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (!ctx) { rafRef.current = requestAnimationFrame(tick); return; }
-          ctx.drawImage(video, 0, 0, w, h);
-          const imageData = ctx.getImageData(0, 0, w, h);
-          const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+          if (!ctx) { detectingRef.current = false; rafRef.current = requestAnimationFrame(tick); return; }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'dontInvert' });
           if (code?.data) {
             handleCameraResultRef.current(code.data);
             return;
@@ -354,18 +369,22 @@ export default function AdminValidate() {
         }
       } catch { /* decode errors are non-fatal, keep scanning */ }
 
-      rafRef.current = requestAnimationFrame(tick);
+      detectingRef.current = false;
+      if (scanningRef.current) rafRef.current = requestAnimationFrame(tick);
     };
 
-    rafRef.current = requestAnimationFrame(tick);
+    tick(); // kick off immediately — no outer RAF needed
   }, []);
 
   const handleCameraResult = useCallback((qrText: string) => {
+    if (!scanningRef.current) return; // guard duplicate fires
+    scanningRef.current = false;      // stop the loop right away
+    cancelAnimationFrame(rafRef.current);
     playBeep('success');
     vibrate([120]);
-    closeCamera();
     setQrInput(qrText);
-    lookupTicket(qrText);
+    lookupTicket(qrText);   // fire immediately
+    closeCamera();          // close concurrently
   }, [closeCamera, lookupTicket]);
 
   // FIX Bug 1: keep ref in sync so startScanLoop always calls the latest version
@@ -390,6 +409,7 @@ export default function AdminValidate() {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1280 },
           height: { ideal: 720 },
+          frameRate: { ideal: 30 },
         },
       })
       .then(stream => {
