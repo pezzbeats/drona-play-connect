@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
 
 type OverrideTarget = { orderId: string; verdict: 'paid_manual_verified' | 'paid_rejected' } | null;
+type AdvanceFormState = { orderId: string; amount: string; method: string } | null;
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState<any[]>([]);
