@@ -663,9 +663,22 @@ export default function AdminValidate() {
           {/* ── Quick payment collection ── */}
           {!isPaid && !isBlocked && (
             <GlassCard className="p-5">
-              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+              <h2 className="font-display text-lg font-bold text-foreground mb-1 flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-warning" /> Collect Payment
               </h2>
+              {(() => {
+                const totalAmt = order?.total_amount ?? 0;
+                const advancePd = order?.advance_paid ?? 0;
+                const balanceDue = Math.max(0, totalAmt - advancePd);
+                if (advancePd > 0 && balanceDue > 0) {
+                  return (
+                    <p className="text-xs text-warning mb-4">
+                      Advance ₹{advancePd} already collected · Collecting balance <span className="font-bold">₹{balanceDue}</span>
+                    </p>
+                  );
+                }
+                return <div className="mb-4" />;
+              })()}
 
               {/* Quick method buttons — large min-height */}
               <div className="grid grid-cols-3 gap-3 mb-4">
