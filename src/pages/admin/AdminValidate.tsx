@@ -707,7 +707,12 @@ export default function AdminValidate() {
                   <Input
                     className="glass-input h-14 text-lg font-semibold"
                     type="number"
-                    placeholder={`Amount ₹ (total: ₹${order?.total_amount})`}
+                    placeholder={(() => {
+                      const totalAmt = order?.total_amount ?? 0;
+                      const advancePd = order?.advance_paid ?? 0;
+                      const bal = Math.max(0, totalAmt - advancePd);
+                      return bal > 0 ? `Balance ₹${bal} (total ₹${totalAmt})` : `Amount ₹ (total: ₹${totalAmt})`;
+                    })()}
                     value={collectAmount}
                     onChange={e => setCollectAmount(e.target.value)}
                   />
