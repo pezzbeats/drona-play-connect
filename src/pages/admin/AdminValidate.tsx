@@ -57,6 +57,7 @@ interface OfflineAction {
 }
 
 const OFFLINE_QUEUE_KEY = 'gate_offline_queue';
+const RECENT_SCANS_KEY = 'gate_recent_scans';
 
 function loadOfflineQueue(): OfflineAction[] {
   try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
@@ -64,6 +65,25 @@ function loadOfflineQueue(): OfflineAction[] {
 }
 function saveOfflineQueue(q: OfflineAction[]) {
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+}
+
+interface RecentScan {
+  name: string;
+  mobile: string;
+  pin: string;
+  checkedInAt: number; // Date.now()
+  seatIndex: number;
+}
+
+function loadRecentScans(): RecentScan[] {
+  try { return JSON.parse(localStorage.getItem(RECENT_SCANS_KEY) || '[]'); }
+  catch { return []; }
+}
+function pushRecentScan(scan: RecentScan) {
+  const existing = loadRecentScans().filter(s => s.mobile !== scan.mobile || s.seatIndex !== scan.seatIndex);
+  const updated = [scan, ...existing].slice(0, 5);
+  localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(updated));
+  return updated;
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
