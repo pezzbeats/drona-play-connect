@@ -38,6 +38,8 @@ interface Match {
 interface PriceQuote {
   seats: Array<{ seat_index: number; price: number; reason: string }>;
   total: number; seating_type: string;
+  is_semifinal_eligible?: boolean;
+  loyalty_seat_cap?: number;
 }
 
 const steps = ['Your Details', 'Seats & Price', 'Payment', 'Your Tickets'];
