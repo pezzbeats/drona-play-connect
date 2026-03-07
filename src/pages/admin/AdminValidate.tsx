@@ -120,6 +120,7 @@ export default function AdminValidate() {
   const [pendingStream, setPendingStream] = useState<MediaStream | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const torchSupportedRef = useRef(false);
+  const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { toast } = useToast();
   const { user } = useAuth();
