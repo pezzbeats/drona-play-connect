@@ -500,7 +500,10 @@ export default function AdminValidate() {
         seatIndex: ticketData.seat_index ?? 0,
       });
       setRecentScans(updated);
-      await lookupTicket(qrInput);
+      // Re-fetch ticket data (skipFeedbackReset=true) then force green — the ticket
+      // is now status='used' which would otherwise trigger the 'reuse_blocked' red flash
+      await lookupTicket(qrInput, true);
+      setScanFeedback('success');
     } catch (e: any) { toast({ variant: 'destructive', title: 'Check-in failed', description: e.message }); }
     setCheckingIn(false);
   };

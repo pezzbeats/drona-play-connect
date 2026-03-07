@@ -1657,6 +1657,20 @@ export default function RegisterPage() {
               🖨️ Print Passes
             </GlassButton>
 
+            {/* View Passes CTA — prominent recovery path */}
+            <Link
+              to={`/ticket?mobile=${mobile}`}
+              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-display font-bold text-sm transition-all active:scale-[0.98] no-print"
+              style={{
+                background: 'hsl(var(--primary) / 0.12)',
+                border: '1px solid hsl(var(--primary) / 0.35)',
+                color: 'hsl(var(--primary))',
+              }}
+            >
+              <Download className="h-4 w-4" />
+              View / Retrieve Your Passes →
+            </Link>
+
             {/* Support footer */}
             <div className="rounded-xl bg-muted/20 border border-border p-4 text-center space-y-2">
               <p className="text-xs font-semibold text-foreground">Need Help?</p>
@@ -1664,9 +1678,10 @@ export default function RegisterPage() {
                 <a href="tel:7217016170" className="flex items-center gap-1 hover:text-primary transition-colors"><Phone className="h-3 w-3" /> 7217016170</a>
                 <a href="mailto:dronapalace@gmail.com" className="flex items-center gap-1 hover:text-primary transition-colors"><Mail className="h-3 w-3" /> dronapalace@gmail.com</a>
               </div>
-              <p className="text-xs text-muted-foreground">Also accessible at{' '}
-                <Link to="/ticket" className="text-primary underline">/ticket</Link> using your mobile ·{' '}
+              <p className="text-xs text-muted-foreground">
                 <Link to="/terms" target="_blank" className="text-muted-foreground underline">Event Terms</Link>
+                {' · '}
+                <Link to="/ticket" className="text-primary underline">Retrieve passes anytime</Link>
               </p>
             </div>
           </div>
