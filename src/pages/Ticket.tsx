@@ -849,7 +849,7 @@ export default function TicketPage() {
                 order={ticket.order as any}
                 match={(ticket.order as any)?.match}
                 paidStatus={paidTickets}
-                onDownload={downloadQr}
+                onDownload={downloadPassAsPng}
                 onShare={whatsappShare}
               />
             </div>
