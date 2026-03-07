@@ -97,6 +97,8 @@ export default function AdminValidate() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [pendingStream, setPendingStream] = useState<MediaStream | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const torchSupportedRef = useRef(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
