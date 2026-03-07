@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Zap, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { Lock, Zap, CheckCircle2, Clock, AlertTriangle, PauseCircle } from 'lucide-react';
+import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
 interface PredictionWindow {
   id: string;
@@ -13,6 +14,11 @@ interface PredictionWindow {
   options: Array<{ key: string; label: string }>;
   status: 'open' | 'locked' | 'resolved';
   correct_answer: any;
+}
+
+interface MatchFlags {
+  predictions_frozen: boolean;
+  freeze_reason: string | null;
 }
 
 interface PredictionPanelProps {
@@ -24,79 +30,98 @@ interface PredictionPanelProps {
 export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) {
   const [windows, setWindows] = useState<PredictionWindow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [matchFlags, setMatchFlags] = useState<MatchFlags | null>(null);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [submittedWindows, setSubmittedWindows] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
-  // Track which window id triggered the last stagger so we only animate new windows
   const [animatingWindowId, setAnimatingWindowId] = useState<string | null>(null);
   const prevOpenWindowIdRef = useRef<string | null>(null);
   const { toast } = useToast();
-  const channelRef = useRef<any>(null);
 
-  useEffect(() => {
-    fetchWindows();
-    subscribeRealtime();
-    return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
-    };
-  }, [matchId]);
+  const fetchWindows = useCallback(async () => {
+    const [windowsRes, flagsRes] = await Promise.all([
+      supabase
+        .from('prediction_windows')
+        .select('*')
+        .eq('match_id', matchId)
+        .in('status', ['open', 'locked', 'resolved'])
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase
+        .from('match_flags')
+        .select('predictions_frozen, freeze_reason')
+        .eq('match_id', matchId)
+        .maybeSingle(),
+    ]);
 
-  const fetchWindows = async () => {
-    const { data } = await supabase
-      .from('prediction_windows')
-      .select('*')
-      .eq('match_id', matchId)
-      .in('status', ['open', 'locked', 'resolved'])
-      .order('created_at', { ascending: false })
-      .limit(5);
+    if (flagsRes.data) {
+      setMatchFlags(flagsRes.data as MatchFlags);
+    }
 
-    if (data) {
-      setWindows(data as any);
+    if (windowsRes.data) {
+      setWindows(windowsRes.data as any);
+
       // Detect new open window → trigger stagger animation
-      const newOpenId = (data as any[]).find(w => w.status === 'open')?.id ?? null;
+      const newOpenId = (windowsRes.data as any[]).find(w => w.status === 'open')?.id ?? null;
       if (newOpenId && newOpenId !== prevOpenWindowIdRef.current) {
         setAnimatingWindowId(newOpenId);
         prevOpenWindowIdRef.current = newOpenId;
       }
-    }
 
-    if (data && data.length > 0) {
-      const windowIds = data.map(w => w.id);
-      const { data: myPreds } = await supabase
-        .from('predictions')
-        .select('window_id, prediction')
-        .eq('mobile', mobile)
-        .in('window_id', windowIds);
+      if (windowsRes.data.length > 0) {
+        const windowIds = windowsRes.data.map(w => w.id);
+        const { data: myPreds } = await supabase
+          .from('predictions')
+          .select('window_id, prediction')
+          .eq('mobile', mobile)
+          .in('window_id', windowIds);
 
-      if (myPreds) {
-        const submitted: Record<string, string> = {};
-        for (const p of myPreds) {
-          submitted[p.window_id] = (p.prediction as any)?.key || '';
+        if (myPreds) {
+          const submitted: Record<string, string> = {};
+          for (const p of myPreds) {
+            submitted[p.window_id] = (p.prediction as any)?.key || '';
+          }
+          setSubmittedWindows(submitted);
         }
-        setSubmittedWindows(submitted);
       }
     }
     setLoading(false);
-  };
+  }, [matchId, mobile]);
 
-  const subscribeRealtime = () => {
-    const channel = supabase
-      .channel(`predictions-${matchId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'prediction_windows',
-        filter: `match_id=eq.${matchId}`,
-      }, () => {
-        fetchWindows();
-      })
-      .subscribe();
-    channelRef.current = channel;
-  };
+  const subscriptions = useMemo<ChannelSubscription[]>(() => [
+    {
+      event: '*',
+      schema: 'public',
+      table: 'prediction_windows',
+      filter: `match_id=eq.${matchId}`,
+      callback: () => { fetchWindows(); },
+    },
+    {
+      event: '*',
+      schema: 'public',
+      table: 'match_flags',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new) {
+          setMatchFlags({
+            predictions_frozen: (payload.new as any).predictions_frozen,
+            freeze_reason: (payload.new as any).freeze_reason,
+          });
+        }
+      },
+    },
+  ], [matchId, fetchWindows]);
+
+  useRealtimeChannel(
+    `predictions-panel-${matchId}`,
+    subscriptions,
+    fetchWindows,
+  );
 
   const handleSubmit = async (windowId: string) => {
     const answer = selectedAnswers[windowId];
     if (!answer) return toast({ variant: 'destructive', title: 'Select an answer first' });
+    if (matchFlags?.predictions_frozen) return toast({ variant: 'destructive', title: 'Guesses are paused' });
 
     setSubmitting(windowId);
     try {
@@ -116,6 +141,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
     setSubmitting(null);
   };
 
+  const frozen = matchFlags?.predictions_frozen === true;
   const openWindows = windows.filter(w => w.status === 'open');
   const closedWindows = windows.filter(w => w.status !== 'open');
 
@@ -123,7 +149,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   if (loading) {
     return (
       <div className="space-y-3">
-        {/* Disclaimer always visible */}
         <div className="disclaimer-bar rounded-lg px-4 py-3 flex items-start gap-2 text-xs">
           <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
           <span>
@@ -131,7 +156,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
             No real money is staked. Participation is voluntary and purely for fun.
           </span>
         </div>
-        {/* Active window skeleton */}
         <GlassCard className="p-4 border border-primary/20 animate-pulse">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-2 h-2 rounded-full skeleton" />
@@ -145,7 +169,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
           </div>
           <div className="h-11 skeleton rounded-xl" />
         </GlassCard>
-        {/* Past windows skeleton */}
         {Array.from({ length: 2 }).map((_, i) => (
           <GlassCard key={i} className="p-3 opacity-60 animate-pulse">
             <div className="flex items-center gap-2 mb-2">
@@ -162,7 +185,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   return (
     <div className="space-y-3">
-      {/* Persistent legal disclaimer — non-removable */}
+      {/* Persistent legal disclaimer */}
       <div className="disclaimer-bar rounded-lg px-4 py-3 flex items-start gap-2 text-xs">
         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
         <span>
@@ -170,6 +193,17 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
           No real money is staked. Participation is voluntary and purely for fun.
         </span>
       </div>
+
+      {/* Admin freeze banner */}
+      {frozen && (
+        <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-warning/40 bg-warning/10 text-warning text-sm font-medium">
+          <PauseCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <span>
+            ⚠️ Guesses are temporarily paused by the admin.
+            {matchFlags?.freeze_reason ? ` Reason: ${matchFlags.freeze_reason}` : ''}
+          </span>
+        </div>
+      )}
 
       {windows.length === 0 && (
         <GlassCard className="p-5 text-center">
@@ -185,10 +219,12 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         const selected = selectedAnswers[window.id];
 
         return (
-          <GlassCard key={window.id} className="p-4 border border-primary/30" glow>
+          <GlassCard key={window.id} className={`p-4 border ${frozen ? 'border-warning/30 opacity-75' : 'border-primary/30'}`} glow={!frozen}>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs font-bold text-primary uppercase tracking-wide">🎯 Fun Guess Open!</span>
+              <div className={`w-2 h-2 rounded-full ${frozen ? 'bg-warning' : 'bg-primary animate-pulse'}`} />
+              <span className={`text-xs font-bold uppercase tracking-wide ${frozen ? 'text-warning' : 'text-primary'}`}>
+                {frozen ? '⏸ Guesses Paused' : '🎯 Fun Guess Open!'}
+              </span>
             </div>
 
             <p className="text-foreground font-semibold text-sm mb-3">
@@ -203,12 +239,14 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
                 return (
                   <button
                     key={opt.key}
-                    disabled={!!submitted}
-                    onClick={() => setSelectedAnswers(prev => ({ ...prev, [window.id]: opt.key }))}
+                    disabled={!!submitted || frozen}
+                    onClick={() => !frozen && setSelectedAnswers(prev => ({ ...prev, [window.id]: opt.key }))}
                     className={`rounded-xl p-3.5 min-h-[52px] text-sm font-semibold transition-all border-2 active:scale-95 ${
                       shouldAnimate ? 'animate-slide-up' : ''
                     } ${
-                      isSubmitted
+                      frozen
+                        ? 'border-border/30 bg-muted/20 text-muted-foreground cursor-not-allowed'
+                        : isSubmitted
                         ? 'border-primary bg-primary/20 text-primary'
                         : isSelected
                         ? 'border-primary/60 bg-primary/10 text-primary'
@@ -225,14 +263,14 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
             {!submitted ? (
               <GlassButton
-                variant="primary"
+                variant={frozen ? 'ghost' : 'primary'}
                 size="md"
                 className="w-full"
                 loading={submitting === window.id}
-                disabled={!selected}
+                disabled={!selected || frozen}
                 onClick={() => handleSubmit(window.id)}
               >
-                <Zap className="h-4 w-4" /> Lock My Guess
+                <Zap className="h-4 w-4" /> {frozen ? 'Guesses Paused' : 'Lock My Guess'}
               </GlassButton>
             ) : (
               <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium">
