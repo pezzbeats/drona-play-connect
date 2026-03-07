@@ -120,6 +120,7 @@ export default function AdminValidate() {
   const [pendingStream, setPendingStream] = useState<MediaStream | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const torchSupportedRef = useRef(false);
+  const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -319,15 +320,21 @@ export default function AdminValidate() {
 
       try {
         // Try native BarcodeDetector first (Chrome/Android — fast)
+        let nativeFound = false;
         if ('BarcodeDetector' in window) {
-          const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-          const codes = await detector.detect(video);
-          if (codes.length > 0) {
-            handleCameraResultRef.current(codes[0].rawValue);
-            return;
-          }
-        } else {
-          // jsQR fallback — draw frame to offscreen canvas
+          try {
+            const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+            const codes = await detector.detect(video);
+            if (codes.length > 0) {
+              handleCameraResultRef.current(codes[0].rawValue);
+              return;
+            }
+            nativeFound = true; // BarcodeDetector ran OK but found nothing this frame
+          } catch { /* BarcodeDetector threw — fall through to jsQR */ }
+        }
+
+        // jsQR fallback — runs when BarcodeDetector is unavailable or threw an error
+        if (!nativeFound) {
           const canvas = canvasRef.current;
           if (!canvas) { rafRef.current = requestAnimationFrame(tick); return; }
           const w = video.videoWidth;
@@ -902,9 +909,22 @@ export default function AdminValidate() {
             style={{ fontSize: '16px' }}
             placeholder="Paste or scan QR code here…"
             value={qrInput}
-            onChange={e => setQrInput(e.target.value)}
+            onChange={e => {
+              const val = e.target.value;
+              setQrInput(val);
+              // Hardware QR scanners type very fast then stop — auto-submit after 400ms idle
+              clearTimeout(autoSubmitTimerRef.current);
+              if (val.trim().length > 8) {
+                autoSubmitTimerRef.current = setTimeout(() => lookupTicket(val), 400);
+              }
+            }}
             onPaste={handlePaste}
-            onKeyDown={e => { if (e.key === 'Enter') lookupTicket(e.currentTarget.value); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                clearTimeout(autoSubmitTimerRef.current);
+                lookupTicket(e.currentTarget.value);
+              }
+            }}
             autoComplete="off"
             spellCheck={false}
           />
