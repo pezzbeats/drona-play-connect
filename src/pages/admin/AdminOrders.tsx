@@ -9,9 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Shield, Banknote } from 'lucide-react';
 
 type OverrideTarget = { orderId: string; verdict: 'paid_manual_verified' | 'paid_rejected' } | null;
+type AdvanceFormState = { orderId: string; amount: string; method: string } | null;
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -23,6 +24,8 @@ export default function AdminOrders() {
   const [overrideTarget, setOverrideTarget] = useState<OverrideTarget>(null);
   const [overrideReason, setOverrideReason] = useState('');
   const [viewingProof, setViewingProof] = useState<string | null>(null);
+  const [advanceForm, setAdvanceForm] = useState<AdvanceFormState>(null);
+  const [savingAdvance, setSavingAdvance] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -104,6 +107,46 @@ export default function AdminOrders() {
       window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
     } catch (e: any) { toast({ variant: 'destructive', title: 'Cannot open proof', description: e.message }); }
     setViewingProof(null);
+  };
+
+  const handleSaveAdvance = async () => {
+    if (!advanceForm) return;
+    const { orderId, amount, method } = advanceForm;
+    const numAmount = parseInt(amount, 10);
+    const order = orders.find(o => o.id === orderId);
+    if (!numAmount || numAmount <= 0) {
+      toast({ variant: 'destructive', title: 'Invalid amount', description: 'Enter a valid advance amount.' });
+      return;
+    }
+    if (order && numAmount > order.total_amount) {
+      toast({ variant: 'destructive', title: 'Amount too high', description: 'Advance cannot exceed total amount.' });
+      return;
+    }
+    setSavingAdvance(true);
+    try {
+      await supabase.from('orders').update({
+        advance_paid: numAmount,
+        advance_payment_method: method,
+      } as any).eq('id', orderId);
+
+      await supabase.from('payment_collections').insert({
+        order_id: orderId,
+        collected_by_admin_id: user?.id,
+        method: method as any,
+        amount: numAmount,
+        note: `Advance ₹${numAmount} via ${method.toUpperCase()} — balance ₹${(order?.total_amount ?? 0) - numAmount} due`,
+      });
+
+      await supabase.from('admin_activity').insert({
+        admin_id: user?.id, action: 'record_advance', entity_type: 'order', entity_id: orderId,
+        meta: { amount: numAmount, method },
+      });
+
+      toast({ title: '✅ Advance recorded', description: `₹${numAmount} via ${method.toUpperCase()} saved.` });
+      setAdvanceForm(null);
+      fetchOrders();
+    } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
+    setSavingAdvance(false);
   };
 
   const filtered = orders.filter(o => {
@@ -360,7 +403,7 @@ export default function AdminOrders() {
                     </div>
                   ) : (
                     ['pending_verification', 'paid_rejected', 'unpaid'].includes(order.payment_status) && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <GlassButton variant="success" size="sm" className="flex-1 h-11"
                           onClick={() => setOverrideTarget({ orderId: order.id, verdict: 'paid_manual_verified' })}>
                           <CheckCircle2 className="h-4 w-4" /> Verify
@@ -369,8 +412,64 @@ export default function AdminOrders() {
                           onClick={() => setOverrideTarget({ orderId: order.id, verdict: 'paid_rejected' })}>
                           <XCircle className="h-4 w-4" /> Reject
                         </GlassButton>
+                        <GlassButton variant="ghost" size="sm" className="flex-1 h-11"
+                          onClick={() => setAdvanceForm({ orderId: order.id, amount: '', method: 'upi' })}>
+                          <Banknote className="h-4 w-4" /> Advance
+                        </GlassButton>
                       </div>
                     )
+                  )}
+
+                  {/* Record Advance form */}
+                  {advanceForm?.orderId === order.id && (
+                    <div className="glass-card-sunken p-3 space-y-2 border border-border/50 mt-2">
+                      <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                        <Banknote className="h-4 w-4 text-primary" /> Record Advance Payment
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Amount (₹)</p>
+                          <Input
+                            type="number"
+                            className="glass-input h-10 text-sm"
+                            placeholder={`max ₹${order.total_amount}`}
+                            min={1}
+                            max={order.total_amount}
+                            value={advanceForm.amount}
+                            onChange={e => setAdvanceForm(f => f ? { ...f, amount: e.target.value } : f)}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Method</p>
+                          <Select
+                            value={advanceForm.method}
+                            onValueChange={v => setAdvanceForm(f => f ? { ...f, method: v } : f)}
+                          >
+                            <SelectTrigger className="glass-input h-10 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="upi">UPI</SelectItem>
+                              <SelectItem value="cash">Cash</SelectItem>
+                              <SelectItem value="card">Card</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {advanceForm.amount && parseInt(advanceForm.amount) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Balance after advance: <span className="text-warning font-bold">₹{Math.max(0, order.total_amount - parseInt(advanceForm.amount))}</span>
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <GlassButton
+                          variant="primary" size="sm" loading={savingAdvance}
+                          onClick={handleSaveAdvance}
+                          disabled={!advanceForm.amount || parseInt(advanceForm.amount) <= 0}
+                        >Save</GlassButton>
+                        <GlassButton variant="ghost" size="sm" onClick={() => setAdvanceForm(null)}>Cancel</GlassButton>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
