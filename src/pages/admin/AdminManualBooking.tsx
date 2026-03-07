@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Loader2, ChevronRight, User, UserX, UserPlus, IndianRupee, Tag } from 'lucide-react';
+import { Search, Loader2, ChevronRight, User, UserX, UserPlus, IndianRupee, Tag, CheckCircle2, MessageCircle, RotateCcw } from 'lucide-react';
 
 export default function AdminManualBooking() {
   const [searchMobile, setSearchMobile] = useState('');
