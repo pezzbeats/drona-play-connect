@@ -618,7 +618,7 @@ export default function AdminValidate() {
           </GlassCard>
 
           {/* ── Check-in + PIN ── */}
-          {isPaid && (
+          {(isPaid || order?.payment_method === 'pay_at_hotel') && (
             <GlassCard className={`p-5 ${isCheckedIn && gamePin ? 'border-success/50 shadow-[0_0_30px_hsl(142_70%_45%/0.2)]' : ''}`}>
               <h2 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-success" /> Check-In & PIN
