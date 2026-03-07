@@ -38,6 +38,8 @@ interface Match {
 interface PriceQuote {
   seats: Array<{ seat_index: number; price: number; reason: string }>;
   total: number; seating_type: string;
+  is_semifinal_eligible?: boolean;
+  loyalty_seat_cap?: number;
 }
 
 const steps = ['Your Details', 'Seats & Price', 'Payment', 'Your Tickets'];
@@ -301,6 +303,7 @@ export default function RegisterPage() {
 
   // Eligibility check state
   const [eligibilityStatus, setEligibilityStatus] = useState<'idle' | 'checking' | 'eligible' | 'standard'>('idle');
+  const [eligibleSeats, setEligibleSeats] = useState<number>(0);
 
 
   // Step 2
@@ -357,16 +360,18 @@ export default function RegisterPage() {
   useEffect(() => {
     if (!mobileValid) {
       setEligibilityStatus('idle');
+      setEligibleSeats(0);
       return;
     }
     setEligibilityStatus('checking');
     const timer = setTimeout(async () => {
       const { data } = await supabase
         .from('semifinal_eligibility')
-        .select('id')
+        .select('id, eligible_seats')
         .eq('mobile', mobile)
         .maybeSingle();
       setEligibilityStatus(data ? 'eligible' : 'standard');
+      setEligibleSeats(data?.eligible_seats ?? 0);
     }, 400);
     return () => clearTimeout(timer);
   }, [mobile, mobileValid]);
@@ -736,7 +741,10 @@ export default function RegisterPage() {
                 {eligibilityStatus === 'eligible' && (
                   <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/30 text-xs text-success font-semibold">
                     <Star className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span>Semifinal attendee — you qualify for <strong>₹949/seat</strong> 🎉</span>
+                    {eligibleSeats > 0
+                      ? <span>Semifinal attendee — <strong>{eligibleSeats} seat{eligibleSeats > 1 ? 's' : ''} at ₹949</strong>, extras at ₹999 🎉</span>
+                      : <span>Semifinal attendee — you qualify for <strong>₹949/seat</strong> 🎉</span>
+                    }
                   </div>
                 )}
                 {eligibilityStatus === 'standard' && (
@@ -774,7 +782,10 @@ export default function RegisterPage() {
             {eligibilityStatus === 'eligible' && (
               <div className="mb-4 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-success/10 border border-success/30 text-xs text-success font-semibold">
                 <Star className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>Semifinal attendee discount applied — qualifying seats at <strong>₹949/seat</strong> 🎉</span>
+                {eligibleSeats > 0
+                  ? <span>Semifinal discount — <strong>{eligibleSeats} seat{eligibleSeats > 1 ? 's' : ''} at ₹949</strong>, extras at ₹999 🎉</span>
+                  : <span>Semifinal attendee discount applied — qualifying seats at <strong>₹949/seat</strong> 🎉</span>
+                }
               </div>
             )}
             {eligibilityStatus === 'standard' && (

@@ -95,10 +95,11 @@ export default function AdminEligibility() {
   // ── Export current list ────────────────────────────────────────────────────
   const handleExportList = () => {
     if (rows.length === 0) return;
-    const header = 'mobile,full_name,notes,match_label,uploaded_at';
+    const header = 'mobile,full_name,eligible_seats,notes,match_label,uploaded_at';
     const body = rows.map(r => [
       r.mobile,
       r.full_name ?? '',
+      r.eligible_seats,
       r.notes ?? '',
       r.match_label ?? '',
       r.uploaded_at,
