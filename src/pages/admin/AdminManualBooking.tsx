@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Loader2, ChevronRight, User, UserX, UserPlus, IndianRupee, Tag } from 'lucide-react';
+import { Search, Loader2, ChevronRight, User, UserX, UserPlus, IndianRupee, Tag, CheckCircle2, MessageCircle, RotateCcw } from 'lucide-react';
 
 export default function AdminManualBooking() {
   const [searchMobile, setSearchMobile] = useState('');
@@ -29,6 +29,9 @@ export default function AdminManualBooking() {
     advance_payment_method: 'cash',
   });
   const [discount, setDiscount] = useState({ type: 'flat', value: '' });
+  const [lastBooking, setLastBooking] = useState<{
+    name: string; mobile: string; balance: number; orderId: string; waLink: string; matchName: string;
+  } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -40,7 +43,7 @@ export default function AdminManualBooking() {
   const handleSearch = async () => {
     if (!/^\d{10}$/.test(searchMobile)) return toast({ variant: 'destructive', title: 'Enter 10-digit mobile' });
     setSearching(true); setExisting(null); setSearched(false); setPriceQuote(null);
-    setDiscount({ type: 'flat', value: '' });
+    setDiscount({ type: 'flat', value: '' }); setLastBooking(null);
     const { data } = await supabase.from('orders').select('*, match:matches!match_id(name)')
       .eq('purchaser_mobile', searchMobile).eq('match_id', activeMatch?.id).single();
     setExisting(data || null);
@@ -123,11 +126,21 @@ export default function AdminManualBooking() {
 
       const finalBalance = data.balance_due ?? 0;
       const discApplied = data.discount_amount ?? 0;
-      let successMsg = `Order ID: ${data.order_id}`;
-      if (discApplied > 0) successMsg += ` · Discount: ₹${discApplied}`;
-      successMsg += finalBalance > 0 ? ` · Balance due at entry: ₹${finalBalance}` : ` · Fully paid`;
+      const matchName = activeMatch?.name ?? 'T20 Fan Night';
+      const ticketUrl = `${window.location.origin}/ticket?mobile=${searchMobile}`;
+      const waMsg = [
+        `🎟️ Booking Confirmed — Hotel Drona Palace`,
+        ``,
+        `Hi ${form.full_name}! Your pass is ready.`,
+        `🏏 Match: ${matchName}`,
+        finalBalance > 0 ? `💳 Balance due at entry: ₹${finalBalance}` : `✅ Fully paid`,
+        ``,
+        `🎫 View pass: ${ticketUrl}`,
+      ].join('\n');
+      const waLink = `https://wa.me/91${searchMobile}?text=${encodeURIComponent(waMsg)}`;
 
-      toast({ title: '✅ Order created', description: successMsg });
+      toast({ title: '✅ Booking created', description: `Order ${data.order_id}${discApplied > 0 ? ` · Discount ₹${discApplied}` : ''}${finalBalance > 0 ? ` · Balance ₹${finalBalance}` : ' · Fully paid'}` });
+
       await supabase.from('admin_activity').insert({
         admin_id: user?.id,
         action: 'manual_booking',
@@ -144,24 +157,12 @@ export default function AdminManualBooking() {
         },
       });
 
-      // WhatsApp share after booking success
-      const matchName = activeMatch?.name ?? 'T20 Fan Night';
-      const ticketUrl = `${window.location.origin}/ticket?mobile=${searchMobile}`;
-      const waMsg = [
-        `🎟️ Booking Confirmed — Hotel Drona Palace`,
-        ``,
-        `Hi ${form.full_name}! Your pass is ready.`,
-        `🏏 Match: ${matchName}`,
-        finalBalance > 0 ? `💳 Balance due at entry: ₹${finalBalance}` : `✅ Fully paid`,
-        ``,
-        `🎫 View pass: ${ticketUrl}`,
-      ].join('\n');
-      window.open(`https://wa.me/91${searchMobile}?text=${encodeURIComponent(waMsg)}`, '_blank');
-
-      setExisting(null); setPriceQuote(null); setSearched(false);
-      setDiscount({ type: 'flat', value: '' });
+      // Auto-open WhatsApp and show persistent success card
+      window.open(waLink, '_blank');
+      setLastBooking({ name: form.full_name, mobile: searchMobile, balance: finalBalance, orderId: data.order_id, waLink, matchName });
+      // Reset form state but keep search mobile so "Book Another" can start fresh
+      setPriceQuote(null); setSearched(false); setDiscount({ type: 'flat', value: '' });
       setForm({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash', advance_paid: '', advance_payment_method: 'cash' });
-      handleSearch();
     } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
     setCreating(false);
   };
@@ -245,7 +246,7 @@ export default function AdminManualBooking() {
       )}
 
       {/* Booking form */}
-      {showBookingForm && (priceQuote !== undefined || priceQuote === undefined) && (
+      {showBookingForm && !lastBooking && (priceQuote !== undefined || priceQuote === undefined) && (
         <GlassCard variant="elevated" className="p-4">
           <h2 className="font-display text-base font-bold text-foreground mb-4 flex items-center gap-2">
             <User className="h-4 w-4 text-primary" />New Booking
@@ -471,6 +472,59 @@ export default function AdminManualBooking() {
                   ? `Create Booking · Save ₹${computedDiscountAmount}`
                   : 'Create Booking'}
             </GlassButton>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ── Booking success card ── */}
+      {lastBooking && (
+        <GlassCard variant="elevated" className="p-5 border-success/40">
+          <div className="flex flex-col items-center text-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-success/15 border-2 border-success/40 flex items-center justify-center">
+              <CheckCircle2 className="h-7 w-7 text-success" />
+            </div>
+            <div>
+              <p className="font-display text-lg font-bold text-success">Booking Created!</p>
+              <p className="text-foreground font-semibold mt-0.5">{lastBooking.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 font-mono">{lastBooking.mobile} · {lastBooking.matchName}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Order: <span className="font-mono text-foreground">{lastBooking.orderId}</span></p>
+            </div>
+
+            {lastBooking.balance > 0 ? (
+              <div className="px-4 py-2.5 rounded-xl bg-warning/10 border border-warning/30 w-full">
+                <p className="text-warning font-bold text-sm">⚠ Balance Due at Entry: ₹{lastBooking.balance}</p>
+              </div>
+            ) : (
+              <div className="px-4 py-2.5 rounded-xl bg-success/10 border border-success/30 w-full">
+                <p className="text-success font-bold text-sm">✅ Fully Paid</p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 w-full mt-1">
+              <GlassButton
+                variant="primary"
+                size="lg"
+                className="w-full h-13 gap-2"
+                onClick={() => window.open(lastBooking.waLink, '_blank')}
+              >
+                <MessageCircle className="h-5 w-5" />
+                Send WhatsApp Confirmation
+              </GlassButton>
+              <GlassButton
+                variant="outline"
+                size="md"
+                className="w-full gap-2"
+                onClick={() => {
+                  setLastBooking(null);
+                  setExisting(null);
+                  setSearchMobile('');
+                  setSearched(false);
+                }}
+              >
+                <RotateCcw className="h-4 w-4" />
+                Book Another
+              </GlassButton>
+            </div>
           </div>
         </GlassCard>
       )}

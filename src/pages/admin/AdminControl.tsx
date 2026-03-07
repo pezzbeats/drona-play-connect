@@ -147,7 +147,7 @@ export default function AdminControl() {
   const [flagLoading, setFlagLoading] = useState<string | null>(null);
 
   // Confirmation dialogs
-  const [confirmDialog, setConfirmDialog] = useState<{ action: string; label: string; body: any } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ action: string; label: string; body: any; successMsg?: string } | null>(null);
 
   // Correction mode
   const [correctionMode, setCorrectionMode] = useState(false);
@@ -309,12 +309,12 @@ export default function AdminControl() {
   const teamById = (id: string) => teams.find(t => t.id === id);
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  const callFunction = async (fn: string, body: any, loadingKey: string) => {
+  const callFunction = async (fn: string, body: any, loadingKey: string, successMsg?: string) => {
     setActionLoading(loadingKey);
     try {
       const { data, error } = await supabase.functions.invoke(fn, { body });
       if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast({ title: '✅ Done' });
+      toast({ title: successMsg ?? '✅ Done' });
       fetchAll();
       return data;
     } catch (e: any) {
@@ -350,24 +350,32 @@ export default function AdminControl() {
   };
 
   const handlePhase = (phase: string) => {
+    const phaseLabels: Record<string, string> = {
+      pre: '⏸ Match set to Pre',
+      innings1: '▶ Innings 1 started',
+      break: '☕ Innings break',
+      innings2: '▶ Innings 2 started',
+      ended: '🏁 Match ended',
+    };
+    const msg = phaseLabels[phase] ?? `✅ Phase: ${phase}`;
     if (['innings2', 'ended'].includes(phase)) {
-      setConfirmDialog({ action: 'set_phase', label: `Set phase to "${phase}"?`, body: { action: 'set_phase', match_id: match?.id, phase } });
+      setConfirmDialog({ action: 'set_phase', label: `Set phase to "${phase}"?`, body: { action: 'set_phase', match_id: match?.id, phase }, successMsg: msg });
     } else {
-      callFunction('match-control', { action: 'set_phase', match_id: match?.id, phase }, `phase-${phase}`);
+      callFunction('match-control', { action: 'set_phase', match_id: match?.id, phase }, `phase-${phase}`, msg);
     }
   };
 
-  const handleInitMatch = () => callFunction('match-control', { action: 'init', match_id: match?.id }, 'init');
+  const handleInitMatch = () => callFunction('match-control', { action: 'init', match_id: match?.id }, 'init', '✅ Match initialized');
 
   const handleCreateOver = () => callFunction('over-control', {
     action: 'create_over', match_id: match?.id,
     innings_no: liveState?.current_innings || 1,
     bowler_id: delivery.bowler_id || overBowler || null,
-  }, 'create-over');
+  }, 'create-over', '🏏 New over started');
 
   const handleCompleteOver = () => {
     if (!activeOver) return;
-    callFunction('over-control', { action: 'update_over', over_id: activeOver.id, status: 'complete' }, 'complete-over');
+    callFunction('over-control', { action: 'update_over', over_id: activeOver.id, status: 'complete' }, 'complete-over', '✅ Over completed');
   };
 
   const handleUpdateOverStatus = (overId: string, status: string) => {
@@ -510,7 +518,7 @@ export default function AdminControl() {
       match_id: match.id,
       question: 'What will happen on the next ball?',
       options: BALL_OUTCOMES.map(o => ({ key: o.key, label: o.label })),
-    }, 'open-window');
+    }, 'open-window', '🎯 Guess window opened');
   };
 
   const applyOutcomePrefill = (key: BallOutcomeKey) => {
@@ -532,7 +540,7 @@ export default function AdminControl() {
 
   const handleLockWindow = () => {
     if (!activeWindow) return;
-    callFunction('resolve-prediction-window', { action: 'lock', window_id: activeWindow.id }, 'lock-window');
+    callFunction('resolve-prediction-window', { action: 'lock', window_id: activeWindow.id }, 'lock-window', '🔒 Guess window locked');
   };
 
   const handleResolveWindow = (correctKey: string) => {
@@ -541,7 +549,7 @@ export default function AdminControl() {
       .eq('match_id', match.id).eq('status', 'locked')
       .order('created_at', { ascending: false }).limit(1).single()
       .then(({ data }) => {
-        if (data) callFunction('resolve-prediction-window', { action: 'resolve', window_id: data.id, match_id: match.id, correct_answer: { key: correctKey } }, 'resolve-window');
+        if (data) callFunction('resolve-prediction-window', { action: 'resolve', window_id: data.id, match_id: match.id, correct_answer: { key: correctKey } }, 'resolve-window', '✅ Window resolved');
       });
   };
 
@@ -563,9 +571,9 @@ export default function AdminControl() {
   const executeConfirmed = () => {
     if (!confirmDialog) return;
     if (confirmDialog.action === 'set_phase') {
-      callFunction('match-control', confirmDialog.body, `phase-${confirmDialog.body.phase}`);
+      callFunction('match-control', confirmDialog.body, `phase-${confirmDialog.body.phase}`, confirmDialog.successMsg);
     } else if (confirmDialog.action === 'update_over') {
-      callFunction('over-control', confirmDialog.body, 'update-over');
+      callFunction('over-control', confirmDialog.body, 'update-over', confirmDialog.successMsg);
     }
     setConfirmDialog(null);
   };
