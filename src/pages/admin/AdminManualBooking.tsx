@@ -59,6 +59,15 @@ export default function AdminManualBooking() {
     setQuoteLoading(false);
   };
 
+  // Auto-clear stale quote when seat count or seating type changes
+  useEffect(() => {
+    if (priceQuote) {
+      setPriceQuote(null);
+      setDiscount({ type: 'flat', value: '' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.seats_count, form.seating_type]);
+
   // ── Discount calculations ──
   const subtotal = priceQuote?.total ?? 0;
   const discountValue = parseFloat(discount.value) || 0;
