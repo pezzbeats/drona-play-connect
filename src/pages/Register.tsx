@@ -358,27 +358,35 @@ export default function RegisterPage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
-  // Auto-download full pass PNGs when step 3 loads
+  // Auto-download full pass PNGs when step 3 loads (staggered to avoid browser blocking)
   useEffect(() => {
     if (step !== 3 || tickets.length === 0 || !activeMatch) return;
-    const timer = setTimeout(async () => {
+    let cancelled = false;
+    const run = async () => {
+      await new Promise(r => setTimeout(r, 800));
       for (const ticket of tickets) {
+        if (cancelled) return;
         const shaped = buildTicketShape(ticket);
         try {
           const canvas = await buildPassCanvas(shaped);
-          canvas.toBlob((blob) => {
-            if (!blob) return;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `pass-seat-${ticket.seat_index + 1}.png`;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 2000);
+          await new Promise<void>((resolve) => {
+            canvas.toBlob((blob) => {
+              if (!blob) { resolve(); return; }
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `pass-seat-${ticket.seat_index + 1}.png`;
+              a.click();
+              setTimeout(() => { URL.revokeObjectURL(url); resolve(); }, 2000);
+            });
           });
+          // Stagger each download by 350ms so the browser doesn't block them
+          if (tickets.length > 1) await new Promise(r => setTimeout(r, 350));
         } catch { /* silent */ }
       }
-    }, 800);
-    return () => clearTimeout(timer);
+    };
+    run();
+    return () => { cancelled = true; };
   }, [step, tickets]);
 
   useEffect(() => {
