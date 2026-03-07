@@ -411,14 +411,15 @@ export default function AdminEligibility() {
                 </div>
               </div>
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_1fr_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2 border-b border-border/20">
-                <span>Mobile</span><span>Name</span><span>Notes</span><span></span>
+              <div className="grid grid-cols-[1fr_1fr_auto_1fr_auto] text-xs font-semibold text-muted-foreground bg-muted/30 px-4 py-2 border-b border-border/20">
+                <span>Mobile</span><span>Name</span><span>Seats</span><span>Notes</span><span></span>
               </div>
               <div className="max-h-52 overflow-y-auto">
                 {preview.slice(0, 20).map((p, i) => (
-                  <div key={i} className={`grid grid-cols-[1fr_1fr_1fr_auto] items-center px-4 py-1.5 text-xs border-b border-border/20 last:border-0 gap-2 ${p.valid ? '' : 'bg-destructive/5'}`}>
+                  <div key={i} className={`grid grid-cols-[1fr_1fr_auto_1fr_auto] items-center px-4 py-1.5 text-xs border-b border-border/20 last:border-0 gap-2 ${p.valid ? '' : 'bg-destructive/5'}`}>
                     <span className={`font-mono ${p.valid ? 'text-foreground' : 'text-destructive'}`}>{p.mobile || '(empty)'}</span>
                     <span className="text-muted-foreground truncate">{p.full_name || '—'}</span>
+                    <span className="font-semibold text-foreground text-center">{p.eligible_seats || '—'}</span>
                     <span className="text-muted-foreground truncate">{p.notes || '—'}</span>
                     {p.valid
                       ? <CheckCircle2 className="h-3.5 w-3.5 text-success flex-shrink-0" />
