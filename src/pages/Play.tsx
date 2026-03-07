@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -7,14 +7,52 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Gamepad2, Lock } from 'lucide-react';
+import { Gamepad2, Lock, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 export default function PlayPage() {
   const [mobile, setMobile] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const [matchStatus, setMatchStatus] = useState<'unknown' | 'live' | 'upcoming' | 'ended'>('unknown');
+  const [matchName, setMatchName] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Fetch and track active match status in realtime
+  const fetchMatchStatus = useCallback(async () => {
+    const { data } = await supabase
+      .from('matches')
+      .select('id, name, status')
+      .eq('is_active_for_registration', true)
+      .maybeSingle();
+    if (data) {
+      setMatchName(data.name);
+      if (data.status === 'live') setMatchStatus('live');
+      else if (data.status === 'ended') setMatchStatus('ended');
+      else setMatchStatus('upcoming');
+    } else {
+      setMatchStatus('unknown');
+      setMatchName(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMatchStatus();
+
+    // Realtime subscription: update status badge when match changes
+    const ch = supabase
+      .channel('play-page-match')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        fetchMatchStatus();
+      })
+      .subscribe();
+    channelRef.current = ch;
+
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+    };
+  }, [fetchMatchStatus]);
 
   const handleLogin = async () => {
     if (!/^\d{10}$/.test(mobile)) {
@@ -66,6 +104,21 @@ export default function PlayPage() {
           <h1 className="font-display text-3xl font-bold gradient-text">Fan Game Login</h1>
           <p className="text-muted-foreground text-sm mt-2">Enter your mobile and gameplay PIN</p>
           <p className="text-xs text-muted-foreground mt-1">PIN is given at the gate after check-in</p>
+
+          {/* Realtime match status badge */}
+          {matchStatus !== 'unknown' && (
+            <div className={`inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs font-semibold border ${
+              matchStatus === 'live'
+                ? 'bg-success/15 border-success/40 text-success'
+                : matchStatus === 'ended'
+                ? 'bg-muted/30 border-border text-muted-foreground'
+                : 'bg-primary/10 border-primary/30 text-primary'
+            }`}>
+              {matchStatus === 'live' && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
+              {matchStatus === 'live' ? '● Match is LIVE' : matchStatus === 'ended' ? 'Match Ended' : '⏳ Match Coming Soon'}
+              {matchName && <span className="opacity-70">· {matchName}</span>}
+            </div>
+          )}
         </div>
 
         <GlassCard className="p-5" glow>

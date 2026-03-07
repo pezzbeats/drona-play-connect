@@ -1206,8 +1206,14 @@ export default function AdminControl() {
                   <div className="text-sm text-foreground bg-primary/10 rounded-lg p-3">
                     <strong>Active:</strong> {activeWindow.question}
                   </div>
+                  {/* Live submission count */}
+                  <PredictionCountBadge windowId={activeWindow.id} matchId={match.id} />
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg border border-warning/40 bg-warning/5 text-warning text-xs">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Lock the window <strong>before</strong> recording the ball for fairness. Recording auto-locks if you forget.</span>
+                  </div>
                   <GlassButton variant="ghost" size="sm" loading={actionLoading === 'lock-window'} onClick={handleLockWindow}>
-                    <Lock className="h-3.5 w-3.5" /> Lock Window
+                    <Lock className="h-3.5 w-3.5" /> Lock Window Now
                   </GlassButton>
                 </div>
               )}
@@ -1297,6 +1303,42 @@ export default function AdminControl() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ── Live Prediction Count Badge ───────────────────────────────────────────────
+function PredictionCountBadge({ windowId, matchId }: { windowId: string; matchId: string }) {
+  const [count, setCount] = useState<number | null>(null);
+
+  const fetchCount = useCallback(async () => {
+    const { count: c } = await supabase
+      .from('predictions')
+      .select('id', { count: 'exact', head: true })
+      .eq('window_id', windowId);
+    setCount(c ?? 0);
+  }, [windowId]);
+
+  // Initial fetch
+  useEffect(() => { fetchCount(); }, [fetchCount]);
+
+  // Realtime subscription on new predictions for this window
+  useEffect(() => {
+    const channel = supabase
+      .channel(`pred-count-${windowId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'predictions', filter: `window_id=eq.${windowId}` },
+        () => setCount(prev => (prev ?? 0) + 1)
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [windowId]);
+
+  if (count === null) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/30 text-success text-xs font-semibold">
+      <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
+      <span><strong>{count}</strong> guess{count !== 1 ? 'es' : ''} received — lock before recording ball</span>
     </div>
   );
 }
