@@ -1206,8 +1206,14 @@ export default function AdminControl() {
                   <div className="text-sm text-foreground bg-primary/10 rounded-lg p-3">
                     <strong>Active:</strong> {activeWindow.question}
                   </div>
+                  {/* Live submission count */}
+                  <PredictionCountBadge windowId={activeWindow.id} matchId={match.id} />
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg border border-warning/40 bg-warning/5 text-warning text-xs">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Lock the window <strong>before</strong> recording the ball for fairness. Recording auto-locks if you forget.</span>
+                  </div>
                   <GlassButton variant="ghost" size="sm" loading={actionLoading === 'lock-window'} onClick={handleLockWindow}>
-                    <Lock className="h-3.5 w-3.5" /> Lock Window
+                    <Lock className="h-3.5 w-3.5" /> Lock Window Now
                   </GlassButton>
                 </div>
               )}
