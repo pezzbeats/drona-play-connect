@@ -164,6 +164,7 @@ export default function AdminOrders() {
             <SelectItem value="paid_verified">Paid Verified</SelectItem>
             <SelectItem value="paid_rejected">Rejected</SelectItem>
             <SelectItem value="paid_manual_verified">Manual Verified</SelectItem>
+            <SelectItem value="balance_due">⚠ Balance Due</SelectItem>
           </SelectContent>
         </Select>
       </div>
