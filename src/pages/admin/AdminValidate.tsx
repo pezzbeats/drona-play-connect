@@ -111,6 +111,7 @@ export default function AdminValidate() {
   const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>(loadOfflineQueue);
   const [matchFlags, setMatchFlags] = useState<any>(null);
   const [notFoundError, setNotFoundError] = useState(false);
+  const [recentScans, setRecentScans] = useState<RecentScan[]>(loadRecentScans);
 
   // Camera scanner state
   const [cameraOpen, setCameraOpen] = useState(false);
