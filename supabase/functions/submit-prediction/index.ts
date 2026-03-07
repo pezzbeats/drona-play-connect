@@ -15,7 +15,6 @@ async function hashPin(pin: string): Promise<string> {
 
 async function checkRateLimit(supabase: any, key: string, limitCount: number, windowMs: number): Promise<boolean> {
   const windowStart = new Date(Date.now() - windowMs).toISOString();
-  // Clean old rows first (>5 min old) for this key
   await supabase.from("rate_limit_events").delete().eq("key", key).lt("created_at", new Date(Date.now() - 300_000).toISOString());
   const { count } = await supabase
     .from("rate_limit_events")
@@ -93,7 +92,22 @@ serve(async (req) => {
       });
     }
 
-    // Get player name from game_access/orders
+    // ── Immutability check: block any overwrite ──
+    const { data: existing } = await supabase
+      .from("predictions")
+      .select("id")
+      .eq("window_id", window_id)
+      .eq("mobile", mobile)
+      .maybeSingle();
+
+    if (existing) {
+      return new Response(
+        JSON.stringify({ error: "You have already locked in a guess for this question.", code: "ALREADY_SUBMITTED", retryable: false }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get player name from orders
     const { data: orderData } = await supabase
       .from("orders")
       .select("purchaser_full_name")
@@ -104,10 +118,10 @@ serve(async (req) => {
 
     const playerName = orderData?.purchaser_full_name || mobile;
 
-    // Upsert prediction
+    // Insert prediction (no upsert — immutable)
     const { data: pred, error: predError } = await supabase
       .from("predictions")
-      .upsert({
+      .insert({
         window_id,
         match_id: window.match_id,
         mobile,
@@ -115,7 +129,7 @@ serve(async (req) => {
         prediction,
         is_correct: null,
         points_earned: 0,
-      }, { onConflict: "window_id,mobile" })
+      })
       .select()
       .single();
 

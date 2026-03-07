@@ -1,10 +1,9 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { GlassButton } from '@/components/ui/GlassButton';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Zap, CheckCircle2, Clock, AlertTriangle, PauseCircle } from 'lucide-react';
+import { Lock, CheckCircle2, Clock, AlertTriangle, PauseCircle, Loader2 } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
 interface PredictionWindow {
@@ -31,9 +30,9 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const [windows, setWindows] = useState<PredictionWindow[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchFlags, setMatchFlags] = useState<MatchFlags | null>(null);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [submittedWindows, setSubmittedWindows] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState<string | null>(null);
+  // submittingKey tracks the exact button being submitted: { windowId, optKey }
+  const [submittingKey, setSubmittingKey] = useState<{ windowId: string; optKey: string } | null>(null);
   const [animatingWindowId, setAnimatingWindowId] = useState<string | null>(null);
   const prevOpenWindowIdRef = useRef<string | null>(null);
   const { toast } = useToast();
@@ -118,27 +117,38 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
     fetchWindows,
   );
 
-  const handleSubmit = async (windowId: string) => {
-    const answer = selectedAnswers[windowId];
-    if (!answer) return toast({ variant: 'destructive', title: 'Select an answer first' });
-    if (matchFlags?.predictions_frozen) return toast({ variant: 'destructive', title: 'Guesses are paused' });
+  // One-tap submit: called immediately when user taps an option
+  const handleOptionTap = async (windowId: string, optKey: string) => {
+    if (submittedWindows[windowId]) return; // already submitted, ignore
+    if (submittingKey?.windowId === windowId) return; // submission in flight
+    if (matchFlags?.predictions_frozen) {
+      toast({ variant: 'destructive', title: 'Guesses are paused by admin' });
+      return;
+    }
 
-    setSubmitting(windowId);
+    setSubmittingKey({ windowId, optKey });
     try {
       const { data, error } = await supabase.functions.invoke('submit-prediction', {
-        body: { mobile, pin, window_id: windowId, prediction: { key: answer } },
+        body: { mobile, pin, window_id: windowId, prediction: { key: optKey } },
       });
 
       if (error || data?.error) {
-        toast({ variant: 'destructive', title: data?.error || 'Failed to submit' });
+        const code = data?.code;
+        if (code === 'ALREADY_SUBMITTED') {
+          // Treat as success — sync local state
+          setSubmittedWindows(prev => ({ ...prev, [windowId]: optKey }));
+          toast({ title: '🎯 Guess already locked in!' });
+        } else {
+          toast({ variant: 'destructive', title: data?.error || 'Failed to submit' });
+        }
       } else {
-        setSubmittedWindows(prev => ({ ...prev, [windowId]: answer }));
+        setSubmittedWindows(prev => ({ ...prev, [windowId]: optKey }));
         toast({ title: '🎯 Guess locked in!' });
       }
     } catch {
       toast({ variant: 'destructive', title: 'Submission failed' });
     }
-    setSubmitting(null);
+    setSubmittingKey(null);
   };
 
   const frozen = matchFlags?.predictions_frozen === true;
@@ -167,7 +177,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
               <div key={i} className="h-[52px] skeleton rounded-xl" />
             ))}
           </div>
-          <div className="h-11 skeleton rounded-xl" />
         </GlassCard>
         {Array.from({ length: 2 }).map((_, i) => (
           <GlassCard key={i} className="p-3 opacity-60 animate-pulse">
@@ -216,14 +225,14 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       {/* Open Windows */}
       {openWindows.map(window => {
         const submitted = submittedWindows[window.id];
-        const selected = selectedAnswers[window.id];
+        const isThisWindowSubmitting = submittingKey?.windowId === window.id;
 
         return (
           <GlassCard key={window.id} className={`p-4 border ${frozen ? 'border-warning/30 opacity-75' : 'border-primary/30'}`} glow={!frozen}>
             <div className="flex items-center gap-2 mb-3">
               <div className={`w-2 h-2 rounded-full ${frozen ? 'bg-warning' : 'bg-primary animate-pulse'}`} />
               <span className={`text-xs font-bold uppercase tracking-wide ${frozen ? 'text-warning' : 'text-primary'}`}>
-                {frozen ? '⏸ Guesses Paused' : '🎯 Fun Guess Open!'}
+                {frozen ? '⏸ Guesses Paused' : submitted ? '✓ Guess Locked' : '🎯 Tap to Lock Your Guess!'}
               </span>
             </div>
 
@@ -231,16 +240,18 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
               {window.question || 'What will happen on the next ball?'}
             </p>
 
-            <div className="grid grid-cols-2 gap-2.5 mb-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {(window.options || []).map((opt: any, optIdx: number) => {
-                const isSelected = (submitted || selected) === opt.key;
                 const isSubmitted = submitted === opt.key;
+                const isThisSpinning = isThisWindowSubmitting && submittingKey?.optKey === opt.key;
+                const isDisabled = !!submitted || frozen || isThisWindowSubmitting;
                 const shouldAnimate = animatingWindowId === window.id;
+
                 return (
                   <button
                     key={opt.key}
-                    disabled={!!submitted || frozen}
-                    onClick={() => !frozen && setSelectedAnswers(prev => ({ ...prev, [window.id]: opt.key }))}
+                    disabled={isDisabled}
+                    onClick={() => handleOptionTap(window.id, opt.key)}
                     className={`rounded-xl p-3.5 min-h-[52px] text-sm font-semibold transition-all border-2 active:scale-95 ${
                       shouldAnimate ? 'animate-slide-up' : ''
                     } ${
@@ -248,34 +259,30 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
                         ? 'border-border/30 bg-muted/20 text-muted-foreground cursor-not-allowed'
                         : isSubmitted
                         ? 'border-primary bg-primary/20 text-primary'
-                        : isSelected
-                        ? 'border-primary/60 bg-primary/10 text-primary'
+                        : isThisWindowSubmitting && !isThisSpinning
+                        ? 'border-border/30 bg-card/30 text-muted-foreground cursor-not-allowed opacity-50'
+                        : isThisSpinning
+                        ? 'border-primary/60 bg-primary/10 text-primary cursor-wait'
                         : 'border-border bg-card/50 text-foreground hover:border-primary/40'
                     }`}
                     style={shouldAnimate ? { animationDelay: `${optIdx * 60}ms`, animationFillMode: 'both' } as React.CSSProperties : undefined}
                   >
-                    {isSubmitted && <CheckCircle2 className="h-3.5 w-3.5 inline mr-1" />}
-                    {opt.label}
+                    {isThisSpinning ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : isSubmitted ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5 inline mr-1" />{opt.label}</>
+                    ) : (
+                      opt.label
+                    )}
                   </button>
                 );
               })}
             </div>
 
-            {!submitted ? (
-              <GlassButton
-                variant={frozen ? 'ghost' : 'primary'}
-                size="md"
-                className="w-full"
-                loading={submitting === window.id}
-                disabled={!selected || frozen}
-                onClick={() => handleSubmit(window.id)}
-              >
-                <Zap className="h-4 w-4" /> {frozen ? 'Guesses Paused' : 'Lock My Guess'}
-              </GlassButton>
-            ) : (
-              <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium">
+            {submitted && (
+              <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium mt-3">
                 <CheckCircle2 className="h-4 w-4" />
-                Guess locked in!
+                Guess locked in — cannot be changed
               </div>
             )}
           </GlassCard>
