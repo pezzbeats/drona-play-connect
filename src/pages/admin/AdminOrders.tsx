@@ -403,7 +403,7 @@ export default function AdminOrders() {
                     </div>
                   ) : (
                     ['pending_verification', 'paid_rejected', 'unpaid'].includes(order.payment_status) && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <GlassButton variant="success" size="sm" className="flex-1 h-11"
                           onClick={() => setOverrideTarget({ orderId: order.id, verdict: 'paid_manual_verified' })}>
                           <CheckCircle2 className="h-4 w-4" /> Verify
@@ -412,8 +412,64 @@ export default function AdminOrders() {
                           onClick={() => setOverrideTarget({ orderId: order.id, verdict: 'paid_rejected' })}>
                           <XCircle className="h-4 w-4" /> Reject
                         </GlassButton>
+                        <GlassButton variant="ghost" size="sm" className="flex-1 h-11"
+                          onClick={() => setAdvanceForm({ orderId: order.id, amount: '', method: 'upi' })}>
+                          <Banknote className="h-4 w-4" /> Advance
+                        </GlassButton>
                       </div>
                     )
+                  )}
+
+                  {/* Record Advance form */}
+                  {advanceForm?.orderId === order.id && (
+                    <div className="glass-card-sunken p-3 space-y-2 border border-border/50 mt-2">
+                      <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                        <Banknote className="h-4 w-4 text-primary" /> Record Advance Payment
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Amount (₹)</p>
+                          <Input
+                            type="number"
+                            className="glass-input h-10 text-sm"
+                            placeholder={`max ₹${order.total_amount}`}
+                            min={1}
+                            max={order.total_amount}
+                            value={advanceForm.amount}
+                            onChange={e => setAdvanceForm(f => f ? { ...f, amount: e.target.value } : f)}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Method</p>
+                          <Select
+                            value={advanceForm.method}
+                            onValueChange={v => setAdvanceForm(f => f ? { ...f, method: v } : f)}
+                          >
+                            <SelectTrigger className="glass-input h-10 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="upi">UPI</SelectItem>
+                              <SelectItem value="cash">Cash</SelectItem>
+                              <SelectItem value="card">Card</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {advanceForm.amount && parseInt(advanceForm.amount) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Balance after advance: <span className="text-warning font-bold">₹{Math.max(0, order.total_amount - parseInt(advanceForm.amount))}</span>
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <GlassButton
+                          variant="primary" size="sm" loading={savingAdvance}
+                          onClick={handleSaveAdvance}
+                          disabled={!advanceForm.amount || parseInt(advanceForm.amount) <= 0}
+                        >Save</GlassButton>
+                        <GlassButton variant="ghost" size="sm" onClick={() => setAdvanceForm(null)}>Cancel</GlassButton>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
