@@ -1227,11 +1227,14 @@ export default function AdminValidate() {
                       <p className="font-display font-bold text-success tracking-[0.5em] text-7xl leading-none">{gamePin}</p>
                     </div>
                   )}
-                  <GlassButton variant="success" size="lg" className="w-full h-14" onClick={copyWhatsApp} disabled={!gamePin}>
-                    <Copy className="h-5 w-5" /> Copy WhatsApp Message
+                  <GlassButton variant="success" size="lg" className="w-full h-14" onClick={sendWhatsApp} disabled={!gamePin}>
+                    <Copy className="h-5 w-5" /> Send WhatsApp PIN
                   </GlassButton>
                   <GlassButton variant="ghost" size="md" className="w-full" loading={checkingIn} onClick={handleRegenPin}>
                     <RefreshCw className="h-4 w-4" /> Regenerate PIN
+                  </GlassButton>
+                  <GlassButton variant="primary" size="lg" className="w-full h-14" onClick={handleScanNext}>
+                    <ScanLine className="h-5 w-5" /> Scan Next →
                   </GlassButton>
                 </div>
               )}
