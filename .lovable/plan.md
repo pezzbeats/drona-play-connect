@@ -1,54 +1,53 @@
 
-## Problem Analysis
+## Root Cause — Found
 
-Two separate gaps allow prediction changes:
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-**1. Frontend (`PredictionPanel.tsx`) — two-step flow allows changing answer before submit**
-- User clicks an option → `selectedAnswers[windowId]` is set
-- User can click a *different* option → `selectedAnswers[windowId]` is overwritten
-- Only after clicking "Lock My Guess" does it become permanent
-- The fix: once a user taps any option, immediately auto-submit. No separate "Lock My Guess" button step. One tap = locked forever.
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-**2. Backend (`submit-prediction/index.ts`) — upsert allows overwriting**
-- Line 108–120: Uses `.upsert(..., { onConflict: "window_id,mobile" })` which updates the existing row if one exists
-- This means if a user somehow calls the function twice (race condition, network retry), their first answer gets silently replaced
-- The fix: change to INSERT with a conflict check — if a prediction already exists for `window_id + mobile`, return an error instead of overwriting
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
+```
+
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
 ## Changes
 
-### `supabase/functions/submit-prediction/index.ts`
-- Before the upsert, add a check: query `predictions` for an existing row where `window_id = window_id AND mobile = mobile`
-- If found → return `{ error: "You have already locked in a guess for this question.", code: "ALREADY_SUBMITTED", retryable: false }` with HTTP 409
-- Change the `.upsert()` to a plain `.insert()` — no more conflict update
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
 
-### `src/components/live/PredictionPanel.tsx`
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
 
-**Remove the two-step select → submit flow entirely:**
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
 
-- Remove `selectedAnswers` state
-- Remove the "Lock My Guess" `GlassButton` 
-- When a user taps an option button, immediately call `handleSubmit(windowId, optKey)` inline
-- While `submitting === windowId`, show all buttons as disabled with a spinner on the tapped option (use `submitting` + a `submittingKey` ref to know which button to spin)
-- After successful submit, `submittedWindows[windowId]` is set — buttons stay disabled and the chosen one shows the checkmark as before
-- On the button: show a small `Loader2` spinner instead of the label text while that specific option is being submitted
-
-**Key UX flow after change:**
-```
-User taps option → button immediately shows spinner → 
-  success → button shows ✓ checkmark, all options frozen
-  error → toast shown, buttons re-enabled so user can try again
+// After:
+const [loading, setLoading] = useState(false);
 ```
 
-**State changes:**
-- Remove: `selectedAnswers` state, `setSelectedAnswers`
-- Add: `submittingKey` state `{ windowId: string; optKey: string } | null` to know which specific button to show spinner on
-- Change `handleSubmit(windowId)` → `handleSubmit(windowId, optKey)`
-- Keep: `submittedWindows`, `submitting`, all other existing state
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
-**No database schema changes required.**
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
 ## Files Changed
 | File | Change |
-|------|--------|
-| `supabase/functions/submit-prediction/index.ts` | Add pre-check for existing prediction, reject with 409 if already submitted; change upsert → insert |
-| `src/components/live/PredictionPanel.tsx` | Remove two-step flow; tap-to-submit immediately; show per-button spinner; handle 409 gracefully |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
