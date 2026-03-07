@@ -133,6 +133,8 @@ export default function AdminValidate() {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const scanningRef = useRef(false);
+  const detectingRef = useRef(false);
+  const detectorRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Fix stale closure: always holds the latest handleCameraResult
   const handleCameraResultRef = useRef<(t: string) => void>(() => {});
