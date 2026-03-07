@@ -792,23 +792,13 @@ export default function AdminControl() {
                     <span className="text-xs font-bold text-success uppercase tracking-wide">Ready for next ball</span>
                   </div>
                   <p className="text-xs text-muted-foreground">Open the guess window so customers can predict before you record this ball.</p>
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <input
-                        className="glass-input w-full h-8 text-xs px-2 rounded-lg border border-border bg-muted/20 text-foreground placeholder:text-muted-foreground"
-                        value={windowQuestion}
-                        onChange={e => setWindowQuestion(e.target.value)}
-                        placeholder="What will happen on the next ball?"
-                      />
-                    </div>
-                    <GlassButton
-                      variant="success" size="sm"
-                      loading={actionLoading === 'open-window'}
-                      onClick={handleOpenWindow}
-                    >
-                      <Unlock className="h-3.5 w-3.5" /> Open Guesses
-                    </GlassButton>
-                  </div>
+                  <GlassButton
+                    variant="success" size="sm"
+                    loading={actionLoading === 'open-window'}
+                    onClick={handleOpenWindow}
+                  >
+                    <Unlock className="h-3.5 w-3.5" /> Open Guesses
+                  </GlassButton>
                 </div>
               )}
 
