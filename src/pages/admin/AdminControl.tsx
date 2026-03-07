@@ -995,25 +995,37 @@ export default function AdminControl() {
 
                   {/* ── Prediction window guard: shown when a window is still OPEN ── */}
                   {activeWindow && (
-                    <div className="rounded-xl border border-warning/60 bg-warning/8 p-3 space-y-2">
+                    <div className="rounded-xl border-2 border-warning bg-warning/10 p-3 space-y-2">
                       <div className="flex items-center gap-2 text-warning text-xs font-bold">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                        Prediction window is OPEN — lock it before recording this ball
+                        Prediction window is OPEN
                       </div>
-                       <p className="text-xs text-warning-foreground font-semibold">
-                         You must lock the window before you can record this ball.
-                       </p>
-                       <PredictionCountBadge windowId={activeWindow.id} matchId={match.id} />
-                    <div className="rounded-xl border border-border bg-muted/10 px-3 py-2 text-center">
-                      <p className="text-xs text-muted-foreground">Total</p>
-                      <p className="font-display text-lg font-bold text-foreground">
-                        {parseInt(delivery.runs_off_bat || '0') + parseInt(delivery.extras_runs || '0')} runs
-                        {delivery.is_wicket && <span className="text-destructive ml-1 text-sm">+W</span>}
-                        {(delivery.extras_type === 'wide' || delivery.extras_type === 'no_ball') && (
-                          <span className="text-warning ml-1 text-xs">+extra ball</span>
-                        )}
+                      <p className="text-xs text-warning font-semibold">
+                        You must lock the window before you can record this ball.
                       </p>
+                      <PredictionCountBadge windowId={activeWindow.id} matchId={match.id} />
                     </div>
+                  )}
+
+                  <GlassButton
+                    variant="primary" size="md"
+                    className="w-full"
+                    loading={actionLoading === 'record-delivery'}
+                    onClick={handleRecordDelivery}
+                    disabled={!!activeWindow}
+                  >
+                    🏏 Record Ball
+                  </GlassButton>
+
+                  <div className="rounded-xl border border-border bg-muted/10 px-3 py-2 text-center">
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="font-display text-lg font-bold text-foreground">
+                      {parseInt(delivery.runs_off_bat || '0') + parseInt(delivery.extras_runs || '0')} runs
+                      {delivery.is_wicket && <span className="text-destructive ml-1 text-sm">+W</span>}
+                      {(delivery.extras_type === 'wide' || delivery.extras_type === 'no_ball') && (
+                        <span className="text-warning ml-1 text-xs">+extra ball</span>
+                      )}
+                    </p>
                   </div>
                 </div>
               )}
