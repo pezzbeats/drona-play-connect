@@ -835,6 +835,9 @@ export type Database = {
           created_at: string
           created_by_admin_id: string | null
           created_source: Database["public"]["Enums"]["created_source_enum"]
+          discount_amount: number | null
+          discount_type: string | null
+          discount_value: number | null
           event_id: string
           gateway_response: Json | null
           id: string
@@ -861,6 +864,9 @@ export type Database = {
           created_at?: string
           created_by_admin_id?: string | null
           created_source?: Database["public"]["Enums"]["created_source_enum"]
+          discount_amount?: number | null
+          discount_type?: string | null
+          discount_value?: number | null
           event_id: string
           gateway_response?: Json | null
           id?: string
@@ -887,6 +893,9 @@ export type Database = {
           created_at?: string
           created_by_admin_id?: string | null
           created_source?: Database["public"]["Enums"]["created_source_enum"]
+          discount_amount?: number | null
+          discount_type?: string | null
+          discount_value?: number | null
           event_id?: string
           gateway_response?: Json | null
           id?: string
