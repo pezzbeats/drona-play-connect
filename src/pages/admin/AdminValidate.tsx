@@ -593,8 +593,18 @@ export default function AdminValidate() {
                 <p className="text-sm font-medium text-foreground leading-snug">{order?.match?.name}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Amount</p>
-                <p className="font-display font-bold gradient-text text-lg">₹{order.total_amount}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(() => {
+                    const bal = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+                    return bal > 0 && !isPaid ? 'Balance Due' : 'Amount';
+                  })()}
+                </p>
+                <p className="font-display font-bold gradient-text text-lg">
+                  {(() => {
+                    const bal = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+                    return bal > 0 && !isPaid ? `₹${bal}` : `₹${order.total_amount}`;
+                  })()}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
