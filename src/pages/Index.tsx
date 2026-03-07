@@ -15,6 +15,115 @@ import {
 } from 'lucide-react';
 import hotelLogo from '@/assets/hotel-logo.png';
 
+// ─── Inline Fan Game Login Card ───────────────────────────────────────────────
+function GameLoginCard() {
+  const [mobile, setMobile] = useState('');
+  const [pin, setPin] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  const handleLogin = async () => {
+    if (!/^\d{10}$/.test(mobile)) {
+      return toast({ variant: 'destructive', title: 'Invalid mobile number' });
+    }
+    if (pin.length !== 4) {
+      return toast({ variant: 'destructive', title: 'PIN must be 4 digits' });
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-game-pin', {
+        body: { mobile, pin }
+      });
+      if (error || !data?.valid) {
+        toast({ variant: 'destructive', title: 'Invalid credentials', description: 'Check your mobile and PIN' });
+      } else {
+        localStorage.setItem('game_session', JSON.stringify({ mobile, pin, match_id: data.match_id || null }));
+        toast({ title: '🎮 Welcome to the game!' });
+        navigate('/live');
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Login failed' });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <GlassCard
+      variant="elevated"
+      className="p-5 mb-6 animate-slide-up"
+      style={{
+        borderColor: 'hsl(142 70% 45% / 0.45)',
+        boxShadow: '0 0 32px hsl(142 70% 45% / 0.12), 0 0 0 1px hsl(142 70% 45% / 0.2)',
+        animationDelay: '0.10s',
+      } as React.CSSProperties}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-xl bg-success/15 border border-success/30 flex items-center justify-center flex-shrink-0">
+          <Gamepad2 className="h-5 w-5 text-success" />
+        </div>
+        <div>
+          <p className="font-display font-bold text-foreground text-base leading-tight">Already Checked In?</p>
+          <p className="text-xs text-muted-foreground">Enter your gate PIN to play now</p>
+        </div>
+        <div className="ml-auto">
+          <span className="text-xs font-bold bg-success/15 border border-success/30 text-success rounded-full px-2.5 py-1 uppercase tracking-wider">
+            🎮 Live
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5 font-medium">Mobile Number</p>
+            <input
+              className="glass-input w-full h-11 px-3 rounded-lg text-sm bg-background/40 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-success/50 focus:ring-1 focus:ring-success/30 transition-colors"
+              placeholder="10-digit mobile"
+              type="tel"
+              inputMode="numeric"
+              value={mobile}
+              onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5 font-medium flex items-center gap-1">
+              <Lock className="h-3 w-3" /> Gate PIN
+            </p>
+            <input
+              className="glass-input w-full h-11 px-3 rounded-lg text-sm text-center tracking-[0.6em] text-lg font-bold bg-background/40 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-success/50 focus:ring-1 focus:ring-success/30 transition-colors"
+              placeholder="●●●●"
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={pin}
+              onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            />
+          </div>
+        </div>
+
+        <GlassButton
+          variant="success"
+          size="md"
+          className="w-full font-semibold"
+          loading={loading}
+          onClick={handleLogin}
+        >
+          <Gamepad2 className="h-4 w-4" /> Enter the Game
+        </GlassButton>
+      </div>
+
+      <p className="text-xs text-muted-foreground text-center mt-3">
+        PIN is issued at the gate after QR check-in ·{' '}
+        <Link to="/play" className="text-success/80 hover:text-success underline-offset-2 hover:underline transition-colors">
+          Full screen login →
+        </Link>
+      </p>
+    </GlassCard>
+  );
+}
+
 interface ActiveMatch {
   id: string;
   name: string;
