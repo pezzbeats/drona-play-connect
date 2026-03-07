@@ -1362,20 +1362,10 @@ export default function AdminControl() {
                 </div>
               )}
 
-              <div className="mt-4">
-                <p className="text-xs text-muted-foreground mb-2">Quick Resolve (for locked window):</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {BALL_OUTCOMES.map(opt => (
-                    <button
-                      key={opt.key}
-                      onClick={() => handleResolveWindow(opt.key)}
-                      className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl border-2 border-border/50 hover:border-primary/60 hover:bg-primary/10 text-foreground transition-all font-semibold h-14`}
-                    >
-                      <span className={`text-base font-black leading-none ${opt.colorCls.split(' ')[1]}`}>{opt.emoji}</span>
-                      <span className="text-[9px] uppercase tracking-wide text-muted-foreground leading-none">{opt.label}</span>
-                    </button>
-                  ))}
-                </div>
+              <div className="mt-4 rounded-xl border border-border/40 bg-muted/10 px-3 py-2">
+                <p className="text-xs text-muted-foreground text-center">
+                  ✅ Windows are resolved automatically when a delivery is recorded.
+                </p>
               </div>
             </GlassCard>
 
