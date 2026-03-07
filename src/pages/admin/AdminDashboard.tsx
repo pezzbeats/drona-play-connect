@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { SkeletonStatCard } from '@/components/ui/SkeletonCard';
-import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight } from 'lucide-react';
+import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight, AlertTriangle } from 'lucide-react';
 
 interface Stats {
   totalOrders: number;
@@ -13,6 +13,8 @@ interface Stats {
   checkedInToday: number;
   totalSeats: number;
   pendingVerification: number;
+  balanceDueTotal: number;
+  balanceDueCount: number;
 }
 
 export default function AdminDashboard() {
@@ -26,7 +28,7 @@ export default function AdminDashboard() {
     setLoading(true);
     const [matchRes, ordersRes] = await Promise.all([
       supabase.from('matches').select('*').eq('is_active_for_registration', true).single(),
-      supabase.from('orders').select('id, payment_status, seats_count, created_at'),
+      supabase.from('orders').select('id, payment_status, seats_count, created_at, advance_paid, total_amount'),
     ]);
 
     setActiveMatch(matchRes.data || null);
@@ -40,13 +42,20 @@ export default function AdminDashboard() {
       .not('checked_in_at', 'is', null)
       .gte('checked_in_at', today);
 
+    const balanceDueOrders = orders.filter(o => {
+      const isPaid = ['paid_verified', 'paid_manual_verified'].includes(o.payment_status);
+      return !isPaid && (o.advance_paid ?? 0) > 0;
+    });
+
     setStats({
       totalOrders: orders.length,
       paidOrders: orders.filter(o => ['paid_verified', 'paid_manual_verified'].includes(o.payment_status)).length,
-      unpaidOrders: orders.filter(o => o.payment_status === 'unpaid').length,
+      unpaidOrders: orders.filter(o => o.payment_status === 'unpaid' && (o.advance_paid ?? 0) === 0).length,
       pendingVerification: orders.filter(o => o.payment_status === 'pending_verification').length,
       checkedInToday: checkinCount || 0,
       totalSeats: orders.reduce((sum, o) => sum + (o.seats_count || 0), 0),
+      balanceDueCount: balanceDueOrders.length,
+      balanceDueTotal: balanceDueOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
     });
     setLoading(false);
   };
@@ -125,6 +134,25 @@ export default function AdminDashboard() {
             </GlassCard>
           ))}
         </div>
+      )}
+
+      {/* Balance Due Alert Card */}
+      {stats && stats.balanceDueCount > 0 && (
+        <Link to="/admin/orders">
+          <GlassCard className="p-4 border border-warning/40 bg-warning/5 hover:border-warning/60 transition-colors cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-warning text-sm leading-tight">Balance Outstanding</p>
+                <p className="text-foreground font-bold text-lg leading-tight">₹{stats.balanceDueTotal.toLocaleString('en-IN')}</p>
+                <p className="text-xs text-muted-foreground">across {stats.balanceDueCount} order{stats.balanceDueCount !== 1 ? 's' : ''} with advance paid</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-warning shrink-0" />
+            </div>
+          </GlassCard>
+        </Link>
       )}
 
       {/* Quick Actions */}
