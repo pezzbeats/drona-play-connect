@@ -13,6 +13,7 @@ import {
   Upload, Loader2, AlertCircle, Star, Info, Zap, Shield, RefreshCw,
   Phone, Mail, ArrowRight, XCircle, Clock, ArrowLeft, Download, Share2, MessageCircle, MapPin
 } from 'lucide-react';
+import { CountdownTimer } from '@/components/ui/CountdownTimer';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
 
