@@ -126,11 +126,21 @@ export default function AdminManualBooking() {
 
       const finalBalance = data.balance_due ?? 0;
       const discApplied = data.discount_amount ?? 0;
-      let successMsg = `Order ID: ${data.order_id}`;
-      if (discApplied > 0) successMsg += ` · Discount: ₹${discApplied}`;
-      successMsg += finalBalance > 0 ? ` · Balance due at entry: ₹${finalBalance}` : ` · Fully paid`;
+      const matchName = activeMatch?.name ?? 'T20 Fan Night';
+      const ticketUrl = `${window.location.origin}/ticket?mobile=${searchMobile}`;
+      const waMsg = [
+        `🎟️ Booking Confirmed — Hotel Drona Palace`,
+        ``,
+        `Hi ${form.full_name}! Your pass is ready.`,
+        `🏏 Match: ${matchName}`,
+        finalBalance > 0 ? `💳 Balance due at entry: ₹${finalBalance}` : `✅ Fully paid`,
+        ``,
+        `🎫 View pass: ${ticketUrl}`,
+      ].join('\n');
+      const waLink = `https://wa.me/91${searchMobile}?text=${encodeURIComponent(waMsg)}`;
 
-      toast({ title: '✅ Order created', description: successMsg });
+      toast({ title: '✅ Booking created', description: `Order ${data.order_id}${discApplied > 0 ? ` · Discount ₹${discApplied}` : ''}${finalBalance > 0 ? ` · Balance ₹${finalBalance}` : ' · Fully paid'}` });
+
       await supabase.from('admin_activity').insert({
         admin_id: user?.id,
         action: 'manual_booking',
@@ -147,24 +157,12 @@ export default function AdminManualBooking() {
         },
       });
 
-      // WhatsApp share after booking success
-      const matchName = activeMatch?.name ?? 'T20 Fan Night';
-      const ticketUrl = `${window.location.origin}/ticket?mobile=${searchMobile}`;
-      const waMsg = [
-        `🎟️ Booking Confirmed — Hotel Drona Palace`,
-        ``,
-        `Hi ${form.full_name}! Your pass is ready.`,
-        `🏏 Match: ${matchName}`,
-        finalBalance > 0 ? `💳 Balance due at entry: ₹${finalBalance}` : `✅ Fully paid`,
-        ``,
-        `🎫 View pass: ${ticketUrl}`,
-      ].join('\n');
-      window.open(`https://wa.me/91${searchMobile}?text=${encodeURIComponent(waMsg)}`, '_blank');
-
-      setExisting(null); setPriceQuote(null); setSearched(false);
-      setDiscount({ type: 'flat', value: '' });
+      // Auto-open WhatsApp and show persistent success card
+      window.open(waLink, '_blank');
+      setLastBooking({ name: form.full_name, mobile: searchMobile, balance: finalBalance, orderId: data.order_id, waLink, matchName });
+      // Reset form state but keep search mobile so "Book Another" can start fresh
+      setPriceQuote(null); setSearched(false); setDiscount({ type: 'flat', value: '' });
       setForm({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash', advance_paid: '', advance_payment_method: 'cash' });
-      handleSearch();
     } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
     setCreating(false);
   };
