@@ -532,12 +532,28 @@ export default function AdminValidate() {
     setCheckingIn(false);
   };
 
-  const copyWhatsApp = () => {
+  const sendWhatsApp = () => {
     if (!ticketData || !gamePin) return;
     const ord = ticketData.order;
-    const msg = `🏏 T20 Fan Night - Hotel Drona Palace\nHello ${ord?.purchaser_full_name}!\n✅ Check-in confirmed for ${ord?.match?.name}\n🎮 Your Gameplay PIN: *${gamePin}*\nEnjoy the fun!`;
-    navigator.clipboard.writeText(msg);
-    toast({ title: '📋 Copied!', description: 'WhatsApp message copied' });
+    const msg = `🏏 T20 Fan Night - Hotel Drona Palace\nHello ${ord?.purchaser_full_name}!\n✅ Check-in confirmed for ${ord?.match?.name}\n🎮 Your Gameplay PIN: *${gamePin}*\nEnjoy the fan night!`;
+    navigator.clipboard?.writeText(msg);
+    window.open(`https://wa.me/91${ord?.purchaser_mobile}?text=${encodeURIComponent(msg)}`, '_blank');
+    toast({ title: '📲 WhatsApp opened!', description: 'Message pre-filled — tap Send' });
+  };
+
+  const handleScanNext = () => {
+    setQrInput('');
+    setTicketData(null);
+    setScanFeedback('idle');
+    setGamePin(null);
+    setNotFoundError(false);
+    setShowBlockForm(false);
+    setBlockReason('');
+    setCollectMethod(null);
+    setCollectAmount('');
+    setCollectRef('');
+    setVerifyResult(null);
+    inputRef.current?.focus();
   };
 
   const handleCollect = async () => {
