@@ -909,9 +909,22 @@ export default function AdminValidate() {
             style={{ fontSize: '16px' }}
             placeholder="Paste or scan QR code here…"
             value={qrInput}
-            onChange={e => setQrInput(e.target.value)}
+            onChange={e => {
+              const val = e.target.value;
+              setQrInput(val);
+              // Hardware QR scanners type very fast then stop — auto-submit after 400ms idle
+              clearTimeout(autoSubmitTimerRef.current);
+              if (val.trim().length > 8) {
+                autoSubmitTimerRef.current = setTimeout(() => lookupTicket(val), 400);
+              }
+            }}
             onPaste={handlePaste}
-            onKeyDown={e => { if (e.key === 'Enter') lookupTicket(e.currentTarget.value); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                clearTimeout(autoSubmitTimerRef.current);
+                lookupTicket(e.currentTarget.value);
+              }
+            }}
             autoComplete="off"
             spellCheck={false}
           />
