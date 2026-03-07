@@ -1061,7 +1061,7 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <Label className="text-foreground mb-1.5 block text-center">Full Name *</Label>
+                <Label className="text-foreground mb-1.5 block">Full Name *</Label>
                 <Input ref={nameRef} className={`glass-input ${nameError ? 'border-destructive' : ''}`}
                   placeholder="Enter your full name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" />
                 {nameError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Please enter your full name</p>}
@@ -1071,10 +1071,15 @@ export default function RegisterPage() {
                   <Label className="text-foreground">Mobile Number *</Label>
                   <span className={`text-xs font-mono flex-shrink-0 ${mobileValid ? 'text-success' : 'text-muted-foreground'}`}>{mobile.length}/10</span>
                 </div>
-                <Input className={`glass-input ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
-                  placeholder="10-digit mobile number" value={mobile}
-                  onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  inputMode="numeric" type="tel" autoComplete="tel" />
+                <div className="flex gap-2">
+                  <div className="flex items-center justify-center px-3 rounded-md border border-border bg-muted/40 text-sm text-muted-foreground font-medium select-none flex-shrink-0">
+                    +91
+                  </div>
+                  <Input className={`glass-input flex-1 ${mobileError ? 'border-destructive' : mobileValid ? 'border-success/50' : ''}`}
+                    placeholder="98765 43210" value={mobile}
+                    onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    inputMode="numeric" type="tel" autoComplete="tel" />
+                </div>
                 {mobileError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Enter a valid 10-digit number</p>}
                 {mobileValid && <p className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Valid mobile number</p>}
                 {/* Eligibility badge */}
@@ -1100,7 +1105,7 @@ export default function RegisterPage() {
                 )}
               </div>
               <div>
-                <Label className="text-foreground mb-1.5 block text-center">Email (optional)</Label>
+                <Label className="text-foreground mb-1.5 block">Email (optional)</Label>
                 <Input className="glass-input" placeholder="your@email.com" type="email"
                   value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
               </div>
