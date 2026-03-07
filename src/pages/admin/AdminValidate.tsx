@@ -457,6 +457,16 @@ export default function AdminValidate() {
       if (error) throw error;
       setGamePin(data.pin);
       toast({ title: '✅ Checked in!', description: `PIN: ${data.pin}` });
+      // Push to recent scans list
+      const ord = ticketData.order;
+      const updated = pushRecentScan({
+        name: ord?.purchaser_full_name || 'Unknown',
+        mobile: ord?.purchaser_mobile || '',
+        pin: data.pin,
+        checkedInAt: Date.now(),
+        seatIndex: ticketData.seat_index ?? 0,
+      });
+      setRecentScans(updated);
       await lookupTicket(qrInput);
     } catch (e: any) { toast({ variant: 'destructive', title: 'Check-in failed', description: e.message }); }
     setCheckingIn(false);
@@ -472,6 +482,16 @@ export default function AdminValidate() {
       if (error) throw error;
       setGamePin(data.pin);
       toast({ title: '🔄 PIN Regenerated', description: `New PIN: ${data.pin}` });
+      // Update the recent scans entry with the new PIN
+      const ord = ticketData.order;
+      const updated = pushRecentScan({
+        name: ord?.purchaser_full_name || 'Unknown',
+        mobile: ord?.purchaser_mobile || '',
+        pin: data.pin,
+        checkedInAt: Date.now(),
+        seatIndex: ticketData.seat_index ?? 0,
+      });
+      setRecentScans(updated);
     } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
     setCheckingIn(false);
   };
