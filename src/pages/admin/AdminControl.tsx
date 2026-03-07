@@ -397,6 +397,33 @@ export default function AdminControl() {
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
       toast({ title: '✅ Delivery recorded' });
+
+      // Auto-resolve the most recent locked prediction window using the delivery outcome
+      const correctKey = deriveOutcomeKey({
+        runs_off_bat: parseInt(delivery.runs_off_bat) || 0,
+        extras_type: delivery.extras_type,
+        is_wicket: delivery.is_wicket,
+      });
+      const { data: lockedWindow } = await supabase
+        .from('prediction_windows')
+        .select('id')
+        .eq('match_id', match.id)
+        .eq('status', 'locked')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lockedWindow) {
+        const { data: resolveData, error: resolveError } = await supabase.functions.invoke('resolve-prediction-window', {
+          body: { action: 'resolve', window_id: lockedWindow.id, match_id: match.id, correct_answer: { key: correctKey } },
+        });
+        if (resolveError || resolveData?.error) {
+          toast({ variant: 'destructive', title: 'Auto-resolve failed', description: resolveData?.error || resolveError?.message });
+        } else {
+          const outcomeLabel = BALL_OUTCOMES.find(o => o.key === correctKey)?.label ?? correctKey;
+          toast({ title: `🎯 Window resolved: ${outcomeLabel}`, description: `${resolveData.resolved ?? 0} prediction(s) scored` });
+        }
+      }
+
       if (data?.needs_new_batsman) {
         setNeedsNewBatsman(true);
         setIncomingPosition(delivery.out_player_id === delivery.striker_id ? 'striker' : 'non_striker');
