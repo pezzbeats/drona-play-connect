@@ -146,7 +146,7 @@ export default function AdminDashboard() {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-warning text-sm leading-tight">Balance Outstanding</p>
                 <p className="text-foreground font-bold text-lg leading-tight">₹{stats.balanceDueTotal.toLocaleString('en-IN')}</p>
-                <p className="text-xs text-muted-foreground">across {stats.balanceDueCount} order{stats.balanceDueCount !== 1 ? 's' : ''} with advance paid</p>
+                <p className="text-xs text-muted-foreground">across {stats.balanceDueCount} unpaid/partial order{stats.balanceDueCount !== 1 ? 's' : ''}</p>
               </div>
               <ArrowRight className="h-4 w-4 text-warning shrink-0" />
             </div>
