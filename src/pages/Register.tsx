@@ -1420,11 +1420,11 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {/* ─── Step 3: Tickets ─── */}
+        {/* ─── Step 3: Tickets (Full Pass Design) ─── */}
         {step === 3 && (
           <div className="space-y-4 animate-fade-in">
             {/* Success banner */}
-            <div className="rounded-xl p-5 text-center border-2 border-success/50 bg-success/10 animate-pulse-glow">
+            <div className="rounded-xl p-5 text-center border-2 border-success/50 bg-success/10">
               <div className="text-5xl mb-2">🎟️</div>
               <h3 className="font-display text-2xl font-bold text-success">
                 {paymentMethod === 'pay_at_hotel' ? 'Booking Confirmed!' : 'Payment Confirmed!'}
@@ -1439,61 +1439,187 @@ export default function RegisterPage() {
                   ✅ Verified at {new Date(paymentVerifiedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground mt-1 opacity-75">Pass downloading automatically…</p>
             </div>
 
-            {/* Hidden canvases for QR PNG generation (auto-download + WhatsApp share) */}
+            {/* Hidden high-res QR canvases for buildPassCanvas */}
             <div className="sr-only" aria-hidden="true">
               {tickets.map((ticket) => (
                 <QRCodeCanvas
                   key={ticket.id}
-                  id={`qr-auto-${ticket.id}`}
+                  id={`qr-canvas-${ticket.id}`}
                   value={ticket.qr_text}
                   size={600}
+                  bgColor="#ffffff"
+                  fgColor="#111111"
                 />
               ))}
             </div>
 
-            {tickets.map((ticket, i) => (
-              <GlassCard key={ticket.id} className="seat-pass p-5">
-                {/* Payment status banner */}
-                <div className={`-mt-5 -mx-5 mb-4 px-5 py-3 flex items-center justify-center gap-2 font-display text-sm font-bold tracking-wide ${
-                  paymentMethod === 'pay_at_hotel'
-                    ? 'bg-warning/20 border-b border-warning/30 text-warning'
-                    : 'bg-success/20 border-b border-success/30 text-success'
-                }`}>
-                  {paymentMethod === 'pay_at_hotel'
-                    ? '⚠️ UNPAID — Pay at Hotel on Arrival'
-                    : paymentMethod === 'razorpay'
-                    ? '✅ PAID via Razorpay — Entry Confirmed'
-                    : '✅ PAID — Entry Confirmed'}
-                </div>
+            {/* Full Pass Cards */}
+            {tickets.map((ticket) => {
+              const shaped = buildTicketShape(ticket);
+              const order = shaped.order;
+              const match = order.match;
+              const paidStatus = isPaid(order.payment_status);
+              const balanceDue = Math.max(0, order.total_amount - order.advance_paid);
+              const hasBalance = !paidStatus && balanceDue > 0;
+              const isPartiallyPaid = order.advance_paid > 0 && !paidStatus;
 
-                <div className="flex items-start justify-between mb-4">
-                  <div className="text-center flex-1">
-                    <p className="font-display text-lg font-bold text-foreground">{fullName}</p>
-                    <p className="text-sm text-muted-foreground">{activeMatch?.name}</p>
-                    <p className="text-xs text-muted-foreground">{activeMatch?.venue}</p>
+              return (
+                <div
+                  key={ticket.id}
+                  className="rounded-2xl overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(145deg, hsl(30 20% 9%), hsl(30 15% 7%))',
+                    border: '1px solid hsl(38 30% 20%)',
+                    boxShadow: paidStatus
+                      ? '0 8px 40px hsl(142 60% 35% / 0.25), 0 0 0 1px hsl(142 60% 35% / 0.15)'
+                      : '0 8px 40px hsl(38 80% 50% / 0.2), 0 0 0 1px hsl(38 80% 50% / 0.15)',
+                  }}
+                >
+                  {/* Status Banner */}
+                  <div
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 font-display text-sm font-bold tracking-wide"
+                    style={{
+                      background: paidStatus
+                        ? 'linear-gradient(90deg, hsl(142 60% 25%), hsl(142 50% 30%))'
+                        : 'linear-gradient(90deg, hsl(38 80% 35%), hsl(38 70% 40%))',
+                      borderBottom: `1px solid ${paidStatus ? 'hsl(142 60% 35% / 0.6)' : 'hsl(38 80% 45% / 0.6)'}`,
+                      color: paidStatus ? 'hsl(142 80% 80%)' : 'hsl(38 90% 85%)',
+                    }}
+                  >
+                    {paidStatus
+                      ? <><span>☑</span> PAID — Entry Confirmed</>
+                      : isPartiallyPaid
+                        ? <><span>⚠</span> ADVANCE PAID — Balance Due at Entry</>
+                        : <><span>⚠</span> UNPAID — Pay at Hotel on Arrival</>
+                    }
                   </div>
-                  <div className="text-center">
-                    <div className="text-xs text-muted-foreground">SEAT</div>
-                    <div className="font-display text-3xl font-bold gradient-text">
-                      {i + 1} <span className="text-base text-muted-foreground">of {tickets.length}</span>
+
+                  {/* Main Body */}
+                  <div className="p-5">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <p className="font-display text-xl font-bold leading-tight mb-0.5" style={{ color: 'hsl(38 90% 88%)' }}>
+                          {order.purchaser_full_name}
+                        </p>
+                        <p className="text-sm font-medium" style={{ color: 'hsl(38 60% 65%)' }}>
+                          {match.name}{match.opponent ? ` vs ${match.opponent}` : ''}
+                        </p>
+                        {match.start_time && (
+                          <p className="text-xs mt-0.5" style={{ color: 'hsl(38 40% 55%)' }}>
+                            {new Date(match.start_time).toLocaleString('en-IN')}
+                          </p>
+                        )}
+                        <p className="text-xs" style={{ color: 'hsl(38 40% 55%)' }}>{match.venue}</p>
+                        <p className="text-xs font-semibold mt-1" style={{ color: 'hsl(38 80% 65%)' }}>
+                          {order.seating_type.charAt(0).toUpperCase() + order.seating_type.slice(1)} Seating
+                        </p>
+                        {hasBalance && (
+                          <div
+                            className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                            style={{
+                              background: 'hsl(38 80% 45% / 0.2)',
+                              border: '1px solid hsl(38 80% 50% / 0.5)',
+                              color: 'hsl(38 90% 72%)',
+                            }}
+                          >
+                            ⚠ Balance Due: ₹{balanceDue}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Seat badge */}
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs uppercase tracking-widest font-semibold mb-0.5" style={{ color: 'hsl(38 50% 50%)' }}>SEAT</p>
+                        <div
+                          className="font-display text-5xl font-black leading-none"
+                          style={{
+                            background: 'linear-gradient(135deg, hsl(38 95% 65%), hsl(38 80% 50%))',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                          }}
+                        >
+                          {ticket.seat_index + 1}
+                        </div>
+                        <p className="text-xs mt-0.5" style={{ color: 'hsl(38 40% 50%)' }}>of {order.seats_count}</p>
+                      </div>
+                    </div>
+
+                    {/* Dashed divider */}
+                    <div
+                      className="w-full h-px my-4"
+                      style={{ background: 'repeating-linear-gradient(90deg, transparent, transparent 6px, hsl(38 30% 25%) 6px, hsl(38 30% 25%) 12px)' }}
+                    />
+
+                    {/* QR Code */}
+                    <div className="flex flex-col items-center gap-3">
+                      <div
+                        className="rounded-xl overflow-hidden"
+                        style={{
+                          padding: '14px',
+                          background: '#ffffff',
+                          boxShadow: paidStatus
+                            ? '0 0 24px hsl(142 60% 45% / 0.35), 0 4px 16px rgba(0,0,0,0.4)'
+                            : '0 0 24px hsl(38 80% 50% / 0.3), 0 4px 16px rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        <QRCodeSVG value={ticket.qr_text} size={170} bgColor="#ffffff" fgColor="#111111" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold tracking-wider" style={{ color: 'hsl(38 70% 65%)' }}>
+                          {order.purchaser_mobile}
+                        </p>
+                        <p className="text-xs font-mono mt-0.5" style={{ color: 'hsl(38 30% 42%)' }}>
+                          {ticket.qr_text.slice(0, 26)}…
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="grid grid-cols-2 gap-3 mt-5">
+                      <button
+                        onClick={() => downloadPassAsPng(shaped)}
+                        className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                        style={{ background: 'hsl(38 40% 12%)', border: '1px solid hsl(38 30% 22%)', color: 'hsl(38 70% 65%)' }}
+                      >
+                        <Download className="h-4 w-4" /> Save Pass
+                      </button>
+                      <button
+                        onClick={handleWhatsAppShare}
+                        className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                        style={{ background: 'hsl(38 40% 12%)', border: '1px solid hsl(38 30% 22%)', color: 'hsl(38 70% 65%)' }}
+                      >
+                        <Share2 className="h-4 w-4" /> Share
+                      </button>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex flex-col items-center mb-4">
-                  <div className="qr-container" style={{ padding: 16 }}>
-                    <QRCodeSVG value={ticket.qr_text} size={140} />
+                  {/* Footer */}
+                  <div
+                    className="flex items-center justify-between px-5 py-3"
+                    style={{ borderTop: '1px solid hsl(38 25% 18%)', background: 'hsl(30 18% 6%)' }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                        style={{ background: 'hsl(38 60% 10%)', border: '1px solid hsl(38 60% 30% / 0.6)', boxShadow: '0 0 10px hsl(38 75% 52% / 0.4)' }}
+                      >
+                        <img src={hotelLogo} alt="Hotel Logo" className="w-6 h-6 object-contain" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold leading-none" style={{ color: 'hsl(38 80% 65%)' }}>Hotel Drona Palace</p>
+                        <p className="text-xs leading-tight mt-0.5" style={{ color: 'hsl(38 30% 42%)' }}>A Unit of SR Leisure Inn</p>
+                      </div>
+                    </div>
+                    <p className="text-xs" style={{ color: 'hsl(38 30% 42%)' }}>
+                      {new Date(ticket.issued_at ?? Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'numeric', year: 'numeric' })}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">{mobile}</p>
                 </div>
-
-                <div className="pt-3 border-t border-border/40 text-xs text-muted-foreground font-mono truncate text-center">
-                  {ticket.qr_text.slice(0, 30)}...
-                </div>
-              </GlassCard>
-            ))}
+              );
+            })}
 
             {/* WhatsApp share — prominent green CTA */}
             <button
@@ -1506,10 +1632,10 @@ export default function RegisterPage() {
             </button>
 
             <GlassButton variant="ghost" size="lg" className="w-full no-print" onClick={() => window.print()}>
-              🖨️ Print Tickets
+              🖨️ Print Passes
             </GlassButton>
 
-            {/* Support footer on ticket page */}
+            {/* Support footer */}
             <div className="rounded-xl bg-muted/20 border border-border p-4 text-center space-y-2">
               <p className="text-xs font-semibold text-foreground">Need Help?</p>
               <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
