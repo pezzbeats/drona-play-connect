@@ -389,6 +389,12 @@ export default function AdminValidate() {
     const onReady = () => {
       video.play()
         .then(() => {
+          // Check torch capability after video starts
+          const track = pendingStream.getVideoTracks()[0];
+          if (track) {
+            const caps = (track as any).getCapabilities?.();
+            torchSupportedRef.current = !!caps?.torch;
+          }
           setCameraReady(true);
           startScanLoop();
         })
