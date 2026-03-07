@@ -38,7 +38,7 @@ function CopyBtn({ text }: { text: string }) {
   };
   return (
     <button onClick={copy} className="ml-1 text-muted-foreground hover:text-foreground transition-colors">
-      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+      {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
     </button>
   );
 }
