@@ -1,53 +1,53 @@
 
-## Root Cause — Found
+## Plan: Record ₹2000 UPI Advance for Shiva Gautam + Add "Edit Advance" Action in Admin Orders
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+### Confirmed order found
+- **Order ID**: `7adf627b-393f-48e0-a5cc-0d3e2e4ade38`
+- **Name**: Shiva Gautam | **Mobile**: 7453064444
+- **Total**: ₹2997 | **Balance after advance**: ₹997
+- Current state: `advance_paid = 0`, `payment_status = unpaid`
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+---
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+### What to do
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
+#### 1. Data update (direct DB writes — no migration needed)
+Two operations via the Supabase data tools:
+
+**a) Update the order:**
+```sql
+UPDATE orders 
+SET advance_paid = 2000, advance_payment_method = 'upi'
+WHERE id = '7adf627b-393f-48e0-a5cc-0d3e2e4ade38';
 ```
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
-
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
-
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
-
-## Changes
-
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
-```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
+**b) Insert payment_collections record:**
+```sql
+INSERT INTO payment_collections (order_id, collected_by_admin_id, method, amount, note)
+VALUES (
+  '7adf627b-393f-48e0-a5cc-0d3e2e4ade38',
+  (SELECT user_id FROM admin_roles LIMIT 1),  -- system admin
+  'upi',
+  2000,
+  'Advance payment ₹2000 via UPI — balance ₹997 due at entry'
+);
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+#### 2. UI improvement — "Edit Advance" in AdminOrders (for future use)
+Add a small inline form inside the expanded order detail section in `AdminOrders.tsx` that lets admins set/update `advance_paid` and `advance_payment_method` for any order that isn't fully paid. This appears as a collapsible **"Record Advance"** button alongside Verify/Reject.
 
-## Why this is the correct fix
+The form:
+- Amount input (number, 0 to total_amount)
+- Mode select: Cash / Card / UPI
+- On save: updates `orders.advance_paid`, `orders.advance_payment_method`, inserts a `payment_collections` row, refreshes list
+- Only shown for orders with `payment_status` in: `unpaid`, `pending_verification`
 
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+---
 
-## Files Changed
-| File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+### Files changed
+| Change | Where |
+|--------|--------|
+| ₹2000 UPI advance recorded for Shiva Gautam | DB data update (orders + payment_collections) |
+| "Record Advance" inline form | `src/pages/admin/AdminOrders.tsx` |
+
+No migration needed — columns already exist. No edge function changes needed.
