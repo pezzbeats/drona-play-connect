@@ -108,6 +108,9 @@ export default function AdminOrders() {
 
   const filtered = orders.filter(o => {
     const matchSearch = !search || o.purchaser_full_name?.toLowerCase().includes(search.toLowerCase()) || o.purchaser_mobile?.includes(search);
+    const isPaidFully = ['paid_verified', 'paid_manual_verified'].includes(o.payment_status);
+    const hasBalanceDue = (o.advance_paid ?? 0) > 0 && !isPaidFully;
+    if (statusFilter === 'balance_due') return matchSearch && hasBalanceDue;
     const matchStatus = statusFilter === 'all' || o.payment_status === statusFilter;
     return matchSearch && matchStatus;
   });
