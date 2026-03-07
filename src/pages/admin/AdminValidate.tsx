@@ -186,7 +186,7 @@ export default function AdminValidate() {
     try {
       const { data, error } = await supabase
         .from('tickets')
-        .select('*, order:orders!order_id(purchaser_full_name, purchaser_mobile, payment_status, seats_count, total_amount, match_id, match:matches!match_id(name, venue))')
+        .select('*, order:orders!order_id(purchaser_full_name, purchaser_mobile, payment_status, seats_count, total_amount, advance_paid, advance_payment_method, match_id, match:matches!match_id(name, venue))')
         .eq('qr_text', trimmed)
         .single();
 
@@ -212,7 +212,13 @@ export default function AdminValidate() {
 
       await logScanAttempt(trimmed, outcome, data.id, ticketMatchId);
       setTicketData(data);
-      setCollectAmount(ord?.total_amount?.toString() || '');
+
+      // Pre-fill collect amount with balance due (total - advance already paid)
+      const totalAmt = ord?.total_amount ?? 0;
+      const advancePd = ord?.advance_paid ?? 0;
+      const balanceDue = Math.max(0, totalAmt - advancePd);
+      setCollectAmount(balanceDue > 0 ? balanceDue.toString() : totalAmt.toString());
+
       setScanFeedback(feedback);
     } catch (e: any) {
       setScanFeedback('error');
