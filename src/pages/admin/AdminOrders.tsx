@@ -247,6 +247,25 @@ export default function AdminOrders() {
                         <p className="text-foreground capitalize truncate">{value}</p>
                       </div>
                     ))}
+                    {/* Advance payment details */}
+                    {hasAdvance && (
+                      <>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Advance Paid</p>
+                          <p className="text-success font-bold">₹{order.advance_paid}
+                            {order.advance_payment_method && (
+                              <span className="text-muted-foreground font-normal ml-1 capitalize">({order.advance_payment_method})</span>
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Balance Due</p>
+                          <p className={`font-bold ${balanceDue > 0 ? 'text-warning' : 'text-success'}`}>
+                            {balanceDue > 0 ? `₹${balanceDue}` : '✅ Cleared'}
+                          </p>
+                        </div>
+                      </>
+                    )}
                     {order.razorpay_payment_id && (
                       <div className="col-span-2">
                         <p className="text-xs text-muted-foreground">Razorpay Payment ID</p>
