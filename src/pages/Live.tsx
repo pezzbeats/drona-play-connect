@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
@@ -26,7 +26,35 @@ export default function LivePage() {
   const [activeTab, setActiveTab] = useState<Tab>('score');
   const [predictionsEnabled, setPredictionsEnabled] = useState(false);
 
-  useEffect(() => { initSession(); }, []);
+  // Realtime subscription for match row changes (predictions_enabled toggled by admin)
+  const matchChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const subscribeToMatch = useCallback((id: string) => {
+    if (matchChannelRef.current) {
+      supabase.removeChannel(matchChannelRef.current);
+    }
+    const ch = supabase
+      .channel(`live-match-${id}`)
+      .on(
+        'postgres_changes' as any,
+        { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${id}` },
+        (payload: any) => {
+          if (payload.new) {
+            setPredictionsEnabled(!!payload.new.predictions_enabled);
+            if (payload.new.name) setMatchName(payload.new.name);
+          }
+        },
+      )
+      .subscribe();
+    matchChannelRef.current = ch;
+  }, []);
+
+  useEffect(() => {
+    initSession();
+    return () => {
+      if (matchChannelRef.current) supabase.removeChannel(matchChannelRef.current);
+    };
+  }, []);
 
   const initSession = async () => {
     const raw = localStorage.getItem('game_session');
@@ -51,6 +79,7 @@ export default function LivePage() {
             setMatchId(sessionMatch.id);
             setMatchName(sessionMatch.name);
             setPredictionsEnabled(sessionMatch.predictions_enabled);
+            subscribeToMatch(sessionMatch.id);
           }
         }
       } else {
@@ -60,10 +89,18 @@ export default function LivePage() {
         const updatedSession = { ...sess, match_id: match.id };
         localStorage.setItem('game_session', JSON.stringify(updatedSession));
         setSession(updatedSession);
+        subscribeToMatch(match.id);
       }
     } catch { navigate('/play'); return; }
     setLoading(false);
   };
+
+  // If activeTab is predict but predictions got disabled reactively, switch to score
+  useEffect(() => {
+    if (!predictionsEnabled && activeTab === 'predict') {
+      setActiveTab('score');
+    }
+  }, [predictionsEnabled, activeTab]);
 
   const handleLogout = () => {
     localStorage.removeItem('game_session');
@@ -138,7 +175,7 @@ export default function LivePage() {
         </div>
       </div>
 
-      {/* Fixed bottom tab bar — iOS-style with top border indicator */}
+      {/* Fixed bottom tab bar */}
       <div
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/50 bg-[hsl(var(--background)/0.92)] backdrop-blur-xl"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}

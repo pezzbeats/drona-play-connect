@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Loader2, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
 interface LiveState {
   phase: string;
@@ -44,46 +45,45 @@ const phaseLabel: Record<string, string> = {
 
 export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
   const [state, setState] = useState<LiveState | null>(initialState || null);
-  const [connected, setConnected] = useState(false);
   const [teams, setTeams] = useState<Record<string, any>>({});
   const [players, setPlayers] = useState<Record<string, any>>({});
   const [superOverRounds, setSuperOverRounds] = useState<any[]>([]);
   const [flash, setFlash] = useState(false);
   const [scoreKey, setScoreKey] = useState(0);
   const [matchSummaryOpen, setMatchSummaryOpen] = useState(false);
-  const channelRef = useRef<any>(null);
   const prevScoreRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    fetchInitialData();
-    subscribeRealtime();
-    return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
-    };
+  // Score animation trigger
+  const triggerFlash = useCallback(() => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 600);
+  }, []);
+
+  const fetchSuperOverRounds = useCallback(async () => {
+    const { data } = await supabase
+      .from('super_over_rounds')
+      .select('*, team_a:teams!super_over_rounds_team_a_id_fkey(name,short_code), team_b:teams!super_over_rounds_team_b_id_fkey(name,short_code), winner:teams!super_over_rounds_winner_team_id_fkey(name,short_code)')
+      .eq('match_id', matchId)
+      .order('round_number');
+    if (data) setSuperOverRounds(data);
   }, [matchId]);
 
-  // Trigger count-in animation when score changes
-  useEffect(() => {
-    if (!state) return;
-    const isSuperOver = state.phase === 'super_over';
-    const currentScore = isSuperOver
-      ? (state.super_over_score ?? 0)
-      : (state.current_innings === 1 ? state.innings1_score : state.innings2_score);
-    if (prevScoreRef.current !== null && prevScoreRef.current !== currentScore) {
-      setScoreKey(k => k + 1);
-    }
-    prevScoreRef.current = currentScore;
-  }, [state]);
-
-  const fetchInitialData = async () => {
-    const [stateRes, rosterRes, roundsRes] = await Promise.all([
+  const fetchData = useCallback(async () => {
+    const [stateRes, rosterRes] = await Promise.all([
       supabase.from('match_live_state').select('*').eq('match_id', matchId).single(),
       supabase.from('match_roster').select('*, team:teams(*)').eq('match_id', matchId),
-      supabase.from('super_over_rounds').select('*, team_a:teams!super_over_rounds_team_a_id_fkey(name,short_code), team_b:teams!super_over_rounds_team_b_id_fkey(name,short_code), winner:teams!super_over_rounds_winner_team_id_fkey(name,short_code)').eq('match_id', matchId).order('round_number'),
     ]);
 
-    if (stateRes.data) setState(stateRes.data as any);
-    if (roundsRes.data) setSuperOverRounds(roundsRes.data);
+    if (stateRes.data) {
+      const newState = stateRes.data as any;
+      setState(newState);
+      // Update score animation ref
+      const isSO = newState.phase === 'super_over';
+      const currentScore = isSO
+        ? (newState.super_over_score ?? 0)
+        : (newState.current_innings === 1 ? newState.innings1_score : newState.innings2_score);
+      prevScoreRef.current = currentScore;
+    }
 
     if (rosterRes.data) {
       const teamMap: Record<string, any> = {};
@@ -105,39 +105,47 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
         }
       }
     }
-  };
 
-  const subscribeRealtime = () => {
-    const channel = supabase
-      .channel(`scoreboard-${matchId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'match_live_state',
-        filter: `match_id=eq.${matchId}`,
-      }, (payload) => {
-        setState(payload.new as any);
-        setFlash(true);
-        setTimeout(() => setFlash(false), 600);
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'super_over_rounds',
-        filter: `match_id=eq.${matchId}`,
-      }, () => {
-        supabase
-          .from('super_over_rounds')
-          .select('*, team_a:teams!super_over_rounds_team_a_id_fkey(name,short_code), team_b:teams!super_over_rounds_team_b_id_fkey(name,short_code), winner:teams!super_over_rounds_winner_team_id_fkey(name,short_code)')
-          .eq('match_id', matchId)
-          .order('round_number')
-          .then(({ data }) => { if (data) setSuperOverRounds(data); });
-      })
-      .subscribe((status) => {
-        setConnected(status === 'SUBSCRIBED');
-      });
-    channelRef.current = channel;
-  };
+    await fetchSuperOverRounds();
+  }, [matchId, fetchSuperOverRounds]);
+
+  const subscriptions = useMemo<ChannelSubscription[]>(() => [
+    {
+      event: '*',
+      schema: 'public',
+      table: 'match_live_state',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        const newState = payload.new as LiveState;
+        // Detect score change for animation
+        const isSO = newState.phase === 'super_over';
+        const currentScore = isSO
+          ? (newState.super_over_score ?? 0)
+          : (newState.current_innings === 1 ? newState.innings1_score : newState.innings2_score);
+        if (prevScoreRef.current !== null && prevScoreRef.current !== currentScore) {
+          setScoreKey(k => k + 1);
+          triggerFlash();
+        }
+        prevScoreRef.current = currentScore;
+        setState(newState);
+      },
+    },
+    {
+      event: '*',
+      schema: 'public',
+      table: 'super_over_rounds',
+      filter: `match_id=eq.${matchId}`,
+      callback: () => {
+        fetchSuperOverRounds();
+      },
+    },
+  ], [matchId, triggerFlash, fetchSuperOverRounds]);
+
+  const { connected, reconnecting } = useRealtimeChannel(
+    `scoreboard-${matchId}`,
+    subscriptions,
+    fetchData,
+  );
 
   const currentInnings = state?.current_innings || 1;
   const score = currentInnings === 1 ? state?.innings1_score : state?.innings2_score;
@@ -178,10 +186,22 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
             )}
           </span>
           <div className="flex items-center gap-1.5">
-            {connected
-              ? <Wifi className="h-3.5 w-3.5 text-success" />
-              : <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />}
-            <span className="text-xs text-muted-foreground">{connected ? 'Live' : 'Connecting'}</span>
+            {reconnecting ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 text-warning animate-spin" />
+                <span className="text-xs text-warning">Reconnecting…</span>
+              </>
+            ) : connected ? (
+              <>
+                <Wifi className="h-3.5 w-3.5 text-success" />
+                <span className="text-xs text-muted-foreground">Live</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Connecting…</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -191,9 +211,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
             <div className="text-center mb-4">
               <div
                 key={scoreKey}
-                className={`font-display font-black tabular-nums leading-none tracking-tight transition-colors duration-300 ${
-                  flash ? 'text-warning' : 'text-warning'
-                } ${scoreKey > 0 ? 'animate-count-in' : ''}`}
+                className={`font-display font-black tabular-nums leading-none tracking-tight transition-colors duration-300 text-warning ${scoreKey > 0 ? 'animate-count-in' : ''}`}
                 style={{ fontSize: 'clamp(3rem, 12vw, 5rem)' }}
               >
                 {state.super_over_score ?? 0}/{state.super_over_wickets ?? 0}

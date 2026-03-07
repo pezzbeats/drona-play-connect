@@ -17,25 +17,33 @@ const variantClasses: Record<GlassCardVariant, string> = {
   sunken: 'glass-card-sunken',
 };
 
-export const GlassCard = ({
-  className,
-  glow = false,
-  gold = false,
-  variant = 'default',
-  animate = false,
-  children,
-  ...props
-}: GlassCardProps) => (
-  <div
-    className={cn(
-      variantClasses[variant],
-      glow && 'glass-card-glow',
-      gold && 'glass-card-gold',
-      animate && 'animate-slide-up',
+export const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(
+  (
+    {
       className,
-    )}
-    {...props}
-  >
-    {children}
-  </div>
+      glow = false,
+      gold = false,
+      variant = 'default',
+      animate = false,
+      children,
+      ...props
+    },
+    ref,
+  ) => (
+    <div
+      ref={ref}
+      className={cn(
+        variantClasses[variant],
+        glow && 'glass-card-glow',
+        gold && 'glass-card-gold',
+        animate && 'animate-slide-up',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  ),
 );
+
+GlassCard.displayName = 'GlassCard';
