@@ -717,14 +717,41 @@ export default function AdminValidate() {
             )}
           </div>
 
-          {/* Bottom instruction bar */}
+          {/* Bottom bar — instruction + persistent torch button */}
           {!cameraError && (
-            <div className="px-4 pb-safe py-4 bg-black/80 text-center">
-              <p className="text-muted-foreground text-sm">
+            <div className="px-4 pb-safe py-3 bg-black/90 flex items-center justify-between gap-4">
+              <p className="text-muted-foreground text-sm leading-snug flex-1">
                 {cameraReady
-                  ? 'Point camera at ticket QR code — auto-detects instantly'
-                  : 'Please allow camera access when prompted'}
+                  ? 'Point camera at QR code — auto-detects instantly'
+                  : 'Allow camera access when prompted'}
               </p>
+              {/* Torch button — always visible once camera is ready; hidden if not supported */}
+              {cameraReady && (
+                <button
+                  onClick={torchSupportedRef.current ? toggleTorch : undefined}
+                  disabled={!torchSupportedRef.current}
+                  title={!torchSupportedRef.current ? 'Torch not supported on this device' : torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                  aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                  className={`
+                    shrink-0 h-14 w-14 rounded-2xl flex flex-col items-center justify-center gap-0.5
+                    border transition-all duration-150 active:scale-95
+                    ${torchSupportedRef.current
+                      ? torchOn
+                        ? 'bg-warning/25 border-warning/70 text-warning shadow-[0_0_16px_hsl(38_95%_55%/0.5)]'
+                        : 'bg-muted/20 border-muted/40 text-muted-foreground hover:bg-muted/40 hover:border-muted/60'
+                      : 'bg-muted/10 border-muted/20 text-muted-foreground/40 cursor-not-allowed'
+                    }
+                  `}
+                >
+                  {torchOn
+                    ? <Zap className="h-6 w-6 fill-warning" />
+                    : <ZapOff className="h-6 w-6" />
+                  }
+                  <span className="text-[9px] font-medium uppercase tracking-wider leading-none">
+                    {torchOn ? 'ON' : 'Torch'}
+                  </span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -804,6 +831,16 @@ export default function AdminValidate() {
               <span className="text-foreground font-medium">{activeMatch.name}</span>
             </span>
           )}
+          {/* Quick-open camera button in card header */}
+          <button
+            type="button"
+            onClick={openCamera}
+            title="Open camera"
+            aria-label="Open camera scanner"
+            className="shrink-0 h-8 w-8 rounded-lg flex items-center justify-center bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 hover:border-primary/50 transition-all duration-150 active:scale-95 ml-1"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
         </div>
 
         {/* ── Primary CTA: big camera scan button ── */}
