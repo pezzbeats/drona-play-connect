@@ -471,7 +471,7 @@ export default function AdminValidate() {
             variant="primary"
             size="lg"
             loading={scanFeedback === 'loading'}
-            onClick={() => lookupTicket(qrInput)}
+            onClick={() => lookupTicket(inputRef.current?.value ?? qrInput)}
             className="shrink-0 h-14"
           >
             <ScanLine className="h-5 w-5" />
