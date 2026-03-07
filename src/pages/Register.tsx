@@ -359,6 +359,7 @@ export default function RegisterPage() {
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
   // Auto-download full pass PNGs when step 3 loads (staggered to avoid browser blocking)
+  // After all downloads complete, auto-open WhatsApp with booking confirmation
   useEffect(() => {
     if (step !== 3 || tickets.length === 0 || !activeMatch) return;
     let cancelled = false;
@@ -383,6 +384,11 @@ export default function RegisterPage() {
           // Stagger each download by 350ms so the browser doesn't block them
           if (tickets.length > 1) await new Promise(r => setTimeout(r, 350));
         } catch { /* silent */ }
+      }
+      // After downloads, auto-open WhatsApp with confirmation (may be blocked on some browsers — fallback button shown in UI)
+      if (!cancelled) {
+        await new Promise(r => setTimeout(r, 500));
+        window.open(buildConfirmationWALink(), '_blank');
       }
     };
     run();
