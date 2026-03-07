@@ -725,33 +725,31 @@ export default function AdminValidate() {
                   ? 'Point camera at QR code — auto-detects instantly'
                   : 'Allow camera access when prompted'}
               </p>
-              {/* Torch button — always visible once camera is ready; hidden if not supported */}
-              {cameraReady && (
-                <button
-                  onClick={torchSupportedRef.current ? toggleTorch : undefined}
-                  disabled={!torchSupportedRef.current}
-                  title={!torchSupportedRef.current ? 'Torch not supported on this device' : torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
-                  aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
-                  className={`
-                    shrink-0 h-14 w-14 rounded-2xl flex flex-col items-center justify-center gap-0.5
-                    border transition-all duration-150 active:scale-95
-                    ${torchSupportedRef.current
-                      ? torchOn
-                        ? 'bg-warning/25 border-warning/70 text-warning shadow-[0_0_16px_hsl(38_95%_55%/0.5)]'
-                        : 'bg-muted/20 border-muted/40 text-muted-foreground hover:bg-muted/40 hover:border-muted/60'
-                      : 'bg-muted/10 border-muted/20 text-muted-foreground/40 cursor-not-allowed'
-                    }
-                  `}
-                >
-                  {torchOn
-                    ? <Zap className="h-6 w-6 fill-warning" />
-                    : <ZapOff className="h-6 w-6" />
+              {/* Torch button — always visible in bottom bar, disabled while camera loads */}
+              <button
+                onClick={cameraReady ? toggleTorch : undefined}
+                disabled={!cameraReady}
+                aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                title={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                className={`
+                  shrink-0 h-16 w-16 rounded-2xl flex flex-col items-center justify-center gap-1
+                  border-2 transition-all duration-200 active:scale-95 select-none
+                  ${!cameraReady
+                    ? 'bg-muted/10 border-muted/20 text-muted-foreground/30 cursor-not-allowed'
+                    : torchOn
+                      ? 'bg-warning/25 border-warning/60 text-warning shadow-[0_0_20px_hsl(38_95%_55%/0.55)]'
+                      : 'bg-white/10 border-white/30 text-white hover:bg-white/20 hover:border-white/50'
                   }
-                  <span className="text-[9px] font-medium uppercase tracking-wider leading-none">
-                    {torchOn ? 'ON' : 'Torch'}
-                  </span>
-                </button>
-              )}
+                `}
+              >
+                {torchOn
+                  ? <Zap className="h-7 w-7 fill-warning stroke-warning" />
+                  : <ZapOff className="h-7 w-7" />
+                }
+                <span className="text-[10px] font-bold uppercase tracking-widest leading-none">
+                  {torchOn ? 'ON' : 'Torch'}
+                </span>
+              </button>
             </div>
           )}
         </div>
