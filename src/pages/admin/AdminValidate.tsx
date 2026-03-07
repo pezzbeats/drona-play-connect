@@ -186,7 +186,7 @@ export default function AdminValidate() {
     try {
       const { data, error } = await supabase
         .from('tickets')
-        .select('*, order:orders!order_id(purchaser_full_name, purchaser_mobile, payment_status, seats_count, total_amount, match_id, match:matches!match_id(name, venue))')
+        .select('*, order:orders!order_id(purchaser_full_name, purchaser_mobile, payment_status, seats_count, total_amount, advance_paid, advance_payment_method, match_id, match:matches!match_id(name, venue))')
         .eq('qr_text', trimmed)
         .single();
 
@@ -212,7 +212,13 @@ export default function AdminValidate() {
 
       await logScanAttempt(trimmed, outcome, data.id, ticketMatchId);
       setTicketData(data);
-      setCollectAmount(ord?.total_amount?.toString() || '');
+
+      // Pre-fill collect amount with balance due (total - advance already paid)
+      const totalAmt = ord?.total_amount ?? 0;
+      const advancePd = ord?.advance_paid ?? 0;
+      const balanceDue = Math.max(0, totalAmt - advancePd);
+      setCollectAmount(balanceDue > 0 ? balanceDue.toString() : totalAmt.toString());
+
       setScanFeedback(feedback);
     } catch (e: any) {
       setScanFeedback('error');
@@ -540,6 +546,28 @@ export default function AdminValidate() {
               <p className="text-muted-foreground text-sm ml-7">{order.purchaser_mobile}</p>
             </div>
 
+            {/* Balance due banner — shown if advance partially paid and not yet fully settled */}
+            {(() => {
+              const totalAmt = order?.total_amount ?? 0;
+              const advancePd = order?.advance_paid ?? 0;
+              const balanceDue = Math.max(0, totalAmt - advancePd);
+              if (advancePd > 0 && balanceDue > 0 && !isPaid) {
+                return (
+                  <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 bg-warning/10 border-warning/50 text-warning">
+                    <div>
+                      <p className="font-bold text-base">⚠ BALANCE DUE: ₹{balanceDue}</p>
+                      <p className="text-xs text-warning/80 mt-0.5">Advance paid: ₹{advancePd} via {order.advance_payment_method || 'cash'}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="font-display font-bold text-foreground text-lg">₹{totalAmt}</p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {/* Quick summary chips */}
             <div className="flex flex-wrap gap-2 mb-4">
               <div className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border-2 ${
@@ -565,8 +593,18 @@ export default function AdminValidate() {
                 <p className="text-sm font-medium text-foreground leading-snug">{order?.match?.name}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Amount</p>
-                <p className="font-display font-bold gradient-text text-lg">₹{order.total_amount}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(() => {
+                    const bal = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+                    return bal > 0 && !isPaid ? 'Balance Due' : 'Amount';
+                  })()}
+                </p>
+                <p className="font-display font-bold gradient-text text-lg">
+                  {(() => {
+                    const bal = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+                    return bal > 0 && !isPaid ? `₹${bal}` : `₹${order.total_amount}`;
+                  })()}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
@@ -625,9 +663,22 @@ export default function AdminValidate() {
           {/* ── Quick payment collection ── */}
           {!isPaid && !isBlocked && (
             <GlassCard className="p-5">
-              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+              <h2 className="font-display text-lg font-bold text-foreground mb-1 flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-warning" /> Collect Payment
               </h2>
+              {(() => {
+                const totalAmt = order?.total_amount ?? 0;
+                const advancePd = order?.advance_paid ?? 0;
+                const balanceDue = Math.max(0, totalAmt - advancePd);
+                if (advancePd > 0 && balanceDue > 0) {
+                  return (
+                    <p className="text-xs text-warning mb-4">
+                      Advance ₹{advancePd} already collected · Collecting balance <span className="font-bold">₹{balanceDue}</span>
+                    </p>
+                  );
+                }
+                return <div className="mb-4" />;
+              })()}
 
               {/* Quick method buttons — large min-height */}
               <div className="grid grid-cols-3 gap-3 mb-4">
@@ -656,7 +707,12 @@ export default function AdminValidate() {
                   <Input
                     className="glass-input h-14 text-lg font-semibold"
                     type="number"
-                    placeholder={`Amount ₹ (total: ₹${order?.total_amount})`}
+                    placeholder={(() => {
+                      const totalAmt = order?.total_amount ?? 0;
+                      const advancePd = order?.advance_paid ?? 0;
+                      const bal = Math.max(0, totalAmt - advancePd);
+                      return bal > 0 ? `Balance ₹${bal} (total ₹${totalAmt})` : `Amount ₹ (total: ₹${totalAmt})`;
+                    })()}
                     value={collectAmount}
                     onChange={e => setCollectAmount(e.target.value)}
                   />

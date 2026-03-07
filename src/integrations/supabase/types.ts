@@ -830,6 +830,8 @@ export type Database = {
       }
       orders: {
         Row: {
+          advance_paid: number
+          advance_payment_method: string | null
           created_at: string
           created_by_admin_id: string | null
           created_source: Database["public"]["Enums"]["created_source_enum"]
@@ -854,6 +856,8 @@ export type Database = {
           total_amount: number
         }
         Insert: {
+          advance_paid?: number
+          advance_payment_method?: string | null
           created_at?: string
           created_by_admin_id?: string | null
           created_source?: Database["public"]["Enums"]["created_source_enum"]
@@ -878,6 +882,8 @@ export type Database = {
           total_amount: number
         }
         Update: {
+          advance_paid?: number
+          advance_payment_method?: string | null
           created_at?: string
           created_by_admin_id?: string | null
           created_source?: Database["public"]["Enums"]["created_source_enum"]

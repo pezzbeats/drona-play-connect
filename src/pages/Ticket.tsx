@@ -6,8 +6,8 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Input } from '@/components/ui/input';
 import {
-  Loader2, Printer, Share2, ChevronLeft, ChevronRight,
-  ArrowLeft, Download, MessageCircle, Search
+  Loader2, Share2, ChevronLeft, ChevronRight,
+  ArrowLeft, Download, MessageCircle, Search, Printer
 } from 'lucide-react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
@@ -25,6 +25,7 @@ interface TicketData {
     seats_count: number;
     total_amount: number;
     seating_type: string;
+    advance_paid: number;
     match: {
       name: string;
       venue: string;
@@ -40,22 +41,8 @@ function isPaid(status: string) {
   return ['paid_verified', 'paid_manual_verified'].includes(status);
 }
 
-function PaymentBanner({ status }: { status: string }) {
-  const paid = isPaid(status);
-  return (
-    <div className={`flex items-center justify-center gap-2 py-3 px-4 font-display text-lg font-bold tracking-wide ${
-      paid
-        ? 'bg-success/25 text-success border-b-2 border-success/40'
-        : 'bg-warning/25 text-warning border-b-2 border-warning/40'
-    }`}>
-      {paid ? '✅ PAID — Entry Confirmed' : '⚠️ UNPAID — Pay at Hotel on Arrival'}
-    </div>
-  );
-}
-
 function validateMobile(raw: string): { valid: boolean; normalized: string; error: string } {
   const digits = raw.replace(/\D/g, '');
-  // Strip leading 91 if 12 digits
   const normalized = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
   if (normalized.length !== 10) {
     return { valid: false, normalized, error: 'Please enter a valid 10-digit mobile number.' };
@@ -65,6 +52,241 @@ function validateMobile(raw: string): { valid: boolean; normalized: string; erro
   }
   return { valid: true, normalized, error: '' };
 }
+
+// ── Professional Pass Card ────────────────────────────────────────────────────
+
+function PassCard({
+  ticket,
+  order,
+  match,
+  paidStatus,
+  onDownload,
+  onShare,
+}: {
+  ticket: TicketData;
+  order: TicketData['order'];
+  match: TicketData['order']['match'];
+  paidStatus: boolean;
+  onDownload: (t: TicketData) => void;
+  onShare: (t: TicketData) => void;
+}) {
+  const balanceDue = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+  const hasBalance = !paidStatus && balanceDue > 0;
+  const isPartiallyPaid = (order.advance_paid ?? 0) > 0 && !paidStatus;
+
+  return (
+    <div
+      className="pass-card-wrap rounded-2xl overflow-hidden no-break"
+      style={{
+        background: 'linear-gradient(145deg, hsl(30 20% 9%), hsl(30 15% 7%))',
+        border: '1px solid hsl(38 30% 20%)',
+        boxShadow: paidStatus
+          ? '0 8px 40px hsl(142 60% 35% / 0.25), 0 0 0 1px hsl(142 60% 35% / 0.15)'
+          : '0 8px 40px hsl(38 80% 50% / 0.2), 0 0 0 1px hsl(38 80% 50% / 0.15)',
+      }}
+    >
+      {/* ── Status Banner ── */}
+      <div
+        className="flex items-center justify-center gap-2 py-2.5 px-4 font-display text-sm font-bold tracking-wide"
+        style={{
+          background: paidStatus
+            ? 'linear-gradient(90deg, hsl(142 60% 25%), hsl(142 50% 30%))'
+            : 'linear-gradient(90deg, hsl(38 80% 35%), hsl(38 70% 40%))',
+          borderBottom: `1px solid ${paidStatus ? 'hsl(142 60% 35% / 0.6)' : 'hsl(38 80% 45% / 0.6)'}`,
+          color: paidStatus ? 'hsl(142 80% 80%)' : 'hsl(38 90% 85%)',
+        }}
+      >
+        {paidStatus
+          ? <><span>☑</span> PAID — Entry Confirmed</>
+          : isPartiallyPaid
+            ? <><span>⚠</span> ADVANCE PAID — Balance Due at Entry</>
+            : <><span>⚠</span> UNPAID — Pay at Hotel on Arrival</>
+        }
+      </div>
+
+      {/* ── Main Body ── */}
+      <div className="p-5">
+        {/* Name + Seat row */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1 min-w-0 pr-4">
+            <p
+              className="font-display text-xl font-bold leading-tight mb-0.5"
+              style={{ color: 'hsl(38 90% 88%)' }}
+            >
+              {order.purchaser_full_name}
+            </p>
+            <p className="text-sm font-medium" style={{ color: 'hsl(38 60% 65%)' }}>
+              {match?.name}
+              {match?.opponent ? ` vs ${match.opponent}` : ''}
+            </p>
+            {match?.start_time && (
+              <p className="text-xs mt-0.5" style={{ color: 'hsl(38 40% 55%)' }}>
+                {new Date(match.start_time).toLocaleString('en-IN')}
+              </p>
+            )}
+            <p className="text-xs" style={{ color: 'hsl(38 40% 55%)' }}>{match?.venue}</p>
+            {order?.seating_type && (
+              <p className="text-xs font-semibold mt-1" style={{ color: 'hsl(38 80% 65%)' }}>
+                {order.seating_type.charAt(0).toUpperCase() + order.seating_type.slice(1)} Seating
+              </p>
+            )}
+            {/* Balance due pill */}
+            {hasBalance && (
+              <div
+                className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                style={{
+                  background: 'hsl(38 80% 45% / 0.2)',
+                  border: '1px solid hsl(38 80% 50% / 0.5)',
+                  color: 'hsl(38 90% 72%)',
+                }}
+              >
+                ⚠ Balance Due: ₹{balanceDue}
+                {isPartiallyPaid && <span style={{ color: 'hsl(38 60% 55%)' }}> (Adv: ₹{order.advance_paid})</span>}
+              </div>
+            )}
+          </div>
+
+          {/* Seat badge */}
+          <div className="text-right flex-shrink-0">
+            <p
+              className="text-xs uppercase tracking-widest font-semibold mb-0.5"
+              style={{ color: 'hsl(38 50% 50%)' }}
+            >
+              SEAT
+            </p>
+            <div
+              className="font-display text-5xl font-black leading-none"
+              style={{
+                background: 'linear-gradient(135deg, hsl(38 95% 65%), hsl(38 80% 50%))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              {ticket.seat_index + 1}
+            </div>
+            <p className="text-xs mt-0.5" style={{ color: 'hsl(38 40% 50%)' }}>
+              of {order?.seats_count}
+            </p>
+          </div>
+        </div>
+
+        {/* Divider dashes */}
+        <div
+          className="w-full h-px my-4"
+          style={{
+            background: 'repeating-linear-gradient(90deg, transparent, transparent 6px, hsl(38 30% 25%) 6px, hsl(38 30% 25%) 12px)',
+          }}
+        />
+
+        {/* ── QR Code ── */}
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              padding: '14px',
+              background: '#ffffff',
+              boxShadow: paidStatus
+                ? '0 0 24px hsl(142 60% 45% / 0.35), 0 4px 16px rgba(0,0,0,0.4)'
+                : '0 0 24px hsl(38 80% 50% / 0.3), 0 4px 16px rgba(0,0,0,0.4)',
+            }}
+          >
+            <QRCodeSVG
+              value={ticket.qr_text}
+              size={170}
+              bgColor="#ffffff"
+              fgColor="#111111"
+            />
+            {/* Hidden canvas for PNG download */}
+            <QRCodeCanvas
+              id={`qr-canvas-${ticket.id}`}
+              value={ticket.qr_text}
+              size={600}
+              bgColor="#ffffff"
+              fgColor="#111111"
+              style={{ display: 'none' }}
+            />
+          </div>
+
+          <div className="text-center">
+            <p
+              className="text-sm font-semibold tracking-wider"
+              style={{ color: 'hsl(38 70% 65%)' }}
+            >
+              {order?.purchaser_mobile}
+            </p>
+            <p
+              className="text-xs font-mono mt-0.5"
+              style={{ color: 'hsl(38 30% 42%)' }}
+            >
+              {ticket.qr_text.slice(0, 26)}…
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3 mt-5 no-print">
+          <button
+            onClick={() => onDownload(ticket)}
+            className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-semibold transition-all active:scale-95"
+            style={{
+              background: 'hsl(38 40% 12%)',
+              border: '1px solid hsl(38 30% 22%)',
+              color: 'hsl(38 70% 65%)',
+            }}
+          >
+            <Download className="h-4 w-4" /> Save QR
+          </button>
+          <button
+            onClick={() => onShare(ticket)}
+            className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-semibold transition-all active:scale-95"
+            style={{
+              background: 'hsl(38 40% 12%)',
+              border: '1px solid hsl(38 30% 22%)',
+              color: 'hsl(38 70% 65%)',
+            }}
+          >
+            <Share2 className="h-4 w-4" /> Share
+          </button>
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <div
+        className="flex items-center justify-between px-5 py-3"
+        style={{
+          borderTop: '1px solid hsl(38 25% 18%)',
+          background: 'hsl(30 18% 6%)',
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+            style={{
+              background: 'hsl(38 60% 10%)',
+              border: '1px solid hsl(38 60% 30% / 0.6)',
+              boxShadow: '0 0 10px hsl(38 75% 52% / 0.4)',
+            }}
+          >
+            <img src={hotelLogo} alt="Hotel Logo" className="w-6 h-6 object-contain" />
+          </div>
+          <div>
+            <p className="text-xs font-bold leading-none" style={{ color: 'hsl(38 80% 65%)' }}>
+              Hotel Drona Palace
+            </p>
+            <p className="text-xs leading-tight mt-0.5" style={{ color: 'hsl(38 30% 42%)' }}>
+              A Unit of SR Leisure Inn
+            </p>
+          </div>
+        </div>
+        <p className="text-xs" style={{ color: 'hsl(38 30% 42%)' }}>
+          {new Date(ticket.issued_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'numeric', year: 'numeric' })}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function TicketPage() {
   const [params] = useSearchParams();
@@ -96,7 +318,6 @@ export default function TicketPage() {
       if (byOrderId) {
         orderIds = [byOrderId];
       } else if (byMobile) {
-        // Two-step: get order IDs first
         const { data: orders, error: ordersErr } = await supabase
           .from('orders')
           .select('id')
@@ -116,7 +337,8 @@ export default function TicketPage() {
         .select(`
           id, seat_index, qr_text, status, issued_at,
           order:orders!order_id(
-            purchaser_full_name, purchaser_mobile, payment_status, seats_count, total_amount, seating_type,
+            purchaser_full_name, purchaser_mobile, payment_status, seats_count,
+            total_amount, seating_type, advance_paid,
             match:matches!match_id(name, venue, start_time, opponent)
           )
         `)
@@ -164,7 +386,6 @@ export default function TicketPage() {
     const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${order?.purchaser_mobile}`;
     const text = `🎫 My T20 Fan Night Pass${match?.name ? ` — ${match.name}` : ''} — Seat ${ticket.seat_index + 1}\nView tickets: ${ticketUrl}`;
 
-    // Try native share with PNG on mobile
     if (navigator.canShare) {
       try {
         const canvas = document.getElementById(`qr-canvas-${ticket.id}`) as HTMLCanvasElement | null;
@@ -174,11 +395,8 @@ export default function TicketPage() {
           await navigator.share({ files, title: 'My T20 Fan Night Ticket', text });
           return;
         }
-      } catch {
-        // fall through
-      }
+      } catch { /* fall through */ }
     }
-    // Desktop / fallback: wa.me deep-link
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -286,166 +504,65 @@ export default function TicketPage() {
         🎯 Fun Guess Game only — entertainment. No betting, no wagering.
       </div>
 
-      <div className="relative z-10 max-w-lg mx-auto px-4 py-5">
+      <div className="relative z-10 max-w-md mx-auto px-4 py-5">
         {/* Header */}
-        <div className="text-center mb-6 no-print">
+        <div className="text-center mb-5 no-print">
           <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mb-3">
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Home
           </Link>
-          <h1 className="font-display text-3xl font-bold gradient-text">Your Tickets</h1>
+          <h1 className="font-display text-2xl font-bold gradient-text">Your Passes</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {match?.name}{match?.opponent ? ` vs ${match.opponent}` : ''} · {match?.venue}
           </p>
-          {match?.start_time && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {new Date(match.start_time).toLocaleString('en-IN')}
-            </p>
-          )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3 mb-6 no-print">
-          <GlassButton variant="primary" size="md" className="flex-1" onClick={() => window.print()}>
+        {/* Print button */}
+        <div className="flex gap-2 mb-4 no-print">
+          <GlassButton variant="ghost" size="sm" className="flex-1" onClick={() => window.print()}>
             <Printer className="h-4 w-4" /> Print All
           </GlassButton>
-          <GlassButton variant="ghost" size="md" className="flex-1" onClick={() => whatsappShare(currentTicket)}>
+          <GlassButton variant="ghost" size="sm" className="flex-1" onClick={() => whatsappShare(currentTicket)}>
             <MessageCircle className="h-4 w-4" /> WhatsApp
           </GlassButton>
         </div>
 
-        {/* Multi-ticket carousel indicator */}
+        {/* Multi-ticket navigation */}
         {tickets.length > 1 && (
           <div className="flex items-center justify-between mb-3 no-print">
             <GlassButton variant="ghost" size="sm" onClick={() => setActiveIdx(i => Math.max(0, i - 1))} disabled={activeIdx === 0}>
               <ChevronLeft className="h-4 w-4" /> Prev
             </GlassButton>
             <p className="text-sm text-muted-foreground font-medium">
-              Ticket {activeIdx + 1} of {tickets.length}
+              Pass {activeIdx + 1} of {tickets.length}
             </p>
             <GlassButton variant="ghost" size="sm" onClick={() => setActiveIdx(i => Math.min(tickets.length - 1, i + 1))} disabled={activeIdx === tickets.length - 1}>
               Next <ChevronRight className="h-4 w-4" />
             </GlassButton>
           </div>
         )}
-        {tickets.length > 1 && (
-          <p className="text-xs text-muted-foreground text-center mb-4 no-print">
-            ← Swipe or use arrows to view all passes →
-          </p>
-        )}
 
-        {/* Tickets */}
+        {/* Ticket cards */}
         <div className="space-y-6">
           {tickets.map((ticket, i) => (
             <div
               key={ticket.id}
-              className={`seat-pass rounded-xl overflow-hidden no-break ${
-                tickets.length > 1 && i !== activeIdx ? 'hidden print:block' : ''
-              }`}
+              className={tickets.length > 1 && i !== activeIdx ? 'hidden print:block' : ''}
             >
-              {/* Color-coded top gradient strip & payment banner */}
-              <div className={`h-1.5 w-full ${paidTickets ? 'bg-gradient-success' : 'bg-gradient-warning'}`} />
-              <PaymentBanner status={paymentStatus} />
-
-              <div className="p-5">
-                {/* Seat indicator */}
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <p className="font-display text-xl font-bold text-foreground">{order?.purchaser_full_name}</p>
-                    <p className="text-sm text-muted-foreground">{match?.name}</p>
-                    {match?.opponent && <p className="text-xs text-muted-foreground">vs {match.opponent}</p>}
-                    {match?.start_time && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(match.start_time).toLocaleString('en-IN')}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground">{match?.venue}</p>
-                    {order?.seating_type && (
-                      <p className="text-xs text-primary font-medium mt-0.5 capitalize">{order.seating_type} seating</p>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Seat</div>
-                    <div className="font-display text-4xl font-bold gradient-text leading-none">
-                      {ticket.seat_index + 1}
-                    </div>
-                    <div className="text-xs text-muted-foreground">of {order?.seats_count}</div>
-                  </div>
-                </div>
-
-                {/* Large QR */}
-                <div className="flex flex-col items-center gap-3 mb-4">
-                  <div
-                    className={`qr-container ${paidTickets ? 'shadow-glow-success' : 'shadow-glow-warning'}`}
-                    style={{ padding: 16 }}
-                  >
-                    <QRCodeSVG value={ticket.qr_text} size={150} />
-                    {/* Hidden canvas for PNG download */}
-                    <QRCodeCanvas
-                      id={`qr-canvas-${ticket.id}`}
-                      value={ticket.qr_text}
-                      size={400}
-                      style={{ display: 'none' }}
-                    />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">{order?.purchaser_mobile}</p>
-                    <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                      {ticket.qr_text.slice(0, 24)}...
-                    </p>
-                  </div>
-                </div>
-
-                {/* Per-ticket action buttons */}
-                <div className="flex gap-2 mb-4 no-print">
-                  <GlassButton
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => downloadQr(ticket)}
-                  >
-                    <Download className="h-3.5 w-3.5" /> Save QR
-                  </GlassButton>
-                  <GlassButton
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => whatsappShare(ticket)}
-                  >
-                    <Share2 className="h-3.5 w-3.5" /> Share
-                  </GlassButton>
-                </div>
-
-                {/* Bottom strip */}
-                <div className="pt-3 border-t border-border/30 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full bg-[hsl(38_60%_10%)] shadow-[0_0_10px_hsl(38_75%_52%/0.6)]" style={{ border: '1px solid hsl(38 75% 52% / 0.5)' }}>
-                      <img src={hotelLogo} alt="Hotel Drona Palace" className="w-5 h-5 object-contain drop-shadow-[0_0_4px_hsl(38_75%_52%/0.8)]" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-secondary leading-tight">Hotel Drona Palace</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">A Unit of SR Leisure Inn</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(ticket.issued_at).toLocaleDateString('en-IN')}
-                  </span>
-                </div>
-              </div>
+              <PassCard
+                ticket={ticket}
+                order={ticket.order as any}
+                match={(ticket.order as any)?.match}
+                paidStatus={paidTickets}
+                onDownload={downloadQr}
+                onShare={whatsappShare}
+              />
             </div>
           ))}
         </div>
 
-        {/* Disclaimer + Terms */}
-        <div className="mt-6 space-y-3 no-print">
-          <div className="disclaimer-bar rounded-lg p-3 text-xs">
-            🎯 <strong>Fun Guess Game:</strong> This is a fun guess game for entertainment only. No betting, no wagering, no gambling. Participation is voluntary and for fun purposes only.
-          </div>
-          <p className="text-xs text-center text-muted-foreground">
-            <Link to="/terms" target="_blank" className="text-primary underline underline-offset-2">
-              View Event Terms & Conditions
-            </Link>
-          </p>
-        </div>
+        <p className="text-xs text-center text-muted-foreground mt-6 no-print">
+          Questions? Contact hotel reception.
+        </p>
       </div>
     </div>
   );
