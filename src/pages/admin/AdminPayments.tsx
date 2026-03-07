@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   CreditCard, RefreshCw, Search, ChevronDown, ChevronRight,
   Copy, Check, Eye, EyeOff, AlertTriangle, ShieldAlert, Download,
+  ArrowUpDown, ArrowUp, ArrowDown, Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
