@@ -43,7 +43,7 @@ export default function AdminManualBooking() {
   const handleSearch = async () => {
     if (!/^\d{10}$/.test(searchMobile)) return toast({ variant: 'destructive', title: 'Enter 10-digit mobile' });
     setSearching(true); setExisting(null); setSearched(false); setPriceQuote(null);
-    setDiscount({ type: 'flat', value: '' });
+    setDiscount({ type: 'flat', value: '' }); setLastBooking(null);
     const { data } = await supabase.from('orders').select('*, match:matches!match_id(name)')
       .eq('purchaser_mobile', searchMobile).eq('match_id', activeMatch?.id).single();
     setExisting(data || null);
