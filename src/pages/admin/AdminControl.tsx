@@ -39,6 +39,26 @@ export const BALL_OUTCOMES = [
 
 export type BallOutcomeKey = typeof BALL_OUTCOMES[number]['key'];
 
+/** Derive the canonical outcome key from delivery fields — mirrors resolution logic */
+export function deriveOutcomeKey(params: {
+  runs_off_bat: number;
+  extras_type: string;
+  is_wicket: boolean;
+}): BallOutcomeKey {
+  const { runs_off_bat, extras_type, is_wicket } = params;
+  if (is_wicket) return 'wicket';
+  if (extras_type === 'wide') return 'wide';
+  if (extras_type === 'no_ball') return 'no_ball';
+  if (extras_type === 'bye') return 'byes';
+  if (extras_type === 'leg_bye') return 'leg_byes';
+  if (runs_off_bat === 1) return 'runs_1';
+  if (runs_off_bat === 2) return 'runs_2';
+  if (runs_off_bat === 3) return 'runs_3';
+  if (runs_off_bat === 4) return 'boundary_4';
+  if (runs_off_bat === 6) return 'six_6';
+  return 'dot_ball';
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabId = 'command' | 'roster' | 'overs' | 'prediction' | 'super_over';
 
@@ -377,6 +397,33 @@ export default function AdminControl() {
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
       toast({ title: '✅ Delivery recorded' });
+
+      // Auto-resolve the most recent locked prediction window using the delivery outcome
+      const correctKey = deriveOutcomeKey({
+        runs_off_bat: parseInt(delivery.runs_off_bat) || 0,
+        extras_type: delivery.extras_type,
+        is_wicket: delivery.is_wicket,
+      });
+      const { data: lockedWindow } = await supabase
+        .from('prediction_windows')
+        .select('id')
+        .eq('match_id', match.id)
+        .eq('status', 'locked')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lockedWindow) {
+        const { data: resolveData, error: resolveError } = await supabase.functions.invoke('resolve-prediction-window', {
+          body: { action: 'resolve', window_id: lockedWindow.id, match_id: match.id, correct_answer: { key: correctKey } },
+        });
+        if (resolveError || resolveData?.error) {
+          toast({ variant: 'destructive', title: 'Auto-resolve failed', description: resolveData?.error || resolveError?.message });
+        } else {
+          const outcomeLabel = BALL_OUTCOMES.find(o => o.key === correctKey)?.label ?? correctKey;
+          toast({ title: `🎯 Window resolved: ${outcomeLabel}`, description: `${resolveData.resolved ?? 0} prediction(s) scored` });
+        }
+      }
+
       if (data?.needs_new_batsman) {
         setNeedsNewBatsman(true);
         setIncomingPosition(delivery.out_player_id === delivery.striker_id ? 'striker' : 'non_striker');
