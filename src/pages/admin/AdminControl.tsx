@@ -540,7 +540,7 @@ export default function AdminControl() {
 
   const handleLockWindow = () => {
     if (!activeWindow) return;
-    callFunction('resolve-prediction-window', { action: 'lock', window_id: activeWindow.id }, 'lock-window');
+    callFunction('resolve-prediction-window', { action: 'lock', window_id: activeWindow.id }, 'lock-window', '🔒 Guess window locked');
   };
 
   const handleResolveWindow = (correctKey: string) => {
@@ -549,7 +549,7 @@ export default function AdminControl() {
       .eq('match_id', match.id).eq('status', 'locked')
       .order('created_at', { ascending: false }).limit(1).single()
       .then(({ data }) => {
-        if (data) callFunction('resolve-prediction-window', { action: 'resolve', window_id: data.id, match_id: match.id, correct_answer: { key: correctKey } }, 'resolve-window');
+        if (data) callFunction('resolve-prediction-window', { action: 'resolve', window_id: data.id, match_id: match.id, correct_answer: { key: correctKey } }, 'resolve-window', '✅ Window resolved');
       });
   };
 
