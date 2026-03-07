@@ -74,7 +74,7 @@ export default function AdminValidate() {
   const [scanFeedback, setScanFeedback] = useState<ScanFeedback>('idle');
   const [checkingIn, setCheckingIn] = useState(false);
   const [gamePin, setGamePin] = useState<string | null>(null);
-  const [collectMethod, setCollectMethod] = useState<'cash' | 'upi' | 'card' | null>(null);
+  const [collectMethod, setCollectMethod] = useState<'cash' | 'upi_qr' | 'card' | null>(null);
   const [collectAmount, setCollectAmount] = useState('');
   const [collectRef, setCollectRef] = useState('');
   const [collecting, setCollecting] = useState(false);
