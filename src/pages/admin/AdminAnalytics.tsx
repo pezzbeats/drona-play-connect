@@ -402,6 +402,7 @@ export default function AdminAnalytics() {
                 { label: 'UPI QR', value: upiRevenue, color: 'text-chart-2' },
                 { label: 'Pay at Hotel', value: hotelRevenue, color: 'text-chart-3' },
                 { label: 'Cash', value: cashRevenue, color: 'text-chart-4' },
+                { label: 'Razorpay', value: paidOrders.filter(o => o.payment_method === 'razorpay').reduce((s, o) => s + o.total_amount, 0), color: 'text-primary' },
               ].map(r => (
                 <div key={r.label} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
                   <span className="text-sm text-muted-foreground">{r.label}</span>
