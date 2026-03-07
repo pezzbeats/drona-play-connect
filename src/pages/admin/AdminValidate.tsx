@@ -253,9 +253,16 @@ export default function AdminValidate() {
 
   // ── Camera scanning ──────────────────────────────────────────────────────────
 
-  const closeCamera = useCallback(() => {
+  const closeCamera = useCallback(async () => {
     scanningRef.current = false;
     cancelAnimationFrame(rafRef.current);
+    // Turn off torch before stopping tracks
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (track && torchSupportedRef.current && torchOn) {
+      try { await track.applyConstraints({ advanced: [{ torch: false } as any] }); } catch { /* ignore */ }
+    }
+    setTorchOn(false);
+    torchSupportedRef.current = false;
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
     if (videoRef.current) {
@@ -265,7 +272,17 @@ export default function AdminValidate() {
     setCameraOpen(false);
     setCameraError(null);
     setCameraReady(false);
-  }, []);
+  }, [torchOn]);
+
+  const toggleTorch = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !torchSupportedRef.current) return;
+    const newVal = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: newVal } as any] });
+      setTorchOn(newVal);
+    } catch { /* torch not supported on this device */ }
+  }, [torchOn]);
 
   // FIX Bug 1: use ref so startScanLoop never has a stale closure on handleCameraResult
   const startScanLoop = useCallback(() => {
