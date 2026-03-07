@@ -1004,16 +1004,6 @@ export default function AdminControl() {
                          You must lock the window before you can record this ball.
                        </p>
                        <PredictionCountBadge windowId={activeWindow.id} matchId={match.id} />
-...
-                    <GlassButton
-                       variant="primary" size="md"
-                       className="w-full"
-                       loading={actionLoading === 'record-delivery'}
-                       onClick={handleRecordDelivery}
-                       disabled={!!activeWindow}
-                     >
-                       🏏 Record Ball
-                     </GlassButton>
                     <div className="rounded-xl border border-border bg-muted/10 px-3 py-2 text-center">
                       <p className="text-xs text-muted-foreground">Total</p>
                       <p className="font-display text-lg font-bold text-foreground">
