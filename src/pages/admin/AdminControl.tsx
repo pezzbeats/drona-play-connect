@@ -309,12 +309,12 @@ export default function AdminControl() {
   const teamById = (id: string) => teams.find(t => t.id === id);
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  const callFunction = async (fn: string, body: any, loadingKey: string) => {
+  const callFunction = async (fn: string, body: any, loadingKey: string, successMsg?: string) => {
     setActionLoading(loadingKey);
     try {
       const { data, error } = await supabase.functions.invoke(fn, { body });
       if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast({ title: '✅ Done' });
+      toast({ title: successMsg ?? '✅ Done' });
       fetchAll();
       return data;
     } catch (e: any) {
