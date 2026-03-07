@@ -1331,7 +1331,7 @@ export default function AdminValidate() {
           )}
 
           {/* ── Admin controls ── */}
-          {(isPaid || isBlocked) && (
+          {ticketData && (
             <GlassCard className="p-5">
               <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-primary" /> Admin Controls

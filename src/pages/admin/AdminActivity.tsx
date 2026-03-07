@@ -233,8 +233,10 @@ export default function AdminActivity() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                        {row.admin_id ? row.admin_id.slice(0, 12) + '…' : <span className="italic">system</span>}
+                      <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground max-w-[140px]">
+                        {row.admin_id
+                          ? <span title={row.admin_id}>{adminEmailMap[row.admin_id] ?? row.admin_id.slice(0, 10) + '…'}</span>
+                          : <span className="italic">system</span>}
                       </td>
                       <td className="px-3 py-2 max-w-[200px] truncate text-muted-foreground font-mono">
                         {row.meta ? JSON.stringify(row.meta) : '—'}
