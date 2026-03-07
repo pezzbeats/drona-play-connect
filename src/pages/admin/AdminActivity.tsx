@@ -56,6 +56,8 @@ export default function AdminActivity() {
   const [filterEntity, setFilterEntity] = useState('all');
   const [uniqueActions, setUniqueActions] = useState<string[]>([]);
   const [uniqueEntities, setUniqueEntities] = useState<string[]>([]);
+  // Map of userId → email for display
+  const [adminEmailMap, setAdminEmailMap] = useState<Record<string, string>>({});
 
   const fetchActivity = useCallback(async () => {
     setLoading(true);
@@ -75,12 +77,21 @@ export default function AdminActivity() {
     setLoading(false);
   }, [page, filterAction, filterEntity, search]);
 
-  // Fetch filter options once
+  // Fetch filter options + admin email map once
   useEffect(() => {
     supabase.from('admin_activity').select('action, entity_type').then(({ data }) => {
       if (!data) return;
       setUniqueActions([...new Set(data.map(d => d.action).filter(Boolean))].sort());
       setUniqueEntities([...new Set(data.map(d => d.entity_type).filter(Boolean) as string[])].sort());
+    });
+    // Build userId→email map from admin_roles joined with auth info stored in meta or profiles
+    supabase.from('admin_roles').select('user_id, role').then(({ data: roles }) => {
+      if (!roles) return;
+      // We can only display partial UUID — we don't have access to auth.users emails client-side
+      // Store what we have for display, will enhance if profile table added later
+      const map: Record<string, string> = {};
+      roles.forEach(r => { map[r.user_id] = `${r.role} (${r.user_id.slice(0, 8)}…)`; });
+      setAdminEmailMap(map);
     });
   }, []);
 
