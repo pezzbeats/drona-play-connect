@@ -463,7 +463,7 @@ export default function AdminValidate() {
             value={qrInput}
             onChange={e => setQrInput(e.target.value)}
             onPaste={handlePaste}
-            onKeyDown={e => e.key === 'Enter' && lookupTicket(qrInput)}
+            onKeyDown={e => { if (e.key === 'Enter') lookupTicket(e.currentTarget.value); }}
             autoComplete="off"
             spellCheck={false}
           />
