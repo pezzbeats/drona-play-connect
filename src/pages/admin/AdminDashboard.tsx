@@ -13,6 +13,8 @@ interface Stats {
   checkedInToday: number;
   totalSeats: number;
   pendingVerification: number;
+  balanceDueTotal: number;
+  balanceDueCount: number;
 }
 
 export default function AdminDashboard() {
