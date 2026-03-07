@@ -656,28 +656,37 @@ export default function RegisterPage() {
   };
 
   /** Build a TicketData-compatible shape from local Register state */
-  const buildTicketShape = (ticket: any): TicketData => ({
-    id: ticket.id,
-    seat_index: ticket.seat_index,
-    qr_text: ticket.qr_text,
-    status: ticket.status ?? 'active',
-    issued_at: ticket.issued_at ?? new Date().toISOString(),
-    order: {
-      purchaser_full_name: fullName,
-      purchaser_mobile: mobile,
-      payment_status: paymentMethod === 'pay_at_hotel' ? 'unpaid' : 'paid_manual_verified',
-      seats_count: seatsCount,
-      total_amount: priceQuote?.total ?? 0,
-      seating_type: seatingType,
-      advance_paid: 0,
-      match: {
-        name: activeMatch!.name,
-        venue: activeMatch!.venue,
-        start_time: activeMatch!.start_time ?? null,
-        opponent: activeMatch!.opponent ?? null,
+  const buildTicketShape = (ticket: any): TicketData => {
+    // Map payment method to the correct status for pass banner colour:
+    // razorpay → paid_verified (green), upi_qr → paid_manual_verified (green),
+    // pay_at_hotel → unpaid (amber)
+    const paymentStatus =
+      paymentMethod === 'razorpay' ? 'paid_verified' :
+      paymentMethod === 'pay_at_hotel' ? 'unpaid' :
+      'paid_manual_verified';
+    return {
+      id: ticket.id,
+      seat_index: ticket.seat_index,
+      qr_text: ticket.qr_text,
+      status: ticket.status ?? 'active',
+      issued_at: ticket.issued_at ?? new Date().toISOString(),
+      order: {
+        purchaser_full_name: fullName,
+        purchaser_mobile: mobile,
+        payment_status: paymentStatus,
+        seats_count: seatsCount,
+        total_amount: priceQuote?.total ?? 0,
+        seating_type: seatingType,
+        advance_paid: 0,
+        match: {
+          name: activeMatch!.name,
+          venue: activeMatch!.venue,
+          start_time: activeMatch!.start_time ?? null,
+          opponent: activeMatch!.opponent ?? null,
+        },
       },
-    },
-  });
+    };
+  };
 
   const buildPassCanvas = async (ticket: TicketData): Promise<HTMLCanvasElement> => {
     const order = ticket.order as any;
