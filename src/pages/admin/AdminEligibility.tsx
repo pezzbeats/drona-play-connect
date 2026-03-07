@@ -78,10 +78,10 @@ export default function AdminEligibility() {
   // ── Download template ──────────────────────────────────────────────────────
   const handleDownloadTemplate = () => {
     const csv = [
-      'mobile,full_name,notes',
-      '9876543210,Sample Name,Semifinal attendee',
-      '9123456789,Another Name,Eligible for ₹949',
-      '# Add one number per row — remove this comment line',
+      'mobile,full_name,eligible_seats,notes',
+      '9876543210,Sample Name,4,Booked 4 seats for semifinal',
+      '9123456789,Another Name,2,Booked 2 seats for semifinal',
+      '# Add one row per number — eligible_seats = number of seats at ₹949 rate',
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
