@@ -362,7 +362,7 @@ export default function AdminValidate() {
   const isBlocked = ticketData?.status === 'blocked';
   const isMatchMismatch = activeMatch && ticketData && ticketData.match_id !== activeMatch.id;
   const isScanningFrozen = !!matchFlags?.scanning_frozen;
-  const canCheckIn = (isPaid || order?.payment_method === 'pay_at_hotel') && isPaid && !isCheckedIn && !isBlocked && !isMatchMismatch && !isScanningFrozen;
+  const canCheckIn = isPaid && !isCheckedIn && !isBlocked && !isMatchMismatch && !isScanningFrozen;
 
   const feedbackBorder: Record<ScanFeedback, string> = {
     idle: 'border-border',
