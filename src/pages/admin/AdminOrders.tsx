@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Shield, Banknote } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Shield, Banknote, RefreshCw } from 'lucide-react';
 
 type OverrideTarget = { orderId: string; verdict: 'paid_manual_verified' | 'paid_rejected' } | null;
 type AdvanceFormState = { orderId: string; amount: string; method: string } | null;
@@ -180,9 +180,21 @@ export default function AdminOrders() {
 
   return (
     <div className="px-4 py-5 space-y-4 max-w-2xl mx-auto md:max-w-none md:p-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold gradient-text-accent">Orders</h1>
-        <p className="text-muted-foreground text-sm">All registrations and payment status</p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold gradient-text-accent">Orders</h1>
+          <p className="text-muted-foreground text-sm">All registrations and payment status</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {!loading && (
+            <span className="text-xs text-muted-foreground bg-muted/40 px-2.5 py-1 rounded-full font-medium border border-border/50">
+              {filtered.length} order{filtered.length !== 1 ? 's' : ''}
+            </span>
+          )}
+          <GlassButton variant="ghost" size="sm" loading={loading} onClick={fetchOrders}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </GlassButton>
+        </div>
       </div>
 
       {/* Filters — stacked on mobile */}
@@ -231,6 +243,7 @@ export default function AdminOrders() {
             const balanceDue = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
             const hasAdvance = (order.advance_paid ?? 0) > 0;
             const isPaidFully = ['paid_verified', 'paid_manual_verified'].includes(order.payment_status);
+            const isRazorpay = order.payment_method === 'razorpay';
             return (
             <GlassCard key={order.id} className="overflow-hidden">
               {/* Mobile-optimised row */}
@@ -404,10 +417,13 @@ export default function AdminOrders() {
                   ) : (
                     ['pending_verification', 'paid_rejected', 'unpaid'].includes(order.payment_status) && (
                       <div className="flex gap-2 flex-wrap">
-                        <GlassButton variant="success" size="sm" className="flex-1 h-11"
-                          onClick={() => setOverrideTarget({ orderId: order.id, verdict: 'paid_manual_verified' })}>
-                          <CheckCircle2 className="h-4 w-4" /> Verify
-                        </GlassButton>
+                        {/* Hide "Approve" for Razorpay — those are verified automatically */}
+                        {!isRazorpay && (
+                          <GlassButton variant="success" size="sm" className="flex-1 h-11"
+                            onClick={() => setOverrideTarget({ orderId: order.id, verdict: 'paid_manual_verified' })}>
+                            <CheckCircle2 className="h-4 w-4" /> Verify
+                          </GlassButton>
+                        )}
                         <GlassButton variant="danger" size="sm" className="flex-1 h-11"
                           onClick={() => setOverrideTarget({ orderId: order.id, verdict: 'paid_rejected' })}>
                           <XCircle className="h-4 w-4" /> Reject
