@@ -331,8 +331,8 @@ export default function AdminEligibility() {
           <h2 className="font-display font-semibold text-foreground">Step 1: Download Template</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-3">
-          Download the CSV template with <code className="bg-muted/40 px-1 rounded text-xs">mobile,full_name,notes</code> columns.
-          Fill in the 10-digit mobile numbers, then upload below.
+          Download the CSV template with <code className="bg-muted/40 px-1 rounded text-xs">mobile,full_name,eligible_seats,notes</code> columns.
+          Enter the 10-digit mobile number and how many seats that number is entitled to at ₹949.
         </p>
         <button
           onClick={handleDownloadTemplate}
