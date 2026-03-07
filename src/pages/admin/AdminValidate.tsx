@@ -96,6 +96,7 @@ export default function AdminValidate() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [pendingStream, setPendingStream] = useState<MediaStream | null>(null);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -109,6 +110,8 @@ export default function AdminValidate() {
   const rafRef = useRef<number>(0);
   const scanningRef = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Fix stale closure: always holds the latest handleCameraResult
+  const handleCameraResultRef = useRef<(t: string) => void>(() => {});
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
