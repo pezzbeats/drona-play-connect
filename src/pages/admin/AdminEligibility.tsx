@@ -134,8 +134,9 @@ export default function AdminEligibility() {
         const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
         const mobile = cols[0]?.replace(/\D/g, '').slice(0, 10) ?? '';
         const full_name = cols[1] ?? '';
-        const notes = cols[2] ?? '';
-        parsed.push({ mobile, full_name, notes, valid: /^\d{10}$/.test(mobile) });
+        const eligible_seats = parseInt(cols[2] ?? '0', 10) || 0;
+        const notes = cols[3] ?? '';
+        parsed.push({ mobile, full_name, eligible_seats, notes, valid: /^\d{10}$/.test(mobile) });
       }
       setPreview(parsed);
     };
