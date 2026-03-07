@@ -421,6 +421,64 @@ export type Database = {
           },
         ]
       }
+      match_lineup: {
+        Row: {
+          batting_order: number
+          created_at: string
+          id: string
+          is_captain: boolean
+          is_wk: boolean
+          match_id: string
+          player_id: string | null
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          batting_order: number
+          created_at?: string
+          id?: string
+          is_captain?: boolean
+          is_wk?: boolean
+          match_id: string
+          player_id?: string | null
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          batting_order?: number
+          created_at?: string
+          id?: string
+          is_captain?: boolean
+          is_wk?: boolean
+          match_id?: string
+          player_id?: string | null
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_lineup_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_lineup_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_lineup_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_live_state: {
         Row: {
           batting_team_id: string | null
