@@ -86,6 +86,13 @@ serve(async (req) => {
       });
     }
 
+    // ── Security: ensure window belongs to the same match as this user's session ──
+    if (window.match_id !== access.match_id) {
+      return new Response(JSON.stringify({ error: "Invalid prediction window for your session.", code: "MATCH_MISMATCH", retryable: false }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (window.status !== "open") {
       return new Response(JSON.stringify({ error: "Prediction window is closed", code: "WINDOW_CLOSED", retryable: false }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
