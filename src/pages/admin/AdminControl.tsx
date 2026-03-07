@@ -22,6 +22,23 @@ import {
   List, Play, Square, Flag, Shield,
 } from 'lucide-react';
 
+// ── Shared Ball Outcomes ───────────────────────────────────────────────────────
+export const BALL_OUTCOMES = [
+  { key: 'dot_ball',   label: 'Dot',      emoji: '•',  colorCls: 'border-border/60 text-muted-foreground' },
+  { key: 'runs_1',     label: '1',        emoji: '1',  colorCls: 'border-border/60 text-foreground' },
+  { key: 'runs_2',     label: '2',        emoji: '2',  colorCls: 'border-border/60 text-foreground' },
+  { key: 'runs_3',     label: '3',        emoji: '3',  colorCls: 'border-border/60 text-foreground' },
+  { key: 'boundary_4', label: '4',        emoji: '4',  colorCls: 'border-warning/60 text-warning' },
+  { key: 'six_6',      label: '6',        emoji: '6',  colorCls: 'border-primary/70 text-primary' },
+  { key: 'wide',       label: 'Wide',     emoji: 'WD', colorCls: 'border-warning/50 text-warning' },
+  { key: 'no_ball',    label: 'No Ball',  emoji: 'NB', colorCls: 'border-warning/50 text-warning' },
+  { key: 'byes',       label: 'Byes',     emoji: 'B',  colorCls: 'border-muted text-muted-foreground' },
+  { key: 'leg_byes',   label: 'Leg Byes', emoji: 'LB', colorCls: 'border-muted text-muted-foreground' },
+  { key: 'wicket',     label: 'Wicket',   emoji: 'W',  colorCls: 'border-destructive/70 text-destructive' },
+] as const;
+
+export type BallOutcomeKey = typeof BALL_OUTCOMES[number]['key'];
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabId = 'command' | 'roster' | 'overs' | 'prediction' | 'super_over';
 
