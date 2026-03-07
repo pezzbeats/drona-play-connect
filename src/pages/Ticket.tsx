@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -335,6 +336,8 @@ function PassCard({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function TicketPage() {
+  const { role } = useAuth();
+  const isAdmin = role !== null;
   const [params] = useSearchParams();
   const orderId = params.get('order_id');
   const mobileParam = params.get('mobile');
@@ -866,7 +869,7 @@ export default function TicketPage() {
           <GlassButton variant="ghost" size="sm" className="flex-1" onClick={() => whatsappShare(currentTicket)}>
             <MessageCircle className="h-4 w-4" /> WhatsApp
           </GlassButton>
-          {!paidTickets && Math.max(0, (currentTicket?.order as any)?.total_amount - (currentTicket?.order as any)?.advance_paid) > 0 && (
+          {isAdmin && !paidTickets && Math.max(0, (currentTicket?.order as any)?.total_amount - (currentTicket?.order as any)?.advance_paid) > 0 && (
             <a
               href={buildReminderLink(currentTicket)}
               target="_blank"
@@ -913,7 +916,7 @@ export default function TicketPage() {
                 onDownload={downloadPassAsPng}
                 onShare={whatsappShare}
                 onRemind={
-                  !paidTickets && Math.max(0, (ticket.order as any)?.total_amount - (ticket.order as any)?.advance_paid) > 0
+                  isAdmin && !paidTickets && Math.max(0, (ticket.order as any)?.total_amount - (ticket.order as any)?.advance_paid) > 0
                     ? () => window.open(buildReminderLink(ticket), '_blank')
                     : undefined
                 }
