@@ -916,7 +916,7 @@ export default function TicketPage() {
                 onDownload={downloadPassAsPng}
                 onShare={whatsappShare}
                 onRemind={
-                  !paidTickets && Math.max(0, (ticket.order as any)?.total_amount - (ticket.order as any)?.advance_paid) > 0
+                  isAdmin && !paidTickets && Math.max(0, (ticket.order as any)?.total_amount - (ticket.order as any)?.advance_paid) > 0
                     ? () => window.open(buildReminderLink(ticket), '_blank')
                     : undefined
                 }
