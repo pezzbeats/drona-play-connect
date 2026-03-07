@@ -13,6 +13,7 @@ import {
   Upload, Loader2, AlertCircle, Star, Info, Zap, Shield, RefreshCw,
   Phone, Mail, ArrowRight, XCircle, Clock, ArrowLeft, Download, Share2, MessageCircle, MapPin
 } from 'lucide-react';
+import { CountdownTimer } from '@/components/ui/CountdownTimer';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
 
@@ -1084,6 +1085,11 @@ export default function RegisterPage() {
             <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
               {activeMatch.venue} · {new Date(activeMatch.start_time).toLocaleString('en-IN')}
+            </div>
+          )}
+          {activeMatch.start_time && (
+            <div className="mt-3 pt-3 border-t border-border/40">
+              <CountdownTimer targetTime={activeMatch.start_time} variant="compact" />
             </div>
           )}
         </GlassCard>
