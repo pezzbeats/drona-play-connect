@@ -1149,10 +1149,10 @@ export default function RegisterPage() {
               <div>
                 <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Number of Seats</Label>
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setSeatsCount(Math.max(1, seatsCount - 1))}
+                  <button onClick={() => { setSeatsCount(Math.max(1, seatsCount - 1)); setPriceQuote(null); }}
                     className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all">−</button>
                   <span className="font-display text-3xl font-bold text-foreground w-12 text-center tabular-nums">{seatsCount}</span>
-                  <button onClick={() => setSeatsCount(Math.min(10, seatsCount + 1))}
+                  <button onClick={() => { setSeatsCount(Math.min(10, seatsCount + 1)); setPriceQuote(null); }}
                     className="w-12 h-12 rounded-xl border-2 border-border bg-muted/30 text-foreground text-xl font-bold flex items-center justify-center hover:border-primary/50 hover:bg-primary/10 active:scale-95 transition-all">+</button>
                   <span className="text-sm text-muted-foreground">seat{seatsCount > 1 ? 's' : ''}</span>
                 </div>
@@ -1161,7 +1161,7 @@ export default function RegisterPage() {
                 <Label className="text-foreground mb-3 block text-sm font-semibold text-center">Seating Type</Label>
                 <div className="grid grid-cols-2 gap-3">
                   {(['regular', 'family'] as const).map(type => (
-                    <button key={type} onClick={() => setSeatingType(type)}
+                    <button key={type} onClick={() => { setSeatingType(type); setPriceQuote(null); }}
                       className={`p-4 rounded-xl border-2 text-sm font-semibold transition-all active:scale-95 ${
                         seatingType === type ? 'border-primary bg-primary/15 text-primary shadow-glow-primary' : 'border-border bg-muted/20 text-muted-foreground hover:border-primary/40'
                       }`}>
