@@ -74,7 +74,7 @@ export default function AdminValidate() {
   const [scanFeedback, setScanFeedback] = useState<ScanFeedback>('idle');
   const [checkingIn, setCheckingIn] = useState(false);
   const [gamePin, setGamePin] = useState<string | null>(null);
-  const [collectMethod, setCollectMethod] = useState<'cash' | 'upi' | 'card' | null>(null);
+  const [collectMethod, setCollectMethod] = useState<'cash' | 'upi_qr' | 'card' | null>(null);
   const [collectAmount, setCollectAmount] = useState('');
   const [collectRef, setCollectRef] = useState('');
   const [collecting, setCollecting] = useState(false);
@@ -463,7 +463,7 @@ export default function AdminValidate() {
             value={qrInput}
             onChange={e => setQrInput(e.target.value)}
             onPaste={handlePaste}
-            onKeyDown={e => e.key === 'Enter' && lookupTicket(qrInput)}
+            onKeyDown={e => { if (e.key === 'Enter') lookupTicket(e.currentTarget.value); }}
             autoComplete="off"
             spellCheck={false}
           />
@@ -471,7 +471,7 @@ export default function AdminValidate() {
             variant="primary"
             size="lg"
             loading={scanFeedback === 'loading'}
-            onClick={() => lookupTicket(qrInput)}
+            onClick={() => lookupTicket(inputRef.current?.value ?? qrInput)}
             className="shrink-0 h-14"
           >
             <ScanLine className="h-5 w-5" />
@@ -551,12 +551,15 @@ export default function AdminValidate() {
               const totalAmt = order?.total_amount ?? 0;
               const advancePd = order?.advance_paid ?? 0;
               const balanceDue = Math.max(0, totalAmt - advancePd);
-              if (advancePd > 0 && balanceDue > 0 && !isPaid) {
+              if (balanceDue > 0 && !isPaid) {
                 return (
                   <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 bg-warning/10 border-warning/50 text-warning">
                     <div>
                       <p className="font-bold text-base">⚠ BALANCE DUE: ₹{balanceDue}</p>
-                      <p className="text-xs text-warning/80 mt-0.5">Advance paid: ₹{advancePd} via {order.advance_payment_method || 'cash'}</p>
+                      {advancePd > 0
+                        ? <p className="text-xs text-warning/80 mt-0.5">Advance paid: ₹{advancePd} via {order.advance_payment_method || 'cash'}</p>
+                        : <p className="text-xs text-warning/80 mt-0.5">No advance paid — collect full amount at gate</p>
+                      }
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs text-muted-foreground">Total</p>
@@ -615,7 +618,7 @@ export default function AdminValidate() {
           </GlassCard>
 
           {/* ── Check-in + PIN ── */}
-          {isPaid && (
+          {(isPaid || order?.payment_method === 'pay_at_hotel') && (
             <GlassCard className={`p-5 ${isCheckedIn && gamePin ? 'border-success/50 shadow-[0_0_30px_hsl(142_70%_45%/0.2)]' : ''}`}>
               <h2 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-success" /> Check-In & PIN
@@ -627,6 +630,12 @@ export default function AdminValidate() {
                     <div className="mb-3 flex items-center gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg px-3 py-2">
                       <WifiOff className="h-3.5 w-3.5 shrink-0" />
                       Offline — check-in will be queued and synced when reconnected
+                    </div>
+                  )}
+                  {!isPaid && order?.payment_method === 'pay_at_hotel' && (
+                    <div className="mb-3 flex items-center gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg px-3 py-2">
+                      <DollarSign className="h-3.5 w-3.5 shrink-0" />
+                      Collect payment below first — check-in will unlock once payment is recorded
                     </div>
                   )}
                   {/* Larger check-in button */}
@@ -684,7 +693,7 @@ export default function AdminValidate() {
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {([
                   { id: 'cash', label: 'Cash', icon: Banknote },
-                  { id: 'upi', label: 'UPI', icon: Smartphone },
+                  { id: 'upi_qr', label: 'UPI', icon: Smartphone },
                   { id: 'card', label: 'Card', icon: CreditCard },
                 ] as const).map(({ id, label, icon: Icon }) => (
                   <button
@@ -719,7 +728,7 @@ export default function AdminValidate() {
                   {collectMethod !== 'cash' && (
                     <Input
                       className="glass-input h-12 text-base"
-                      placeholder={collectMethod === 'upi' ? 'UTR / Transaction ID *' : 'Card ref / last 4 digits *'}
+                      placeholder={collectMethod === 'upi_qr' ? 'UTR / Transaction ID *' : 'Card ref / last 4 digits *'}
                       value={collectRef}
                       onChange={e => setCollectRef(e.target.value)}
                     />
