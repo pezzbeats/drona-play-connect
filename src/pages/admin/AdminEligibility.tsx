@@ -165,6 +165,7 @@ export default function AdminEligibility() {
     const payload = valid.map(p => ({
       mobile: p.mobile,
       full_name: p.full_name || null,
+      eligible_seats: p.eligible_seats,
       notes: p.notes || null,
       match_label: matchLabel || 'Semi Final',
       uploaded_by: user?.id ?? null,
