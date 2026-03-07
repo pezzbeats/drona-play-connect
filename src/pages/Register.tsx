@@ -360,16 +360,18 @@ export default function RegisterPage() {
   useEffect(() => {
     if (!mobileValid) {
       setEligibilityStatus('idle');
+      setEligibleSeats(0);
       return;
     }
     setEligibilityStatus('checking');
     const timer = setTimeout(async () => {
       const { data } = await supabase
         .from('semifinal_eligibility')
-        .select('id')
+        .select('id, eligible_seats')
         .eq('mobile', mobile)
         .maybeSingle();
       setEligibilityStatus(data ? 'eligible' : 'standard');
+      setEligibleSeats(data?.eligible_seats ?? 0);
     }, 400);
     return () => clearTimeout(timer);
   }, [mobile, mobileValid]);
