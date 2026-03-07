@@ -109,6 +109,46 @@ export default function AdminOrders() {
     setViewingProof(null);
   };
 
+  const handleSaveAdvance = async () => {
+    if (!advanceForm) return;
+    const { orderId, amount, method } = advanceForm;
+    const numAmount = parseInt(amount, 10);
+    const order = orders.find(o => o.id === orderId);
+    if (!numAmount || numAmount <= 0) {
+      toast({ variant: 'destructive', title: 'Invalid amount', description: 'Enter a valid advance amount.' });
+      return;
+    }
+    if (order && numAmount > order.total_amount) {
+      toast({ variant: 'destructive', title: 'Amount too high', description: 'Advance cannot exceed total amount.' });
+      return;
+    }
+    setSavingAdvance(true);
+    try {
+      await supabase.from('orders').update({
+        advance_paid: numAmount,
+        advance_payment_method: method,
+      } as any).eq('id', orderId);
+
+      await supabase.from('payment_collections').insert({
+        order_id: orderId,
+        collected_by_admin_id: user?.id,
+        method: method as any,
+        amount: numAmount,
+        note: `Advance ₹${numAmount} via ${method.toUpperCase()} — balance ₹${(order?.total_amount ?? 0) - numAmount} due`,
+      });
+
+      await supabase.from('admin_activity').insert({
+        admin_id: user?.id, action: 'record_advance', entity_type: 'order', entity_id: orderId,
+        meta: { amount: numAmount, method },
+      });
+
+      toast({ title: '✅ Advance recorded', description: `₹${numAmount} via ${method.toUpperCase()} saved.` });
+      setAdvanceForm(null);
+      fetchOrders();
+    } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
+    setSavingAdvance(false);
+  };
+
   const filtered = orders.filter(o => {
     const matchSearch = !search || o.purchaser_full_name?.toLowerCase().includes(search.toLowerCase()) || o.purchaser_mobile?.includes(search);
     const isPaidFully = ['paid_verified', 'paid_manual_verified'].includes(o.payment_status);
