@@ -1000,43 +1000,20 @@ export default function AdminControl() {
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                         Prediction window is OPEN — lock it before recording this ball
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Players are still submitting guesses. Lock the window first so the result is fair. Recording will auto-lock if you proceed anyway.
-                      </p>
-                      <PredictionCountBadge windowId={activeWindow.id} matchId={match.id} />
-                      <GlassButton
-                        variant="warning" size="sm"
-                        loading={actionLoading === 'lock-window-cmd'}
-                        onClick={async () => {
-                          setActionLoading('lock-window-cmd');
-                          try {
-                            const { data, error } = await supabase.functions.invoke('resolve-prediction-window', {
-                              body: { action: 'lock', window_id: activeWindow.id },
-                            });
-                            if (error || data?.error) throw new Error(data?.error || error?.message);
-                            toast({ title: '🔒 Window locked — safe to record ball' });
-                            fetchAll();
-                          } catch (e: any) {
-                            toast({ variant: 'destructive', title: 'Failed', description: e.message });
-                          } finally {
-                            setActionLoading(null);
-                          }
-                        }}
-                      >
-                        <Lock className="h-3.5 w-3.5" /> Lock Window Now
-                      </GlassButton>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
+                       <p className="text-xs text-warning-foreground font-semibold">
+                         You must lock the window before you can record this ball.
+                       </p>
+                       <PredictionCountBadge windowId={activeWindow.id} matchId={match.id} />
+...
                     <GlassButton
-                      variant="primary" size="md"
-                      className={`w-full transition-all ${activeWindow ? 'border-2 border-warning/60' : ''}`}
-                      loading={actionLoading === 'record-delivery'}
-                      onClick={handleRecordDelivery}
-                    >
-                      🏏 {activeWindow ? 'Record Ball (will auto-lock)' : 'Record Ball'}
-                    </GlassButton>
+                       variant="primary" size="md"
+                       className="w-full"
+                       loading={actionLoading === 'record-delivery'}
+                       onClick={handleRecordDelivery}
+                       disabled={!!activeWindow}
+                     >
+                       🏏 Record Ball
+                     </GlassButton>
                     <div className="rounded-xl border border-border bg-muted/10 px-3 py-2 text-center">
                       <p className="text-xs text-muted-foreground">Total</p>
                       <p className="font-display text-lg font-bold text-foreground">
