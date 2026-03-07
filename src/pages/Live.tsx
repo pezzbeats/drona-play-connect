@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
@@ -7,7 +7,8 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { Scoreboard } from '@/components/live/Scoreboard';
 import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
-import { Loader2, Trophy, Gamepad2, BarChart3 } from 'lucide-react';
+import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
+import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff } from 'lucide-react';
 
 type Tab = 'score' | 'predict' | 'leaderboard';
 
@@ -17,120 +18,72 @@ interface GameSession {
   match_id: string;
 }
 
-export default function LivePage() {
-  const navigate = useNavigate();
-  const [session, setSession] = useState<GameSession | null>(null);
-  const [matchId, setMatchId] = useState<string | null>(null);
-  const [matchName, setMatchName] = useState('');
-  const [loading, setLoading] = useState(true);
+// ── Inner component that receives a resolved matchId ──────────────────────────
+function LiveContent({
+  matchId,
+  matchName: initialMatchName,
+  predictionsEnabled: initialPredictionsEnabled,
+  session,
+  onLogout,
+}: {
+  matchId: string;
+  matchName: string;
+  predictionsEnabled: boolean;
+  session: GameSession;
+  onLogout: () => void;
+}) {
+  const [matchName, setMatchName] = useState(initialMatchName);
+  const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
   const [activeTab, setActiveTab] = useState<Tab>('score');
-  const [predictionsEnabled, setPredictionsEnabled] = useState(false);
 
-  // Realtime subscription for match row changes (predictions_enabled toggled by admin)
-  const matchChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-
-  const subscribeToMatch = useCallback((id: string) => {
-    if (matchChannelRef.current) {
-      supabase.removeChannel(matchChannelRef.current);
-    }
-    const ch = supabase
-      .channel(`live-match-${id}`)
-      .on(
-        'postgres_changes' as any,
-        { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${id}` },
-        (payload: any) => {
-          if (payload.new) {
-            setPredictionsEnabled(!!payload.new.predictions_enabled);
-            if (payload.new.name) setMatchName(payload.new.name);
-          }
-        },
-      )
-      .subscribe();
-    matchChannelRef.current = ch;
-  }, []);
-
-  useEffect(() => {
-    initSession();
-    return () => {
-      if (matchChannelRef.current) supabase.removeChannel(matchChannelRef.current);
-    };
-  }, []);
-
-  const initSession = async () => {
-    const raw = localStorage.getItem('game_session');
-    if (!raw) { navigate('/play'); return; }
-    try {
-      const sess: GameSession = JSON.parse(raw);
-      if (!sess.mobile || !sess.pin) { navigate('/play'); return; }
-      setSession(sess);
-
-      const { data: match } = await supabase
-        .from('matches')
-        .select('id, name, predictions_enabled, disclaimer_enabled')
-        .eq('is_active_for_registration', true)
-        .single();
-
-      if (!match) {
-        if (sess.match_id) {
-          const { data: sessionMatch } = await supabase
-            .from('matches').select('id, name, predictions_enabled')
-            .eq('id', sess.match_id).single();
-          if (sessionMatch) {
-            setMatchId(sessionMatch.id);
-            setMatchName(sessionMatch.name);
-            setPredictionsEnabled(sessionMatch.predictions_enabled);
-            subscribeToMatch(sessionMatch.id);
-          }
-        }
-      } else {
-        setMatchId(match.id);
-        setMatchName(match.name);
-        setPredictionsEnabled(match.predictions_enabled);
-        const updatedSession = { ...sess, match_id: match.id };
-        localStorage.setItem('game_session', JSON.stringify(updatedSession));
-        setSession(updatedSession);
-        subscribeToMatch(match.id);
-      }
-    } catch { navigate('/play'); return; }
-    setLoading(false);
-  };
-
-  // If activeTab is predict but predictions got disabled reactively, switch to score
+  // Auto-switch away from Guess tab if admin disables predictions
   useEffect(() => {
     if (!predictionsEnabled && activeTab === 'predict') {
       setActiveTab('score');
     }
   }, [predictionsEnabled, activeTab]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('game_session');
-    navigate('/play');
-  };
+  // ── Realtime: watch matches row for admin toggles ────────────────────────
+  const matchSubscriptions = useMemo<ChannelSubscription[]>(() => [
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'matches',
+      filter: `id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new) {
+          setPredictionsEnabled(!!payload.new.predictions_enabled);
+          if (payload.new.name) setMatchName(payload.new.name);
+        }
+      },
+    },
+  ], [matchId]);
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <BackgroundOrbs />
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-    </div>
+  const refetchMatch = useCallback(async () => {
+    const { data } = await supabase
+      .from('matches')
+      .select('name, predictions_enabled')
+      .eq('id', matchId)
+      .single();
+    if (data) {
+      setMatchName(data.name);
+      setPredictionsEnabled(data.predictions_enabled);
+    }
+  }, [matchId]);
+
+  const { connected, reconnecting } = useRealtimeChannel(
+    `live-match-${matchId}`,
+    matchSubscriptions,
+    refetchMatch,
   );
 
-  if (!matchId) return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative">
-      <BackgroundOrbs />
-      <GlassCard className="p-8 text-center max-w-sm relative z-10">
-        <div className="text-4xl mb-4">🏏</div>
-        <h2 className="font-display text-xl font-bold text-foreground mb-2">No Active Match</h2>
-        <p className="text-muted-foreground text-sm mb-4">No match is currently live.</p>
-        <GlassButton variant="primary" size="md" onClick={() => navigate('/play')}>Back to Login</GlassButton>
-      </GlassCard>
-    </div>
-  );
-
-  const tabs: { key: Tab; label: string; icon: React.ReactNode; emoji: string }[] = [
-    { key: 'score',       label: 'Live Score',  icon: <BarChart3 className="h-5 w-5" />,  emoji: '📊' },
-    ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: 'Guess', icon: <Gamepad2 className="h-5 w-5" />, emoji: '🎯' }] : []),
-    { key: 'leaderboard', label: 'Leaderboard', icon: <Trophy className="h-5 w-5" />, emoji: '🏆' },
+  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'score',       label: 'Live Score',  icon: <BarChart3 className="h-5 w-5" /> },
+    ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: 'Guess', icon: <Gamepad2 className="h-5 w-5" /> }] : []),
+    { key: 'leaderboard', label: 'Leaderboard', icon: <Trophy className="h-5 w-5" /> },
   ];
+
+  const showBanner = !connected || reconnecting;
 
   return (
     <div
@@ -144,14 +97,39 @@ export default function LivePage() {
         🎯 <strong>Fun Game only.</strong> No betting, no wagering. Entertainment only.
       </div>
 
+      {/* ── Reconnecting / offline banner ── */}
+      <div
+        className={`relative z-20 shrink-0 overflow-hidden transition-all duration-500 ease-in-out ${
+          showBanner ? 'max-h-12 opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className={`flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold ${
+          reconnecting
+            ? 'bg-warning/15 border-b border-warning/30 text-warning'
+            : 'bg-destructive/15 border-b border-destructive/30 text-destructive'
+        }`}>
+          {reconnecting ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+              Reconnecting to live updates… your data is safe
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-3.5 w-3.5 shrink-0" />
+              Connecting to live updates…
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Compact sticky header */}
       <div className="sticky top-0 z-20 bg-[hsl(var(--background)/0.85)] backdrop-blur-md border-b border-border/40 px-4 py-3 shrink-0">
         <div className="flex items-center justify-between max-w-lg mx-auto">
           <div className="min-w-0">
             <h1 className="font-display text-base font-bold gradient-text leading-tight truncate">{matchName}</h1>
-            <p className="text-xs text-muted-foreground">{session?.mobile}</p>
+            <p className="text-xs text-muted-foreground">{session.mobile}</p>
           </div>
-          <GlassButton variant="ghost" size="sm" onClick={handleLogout} className="shrink-0 ml-2">
+          <GlassButton variant="ghost" size="sm" onClick={onLogout} className="shrink-0 ml-2">
             Exit
           </GlassButton>
         </div>
@@ -161,11 +139,11 @@ export default function LivePage() {
       <div className="flex-1 relative z-10 overflow-y-auto">
         <div className="max-w-lg mx-auto px-4 py-4">
           {activeTab === 'score' && <Scoreboard matchId={matchId} />}
-          {activeTab === 'predict' && session && (
+          {activeTab === 'predict' && (
             <PredictionPanel matchId={matchId} mobile={session.mobile} pin={session.pin} />
           )}
           {activeTab === 'leaderboard' && (
-            <Leaderboard matchId={matchId} mobile={session?.mobile} />
+            <Leaderboard matchId={matchId} mobile={session.mobile} />
           )}
 
           {/* Bottom disclaimer */}
@@ -191,7 +169,6 @@ export default function LivePage() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {/* iOS-style top border indicator */}
               <span
                 className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 rounded-b-full transition-all duration-300"
                 style={{
@@ -213,5 +190,88 @@ export default function LivePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Page shell — resolves session & match before rendering LiveContent ────────
+export default function LivePage() {
+  const navigate = useNavigate();
+  const [session, setSession] = useState<GameSession | null>(null);
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [matchName, setMatchName] = useState('');
+  const [predictionsEnabled, setPredictionsEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { initSession(); }, []);
+
+  const initSession = async () => {
+    const raw = localStorage.getItem('game_session');
+    if (!raw) { navigate('/play'); return; }
+    try {
+      const sess: GameSession = JSON.parse(raw);
+      if (!sess.mobile || !sess.pin) { navigate('/play'); return; }
+      setSession(sess);
+
+      const { data: match } = await supabase
+        .from('matches')
+        .select('id, name, predictions_enabled')
+        .eq('is_active_for_registration', true)
+        .single();
+
+      if (!match) {
+        if (sess.match_id) {
+          const { data: sessionMatch } = await supabase
+            .from('matches').select('id, name, predictions_enabled')
+            .eq('id', sess.match_id).single();
+          if (sessionMatch) {
+            setMatchId(sessionMatch.id);
+            setMatchName(sessionMatch.name);
+            setPredictionsEnabled(sessionMatch.predictions_enabled);
+          }
+        }
+      } else {
+        setMatchId(match.id);
+        setMatchName(match.name);
+        setPredictionsEnabled(match.predictions_enabled);
+        const updated = { ...sess, match_id: match.id };
+        localStorage.setItem('game_session', JSON.stringify(updated));
+        setSession(updated);
+      }
+    } catch { navigate('/play'); return; }
+    setLoading(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('game_session');
+    navigate('/play');
+  };
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <BackgroundOrbs />
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+
+  if (!matchId || !session) return (
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      <BackgroundOrbs />
+      <GlassCard className="p-8 text-center max-w-sm relative z-10">
+        <div className="text-4xl mb-4">🏏</div>
+        <h2 className="font-display text-xl font-bold text-foreground mb-2">No Active Match</h2>
+        <p className="text-muted-foreground text-sm mb-4">No match is currently live.</p>
+        <GlassButton variant="primary" size="md" onClick={() => navigate('/play')}>Back to Login</GlassButton>
+      </GlassCard>
+    </div>
+  );
+
+  return (
+    <LiveContent
+      matchId={matchId}
+      matchName={matchName}
+      predictionsEnabled={predictionsEnabled}
+      session={session}
+      onLogout={handleLogout}
+    />
   );
 }
