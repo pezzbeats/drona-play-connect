@@ -41,6 +41,7 @@ import AdminRoles from "./pages/admin/AdminRoles";
 import AdminSiteConfig from "./pages/admin/AdminSiteConfig";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminEligibility from "./pages/admin/AdminEligibility";
+import AdminTrialGame from "./pages/admin/AdminTrialGame";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import RefundPolicyPage from "./pages/RefundPolicy";
 import EventParticipationTermsPage from "./pages/EventParticipationTerms";

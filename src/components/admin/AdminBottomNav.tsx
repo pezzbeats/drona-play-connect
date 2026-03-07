@@ -5,6 +5,7 @@ import {
   LayoutDashboard, ScanLine, ShoppingBag, Radio, MoreHorizontal,
   Trophy, Users, BookOpen, BarChart2, Activity, HeartPulse,
   ShieldCheck, LogOut, X, Zap, FileText, CreditCard, ListChecks,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
