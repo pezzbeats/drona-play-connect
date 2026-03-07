@@ -943,6 +943,38 @@ export default function RegisterPage() {
     });
   };
 
+  const buildConfirmationWALink = (): string => {
+    const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${mobile}`;
+    const matchName = activeMatch?.name ?? 'T20 Fan Night';
+    const matchOpp = activeMatch?.opponent ? ` vs ${activeMatch.opponent}` : '';
+    const matchVenue = activeMatch?.venue ?? '';
+    const matchDate = activeMatch?.start_time
+      ? new Date(activeMatch.start_time).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '';
+    const paidLine = paymentMethod === 'pay_at_hotel'
+      ? `💳 Payment: Pay ₹${priceQuote?.total ?? ''} at the venue on arrival`
+      : `✅ Payment: ₹${priceQuote?.total ?? ''} Confirmed`;
+    const seatNos = tickets.map(t => `Seat ${t.seat_index + 1}`).join(', ');
+
+    const lines = [
+      `🎟️ Booking Confirmed — Hotel Drona Palace`,
+      ``,
+      `Hi ${fullName}! Your T20 Fan Night pass${tickets.length > 1 ? 's are' : ' is'} ready.`,
+      ``,
+      `🏏 Match: ${matchName}${matchOpp}`,
+      matchVenue ? `📍 Venue: ${matchVenue}` : null,
+      matchDate  ? `🗓️ Date: ${matchDate}` : null,
+      `🪑 Seats: ${seatNos}`,
+      paidLine,
+      ``,
+      `🎫 View passes anytime: ${ticketUrl}`,
+      ``,
+      `— Hotel Drona Palace`,
+    ].filter(Boolean).join('\n');
+
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(lines)}`;
+  };
+
   const handleWhatsAppShare = async () => {
     const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${mobile}`;
     const matchName = activeMatch?.name || 'T20 Fan Night';
