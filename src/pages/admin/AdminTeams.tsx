@@ -18,7 +18,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Pencil, Trash2, Users, CheckCircle2, Upload, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, CheckCircle2, Upload, AlertCircle, Star, Shield, Save, Loader2 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

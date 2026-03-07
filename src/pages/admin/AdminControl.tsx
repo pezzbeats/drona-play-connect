@@ -185,11 +185,26 @@ export default function AdminControl() {
       checkins: tickets.filter(t => t.status === 'used').length,
     });
 
-    // Players from roster teams
+    // Players: prefer match_lineup (ordered by batting_order), fall back to all team players
     const teamIds = (rosterRes.data || []).map((r: any) => r.team_id);
     if (teamIds.length > 0) {
-      const { data: playerData } = await supabase.from('players').select('*').in('team_id', teamIds);
-      setPlayers(playerData || []);
+      const { data: lineupData } = await supabase
+        .from('match_lineup')
+        .select('*, players(*)')
+        .eq('match_id', matchData.id)
+        .order('batting_order');
+
+      if (lineupData && lineupData.length > 0) {
+        // Use lineup players, preserving batting order
+        const lineupPlayers = lineupData
+          .filter((l: any) => l.players)
+          .map((l: any) => ({ ...l.players, _batting_order: l.batting_order, _is_captain: l.is_captain, _is_wk: l.is_wk }));
+        setPlayers(lineupPlayers);
+      } else {
+        // Fallback: all players from roster teams
+        const { data: playerData } = await supabase.from('players').select('*').in('team_id', teamIds);
+        setPlayers(playerData || []);
+      }
     }
 
     setLoading(false);
