@@ -148,8 +148,8 @@ export default function AdminControl() {
   // Bowler override for over
   const [overBowler, setOverBowler] = useState('');
 
-  // Prediction window form
-  const [windowQuestion, setWindowQuestion] = useState('What will happen on the next ball?');
+  // Primary ball outcome selection (drives delivery form prefill)
+  const [selectedOutcome, setSelectedOutcome] = useState<BallOutcomeKey | null>(null);
 
   // ── Data fetch ─────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
