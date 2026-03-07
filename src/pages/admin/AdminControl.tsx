@@ -386,6 +386,7 @@ export default function AdminControl() {
         is_wicket: false, wicket_type: '', out_player_id: '', fielder_id: '',
         free_hit: false, notes: '',
       }));
+      setSelectedOutcome(null);
       fetchAll();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed', description: e.message });
