@@ -843,6 +843,35 @@ export default function AdminControl() {
                     </div>
                   )}
 
+                  {/* ── Primary Outcome Selector ── */}
+                  <div className="border border-primary/20 rounded-xl p-3 bg-card/40 space-y-2">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">What happened on this ball?</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {BALL_OUTCOMES.map(opt => {
+                        const isSelected = selectedOutcome === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            onClick={() => applyOutcomePrefill(opt.key)}
+                            className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border-2 h-14 transition-all active:scale-95 ${
+                              isSelected
+                                ? `${opt.colorCls} bg-card/80 shadow-md`
+                                : 'border-border/40 text-muted-foreground hover:border-border bg-card/20'
+                            }`}
+                          >
+                            <span className={`text-base font-black leading-none ${isSelected ? opt.colorCls.split(' ')[1] : 'text-foreground'}`}>{opt.emoji}</span>
+                            <span className="text-[9px] uppercase tracking-wide leading-none">{opt.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedOutcome && (
+                      <p className="text-[10px] text-muted-foreground">
+                        ✓ Fields prefilled for <strong className="text-foreground">{BALL_OUTCOMES.find(o => o.key === selectedOutcome)?.label}</strong> — adjust below if needed
+                      </p>
+                    )}
+                  </div>
+
                   {/* Players */}
                   <div className="grid grid-cols-3 gap-2">
                     {[
