@@ -350,24 +350,32 @@ export default function AdminControl() {
   };
 
   const handlePhase = (phase: string) => {
+    const phaseLabels: Record<string, string> = {
+      pre: '⏸ Match set to Pre',
+      innings1: '▶ Innings 1 started',
+      break: '☕ Innings break',
+      innings2: '▶ Innings 2 started',
+      ended: '🏁 Match ended',
+    };
+    const msg = phaseLabels[phase] ?? `✅ Phase: ${phase}`;
     if (['innings2', 'ended'].includes(phase)) {
-      setConfirmDialog({ action: 'set_phase', label: `Set phase to "${phase}"?`, body: { action: 'set_phase', match_id: match?.id, phase } });
+      setConfirmDialog({ action: 'set_phase', label: `Set phase to "${phase}"?`, body: { action: 'set_phase', match_id: match?.id, phase }, successMsg: msg });
     } else {
-      callFunction('match-control', { action: 'set_phase', match_id: match?.id, phase }, `phase-${phase}`);
+      callFunction('match-control', { action: 'set_phase', match_id: match?.id, phase }, `phase-${phase}`, msg);
     }
   };
 
-  const handleInitMatch = () => callFunction('match-control', { action: 'init', match_id: match?.id }, 'init');
+  const handleInitMatch = () => callFunction('match-control', { action: 'init', match_id: match?.id }, 'init', '✅ Match initialized');
 
   const handleCreateOver = () => callFunction('over-control', {
     action: 'create_over', match_id: match?.id,
     innings_no: liveState?.current_innings || 1,
     bowler_id: delivery.bowler_id || overBowler || null,
-  }, 'create-over');
+  }, 'create-over', '🏏 New over started');
 
   const handleCompleteOver = () => {
     if (!activeOver) return;
-    callFunction('over-control', { action: 'update_over', over_id: activeOver.id, status: 'complete' }, 'complete-over');
+    callFunction('over-control', { action: 'update_over', over_id: activeOver.id, status: 'complete' }, 'complete-over', '✅ Over completed');
   };
 
   const handleUpdateOverStatus = (overId: string, status: string) => {
