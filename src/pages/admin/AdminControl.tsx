@@ -147,7 +147,7 @@ export default function AdminControl() {
   const [flagLoading, setFlagLoading] = useState<string | null>(null);
 
   // Confirmation dialogs
-  const [confirmDialog, setConfirmDialog] = useState<{ action: string; label: string; body: any } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ action: string; label: string; body: any; successMsg?: string } | null>(null);
 
   // Correction mode
   const [correctionMode, setCorrectionMode] = useState(false);

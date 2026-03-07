@@ -475,6 +475,59 @@ export default function AdminManualBooking() {
           </div>
         </GlassCard>
       )}
+
+      {/* ── Booking success card ── */}
+      {lastBooking && (
+        <GlassCard variant="elevated" className="p-5 border-success/40">
+          <div className="flex flex-col items-center text-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-success/15 border-2 border-success/40 flex items-center justify-center">
+              <CheckCircle2 className="h-7 w-7 text-success" />
+            </div>
+            <div>
+              <p className="font-display text-lg font-bold text-success">Booking Created!</p>
+              <p className="text-foreground font-semibold mt-0.5">{lastBooking.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 font-mono">{lastBooking.mobile} · {lastBooking.matchName}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Order: <span className="font-mono text-foreground">{lastBooking.orderId}</span></p>
+            </div>
+
+            {lastBooking.balance > 0 ? (
+              <div className="px-4 py-2.5 rounded-xl bg-warning/10 border border-warning/30 w-full">
+                <p className="text-warning font-bold text-sm">⚠ Balance Due at Entry: ₹{lastBooking.balance}</p>
+              </div>
+            ) : (
+              <div className="px-4 py-2.5 rounded-xl bg-success/10 border border-success/30 w-full">
+                <p className="text-success font-bold text-sm">✅ Fully Paid</p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 w-full mt-1">
+              <GlassButton
+                variant="primary"
+                size="lg"
+                className="w-full h-13 gap-2"
+                onClick={() => window.open(lastBooking.waLink, '_blank')}
+              >
+                <MessageCircle className="h-5 w-5" />
+                Send WhatsApp Confirmation
+              </GlassButton>
+              <GlassButton
+                variant="outline"
+                size="md"
+                className="w-full gap-2"
+                onClick={() => {
+                  setLastBooking(null);
+                  setExisting(null);
+                  setSearchMobile('');
+                  setSearched(false);
+                }}
+              >
+                <RotateCcw className="h-4 w-4" />
+                Book Another
+              </GlassButton>
+            </div>
+          </div>
+        </GlassCard>
+      )}
     </div>
   );
 }
