@@ -305,6 +305,12 @@ export default function AdminEligibility() {
                     <p className="text-xs text-foreground mt-0.5">{(checkResult as EligibilityRow).full_name}</p>
                   )}
                   <p className="text-xs text-muted-foreground mt-0.5">
+                    {(checkResult as EligibilityRow).eligible_seats > 0
+                      ? <><span className="text-success font-semibold">{(checkResult as EligibilityRow).eligible_seats} seats at ₹949</span>{' — extra seats at ₹999'}</>
+                      : 'All seats at ₹949'
+                    }
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Label: {(checkResult as EligibilityRow).match_label || '—'} · 
                     Uploaded {new Date((checkResult as EligibilityRow).uploaded_at).toLocaleDateString('en-IN')}
                   </p>
