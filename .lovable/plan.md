@@ -1,53 +1,80 @@
 
-## Root Cause — Found
+## Goal
+Add a prominent gameplay login section directly on the landing page (`Index.tsx`), so customers who are already checked in at the gate can quickly log in to the live game without having to navigate to `/play`. Also polish the existing `/play` page to match.
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+## What the landing page currently has
+- Hero section
+- Match highlight card
+- Features grid
+- Pricing card
+- Trust strip
+- Primary CTA buttons (Register / View Passes)
+- Sticky bottom bar
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+## What's needed
+1. **A new "Fan Game Login" section on the landing page** — embedded inline card with mobile + PIN inputs, same logic as `Play.tsx`. Placed prominently just below the match highlight card (before the features grid), since that's prime real estate that checkin users will see first.
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+2. **Sticky bottom bar** — add a third "🎮 Play Game" button alongside "Reserve Seats" and "View Passes".
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
-```
+3. **`/play` page** — keep it functional as a standalone route but it can be simplified/redirecting from the landing. No removal needed.
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
-
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
-
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
-
-## Changes
+## Changes — 2 files only
 
 ### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
 
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
-```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
+**A. Extract login logic into inline section** (~line 315, after match highlight card):
+```tsx
+{/* ─── FAN GAME LOGIN ─── */}
+<GameLoginCard />   // inline component defined at top of file
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+The `GameLoginCard` component will:
+- Import `useNavigate`, `useState` from React  
+- Call `supabase.functions.invoke('verify-game-pin', ...)` on submit  
+- On success: `localStorage.setItem('game_session', ...)` + `navigate('/live')`  
+- Styled as a GlassCard with `variant="elevated"` and a green/gaming glow border  
+- Compact design: headline "🎮 Already Checked In? Play Now", mobile input, PIN input (4 digits, OTP-style display), "Enter the Game" CTA button
+- Small disclaimer: "PIN is given at the gate on check-in"
 
-## Why this is the correct fix
+**B. Update sticky bottom bar** (line ~517):
+Add a third button between "View Passes" and the X dismiss button:
+```tsx
+<Link to="/play" className="flex-1">
+  <button className="w-full h-12 bg-primary/20 border border-primary/40 rounded-xl ...">
+    🎮 Play Game
+  </button>
+</Link>
+```
 
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+### `src/pages/Play.tsx`
+- Minor polish: add back-to-home link, ensure it still works standalone
+- No logic changes needed — the logic is already correct
+
+## Section Placement in Index.tsx
+
+```text
+Hero
+Match Highlight Card
+↓ [NEW] Fan Game Login Card  ← prominent, right after match info
+Features Grid
+Pricing Card
+Trust Strip
+Primary CTA Buttons (Register / View Passes)
+Legal Disclaimer
+Business Trust Block
+```
+
+## Styling
+The game login card will use:
+- `variant="elevated" glow` GlassCard
+- Border: `border-primary/40` (green glow, game feel)
+- Gamepad2 icon header
+- Compact 2-row layout (mobile + PIN stacked)
+- Consistent with existing glass-input, GlassButton patterns already in Play.tsx
+- A subtle "🎮 Fan Game" label/pill at top to signal who it's for
 
 ## Files Changed
 | File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+|------|--------|
+| `src/pages/Index.tsx` | Add inline GameLoginCard component + insert section after match card + update sticky bar |
+| `src/pages/Play.tsx` | Minor: add back link, keep standalone |
