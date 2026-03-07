@@ -53,6 +53,22 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Over is not active. Activate a new over first." }), { status: 409, headers: corsHeaders });
     }
 
+    // ── FAIRNESS: Auto-lock any open prediction windows BEFORE recording ─────
+    // This ensures no player can submit a guess AFTER seeing the ball result.
+    // Server-enforced — cannot be bypassed by any client.
+    const { data: openWindows } = await supabase
+      .from("prediction_windows")
+      .select("id")
+      .eq("match_id", match_id)
+      .eq("status", "open");
+
+    if (openWindows && openWindows.length > 0) {
+      await supabase
+        .from("prediction_windows")
+        .update({ status: "locked" })
+        .in("id", openWindows.map((w: any) => w.id));
+    }
+
     // ── Get existing deliveries for this over ────────────────────────────────
     const { data: existingDeliveries } = await supabase
       .from("deliveries")

@@ -93,7 +93,25 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       schema: 'public',
       table: 'prediction_windows',
       filter: `match_id=eq.${matchId}`,
-      callback: () => { fetchWindows(); },
+      callback: (payload) => {
+        // Optimistic instant update — no waiting for async refetch
+        // This means the UI freezes the moment the window status changes server-side
+        if (payload.new) {
+          setWindows(prev => {
+            const updated = prev.map(w =>
+              w.id === (payload.new as any).id ? { ...w, ...(payload.new as any) } : w
+            );
+            // If it's a new window not yet in list, add it
+            const exists = prev.some(w => w.id === (payload.new as any).id);
+            if (!exists && (payload.new as any).status === 'open') {
+              return [payload.new as any, ...updated];
+            }
+            return updated;
+          });
+        }
+        // Full refetch for correctness (catches deletes, resolved answers, etc.)
+        fetchWindows();
+      },
     },
     {
       event: '*',
