@@ -234,7 +234,7 @@ function PassCard({
               color: 'hsl(38 70% 65%)',
             }}
           >
-            <Download className="h-4 w-4" /> Save QR
+            <Download className="h-4 w-4" /> Save Pass
           </button>
           <button
             onClick={() => onShare(ticket)}
