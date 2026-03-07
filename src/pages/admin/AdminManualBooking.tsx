@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Loader2, ChevronRight, User, UserX, UserPlus, IndianRupee } from 'lucide-react';
+import { Search, Loader2, ChevronRight, User, UserX, UserPlus, IndianRupee, Tag } from 'lucide-react';
 
 export default function AdminManualBooking() {
   const [searchMobile, setSearchMobile] = useState('');
@@ -28,6 +28,7 @@ export default function AdminManualBooking() {
     advance_paid: '',
     advance_payment_method: 'cash',
   });
+  const [discount, setDiscount] = useState({ type: 'flat', value: '' });
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -39,6 +40,7 @@ export default function AdminManualBooking() {
   const handleSearch = async () => {
     if (!/^\d{10}$/.test(searchMobile)) return toast({ variant: 'destructive', title: 'Enter 10-digit mobile' });
     setSearching(true); setExisting(null); setSearched(false); setPriceQuote(null);
+    setDiscount({ type: 'flat', value: '' });
     const { data } = await supabase.from('orders').select('*, match:matches!match_id(name)')
       .eq('purchaser_mobile', searchMobile).eq('match_id', activeMatch?.id).single();
     setExisting(data || null);
@@ -53,18 +55,39 @@ export default function AdminManualBooking() {
       body: { mobile: searchMobile, seats_count: parseInt(form.seats_count), seating_type: form.seating_type, match_id: activeMatch.id }
     });
     setPriceQuote(data);
+    setDiscount({ type: 'flat', value: '' }); // reset discount on new quote
     setQuoteLoading(false);
   };
+
+  // ── Discount calculations ──
+  const subtotal = priceQuote?.total ?? 0;
+  const discountValue = parseFloat(discount.value) || 0;
+  const computedDiscountAmount = (() => {
+    if (!discount.value || discountValue <= 0 || !priceQuote) return 0;
+    if (discount.type === 'flat') return Math.min(Math.floor(discountValue), subtotal);
+    if (discount.type === 'percent') return Math.min(Math.floor(subtotal * discountValue / 100), subtotal);
+    return 0;
+  })();
+  const effectiveTotal = Math.max(0, subtotal - computedDiscountAmount);
+
+  const advancePaidNum = parseInt(form.advance_paid) || 0;
+  const balanceDue = Math.max(0, effectiveTotal - advancePaidNum);
+
+  const discountValueError = (() => {
+    if (!discount.value || discountValue <= 0) return null;
+    if (discount.type === 'flat' && discountValue > subtotal) return `Cannot exceed subtotal ₹${subtotal}`;
+    if (discount.type === 'percent' && discountValue > 100) return 'Percentage cannot exceed 100%';
+    return null;
+  })();
 
   const handleCreate = async () => {
     if (!form.full_name.trim()) return toast({ variant: 'destructive', title: 'Name required' });
     if (!priceQuote) return toast({ variant: 'destructive', title: 'Get quote first' });
+    if (discountValueError) return toast({ variant: 'destructive', title: discountValueError });
 
-    const totalAmount = priceQuote.total ?? 0;
-    const advancePaid = parseInt(form.advance_paid) || 0;
-
+    const advancePaid = advancePaidNum;
     if (advancePaid < 0) return toast({ variant: 'destructive', title: 'Advance cannot be negative' });
-    if (advancePaid > totalAmount) return toast({ variant: 'destructive', title: `Advance cannot exceed total ₹${totalAmount}` });
+    if (advancePaid > effectiveTotal) return toast({ variant: 'destructive', title: `Advance cannot exceed total ₹${effectiveTotal}` });
 
     setCreating(true);
     try {
@@ -82,14 +105,18 @@ export default function AdminManualBooking() {
           admin_id: user?.id,
           advance_paid: advancePaid,
           advance_payment_method: advancePaid > 0 ? form.advance_payment_method : null,
+          discount_type: computedDiscountAmount > 0 ? discount.type : null,
+          discount_value: computedDiscountAmount > 0 ? discountValue : 0,
         }
       });
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Unknown error');
 
-      const balanceDue = data.balance_due ?? 0;
-      const successMsg = balanceDue > 0
-        ? `Order ID: ${data.order_id} · Balance due at entry: ₹${balanceDue}`
-        : `Order ID: ${data.order_id} · Fully paid`;
+      const finalBalance = data.balance_due ?? 0;
+      const discApplied = data.discount_amount ?? 0;
+      let successMsg = `Order ID: ${data.order_id}`;
+      if (discApplied > 0) successMsg += ` · Discount: ₹${discApplied}`;
+      successMsg += finalBalance > 0 ? ` · Balance due at entry: ₹${finalBalance}` : ` · Fully paid`;
 
       toast({ title: '✅ Order created', description: successMsg });
       await supabase.from('admin_activity').insert({
@@ -97,9 +124,18 @@ export default function AdminManualBooking() {
         action: 'manual_booking',
         entity_type: 'order',
         entity_id: data.order_id,
-        meta: { mobile: searchMobile, name: form.full_name, advance_paid: advancePaid, balance_due: balanceDue },
+        meta: {
+          mobile: searchMobile,
+          name: form.full_name,
+          advance_paid: advancePaid,
+          balance_due: finalBalance,
+          discount_type: computedDiscountAmount > 0 ? discount.type : null,
+          discount_value: computedDiscountAmount > 0 ? discountValue : null,
+          discount_amount: discApplied,
+        },
       });
       setExisting(null); setPriceQuote(null); setSearched(false);
+      setDiscount({ type: 'flat', value: '' });
       setForm({ full_name: '', email: '', seats_count: '1', seating_type: 'regular', payment_method: 'cash', advance_paid: '', advance_payment_method: 'cash' });
       handleSearch();
     } catch (e: any) { toast({ variant: 'destructive', title: 'Failed', description: e.message }); }
@@ -107,9 +143,7 @@ export default function AdminManualBooking() {
   };
 
   const noCustomerFound = searched && !existing && searchMobile.length === 10 && activeMatch;
-  const advancePaidNum = parseInt(form.advance_paid) || 0;
-  const totalAmount = priceQuote?.total ?? 0;
-  const balanceDue = Math.max(0, totalAmount - advancePaidNum);
+  const showBookingForm = noCustomerFound;
 
   return (
     <div className="px-4 py-5 space-y-4 max-w-lg mx-auto md:p-6">
@@ -151,6 +185,11 @@ export default function AdminManualBooking() {
           <p className="text-sm font-medium text-warning mb-2">⚠️ Existing registration found</p>
           <p className="text-foreground font-bold">{existing.purchaser_full_name}</p>
           <p className="text-sm text-muted-foreground">{existing.match?.name} · {existing.seats_count} seats · ₹{existing.total_amount}</p>
+          {existing.discount_amount > 0 && (
+            <p className="text-xs text-success font-medium mt-1">
+              Discount applied: ₹{existing.discount_amount} ({existing.discount_type === 'percent' ? `${existing.discount_value}%` : 'flat'})
+            </p>
+          )}
           {existing.advance_paid > 0 && (
             <div className="mt-1.5 flex items-center gap-3">
               <span className="text-xs text-success font-medium">Advance: ₹{existing.advance_paid}</span>
@@ -182,7 +221,7 @@ export default function AdminManualBooking() {
       )}
 
       {/* Booking form */}
-      {noCustomerFound && (priceQuote !== undefined || priceQuote === undefined) && (
+      {showBookingForm && (priceQuote !== undefined || priceQuote === undefined) && (
         <GlassCard variant="elevated" className="p-4">
           <h2 className="font-display text-base font-bold text-foreground mb-4 flex items-center gap-2">
             <User className="h-4 w-4 text-primary" />New Booking
@@ -240,15 +279,106 @@ export default function AdminManualBooking() {
                     <span>₹{s.price}</span>
                   </div>
                 ))}
+
+                {/* Subtotal line */}
+                <div className="flex justify-between text-muted-foreground text-xs pt-2 mt-1 border-t border-border/50">
+                  <span>Subtotal</span>
+                  <span>₹{subtotal}</span>
+                </div>
+
+                {/* Discount line — only if discount applied */}
+                {computedDiscountAmount > 0 && (
+                  <div className="flex justify-between text-success text-xs py-0.5">
+                    <span className="flex items-center gap-1">
+                      <Tag className="h-3 w-3" />
+                      Discount {discount.type === 'percent' ? `(${discountValue}%)` : '(flat)'}
+                    </span>
+                    <span className="font-semibold">−₹{computedDiscountAmount}</span>
+                  </div>
+                )}
+
+                {/* Total line */}
                 <div className="flex justify-between font-bold text-foreground mt-2 pt-2 border-t border-border">
                   <span>Total</span>
-                  <span className="gradient-text text-lg">₹{priceQuote.total}</span>
+                  <span className={`text-lg ${computedDiscountAmount > 0 ? 'text-success' : 'gradient-text'}`}>
+                    ₹{effectiveTotal}
+                    {computedDiscountAmount > 0 && (
+                      <span className="ml-2 text-xs text-muted-foreground line-through font-normal">₹{subtotal}</span>
+                    )}
+                  </span>
                 </div>
               </GlassCard>
             ) : (
               <GlassButton variant="outline" size="md" className="w-full h-12" onClick={fetchQuote}>
                 Get Price Quote
               </GlassButton>
+            )}
+
+            {/* ── Discount section — only shown after quote ── */}
+            {priceQuote && (
+              <div className="space-y-3 pt-2 border-t border-border/50">
+                <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Tag className="h-4 w-4 text-primary" />
+                  Discount <span className="text-muted-foreground font-normal">(optional)</span>
+                </p>
+
+                {/* Toggle: Flat vs Percent */}
+                <div className="flex rounded-xl overflow-hidden border border-border h-10">
+                  <button
+                    type="button"
+                    onClick={() => setDiscount(d => ({ ...d, type: 'flat', value: '' }))}
+                    className={`flex-1 text-sm font-medium transition-colors ${
+                      discount.type === 'flat'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Flat (₹)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiscount(d => ({ ...d, type: 'percent', value: '' }))}
+                    className={`flex-1 text-sm font-medium transition-colors border-l border-border ${
+                      discount.type === 'percent'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Percent (%)
+                  </button>
+                </div>
+
+                {/* Discount input */}
+                <div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">
+                      {discount.type === 'flat' ? '₹' : '%'}
+                    </span>
+                    <Input
+                      className={`glass-input h-12 text-base font-semibold pl-7 ${discountValueError ? 'border-destructive' : ''}`}
+                      type="number"
+                      min={0}
+                      max={discount.type === 'percent' ? 100 : subtotal}
+                      step={discount.type === 'percent' ? 1 : 50}
+                      placeholder={discount.type === 'flat' ? 'e.g. 200' : 'e.g. 10'}
+                      value={discount.value}
+                      onChange={e => setDiscount(d => ({ ...d, value: e.target.value }))}
+                    />
+                  </div>
+                  {discountValueError && (
+                    <p className="text-destructive text-xs mt-1">{discountValueError}</p>
+                  )}
+                  {/* Live preview */}
+                  {computedDiscountAmount > 0 && !discountValueError && (
+                    <p className="text-success text-xs mt-1 font-medium">
+                      ₹{subtotal} − ₹{computedDiscountAmount} = <strong>₹{effectiveTotal}</strong>
+                      {discount.type === 'percent' && (
+                        <span className="text-muted-foreground ml-1">({discountValue}% of ₹{subtotal})</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Advance Payment section — only shown after quote */}
@@ -267,7 +397,7 @@ export default function AdminManualBooking() {
                       className="glass-input h-12 text-base font-semibold"
                       type="number"
                       min={0}
-                      max={priceQuote.total}
+                      max={effectiveTotal}
                       placeholder="0"
                       value={form.advance_paid}
                       onChange={e => setForm(f => ({ ...f, advance_paid: e.target.value }))}
@@ -310,10 +440,12 @@ export default function AdminManualBooking() {
               </div>
             )}
 
-            <GlassButton variant="primary" size="lg" className="w-full h-14 text-base" loading={creating} onClick={handleCreate} disabled={!priceQuote}>
+            <GlassButton variant="primary" size="lg" className="w-full h-14 text-base" loading={creating} onClick={handleCreate} disabled={!priceQuote || !!discountValueError}>
               {advancePaidNum > 0 && balanceDue > 0
                 ? `Create Booking · ₹${balanceDue} at entry`
-                : 'Create Booking'}
+                : computedDiscountAmount > 0
+                  ? `Create Booking · Save ₹${computedDiscountAmount}`
+                  : 'Create Booking'}
             </GlassButton>
           </div>
         </GlassCard>
