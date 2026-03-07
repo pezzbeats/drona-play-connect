@@ -782,7 +782,10 @@ export default function RegisterPage() {
             {eligibilityStatus === 'eligible' && (
               <div className="mb-4 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-success/10 border border-success/30 text-xs text-success font-semibold">
                 <Star className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>Semifinal attendee discount applied — qualifying seats at <strong>₹949/seat</strong> 🎉</span>
+                {eligibleSeats > 0
+                  ? <span>Semifinal discount — <strong>{eligibleSeats} seat{eligibleSeats > 1 ? 's' : ''} at ₹949</strong>, extras at ₹999 🎉</span>
+                  : <span>Semifinal attendee discount applied — qualifying seats at <strong>₹949/seat</strong> 🎉</span>
+                }
               </div>
             )}
             {eligibilityStatus === 'standard' && (
