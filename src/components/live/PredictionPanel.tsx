@@ -234,6 +234,19 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   return (
     <div className="space-y-3">
+      {/* Running score banner */}
+      {myScore && myScore.total_predictions > 0 && (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/25">
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary flex-shrink-0" />
+            <span className="text-sm font-bold text-primary">{myScore.total_points} pts</span>
+          </div>
+          <span className="text-xs text-muted-foreground font-medium">
+            {myScore.correct_predictions}/{myScore.total_predictions} correct
+          </span>
+        </div>
+      )}
+
       {/* Persistent legal disclaimer */}
       <div className="disclaimer-bar rounded-lg px-4 py-3 flex items-start gap-2 text-xs">
         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
