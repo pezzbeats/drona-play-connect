@@ -1108,7 +1108,8 @@ export default function RegisterPage() {
               <div>
                 <Label className="text-foreground mb-1.5 block">Full Name *</Label>
                 <Input ref={nameRef} className={`glass-input ${nameError ? 'border-destructive' : ''}`}
-                  placeholder="Enter your full name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" />
+                  placeholder="e.g. Rajesh Kumar" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name"
+                  onKeyDown={e => { if (e.key === 'Enter' && fullName.trim().length >= 2) document.querySelector<HTMLInputElement>('input[type="tel"]')?.focus(); }} />
                 {nameError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Please enter your full name</p>}
               </div>
               <div>
