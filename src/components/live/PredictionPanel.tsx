@@ -71,6 +71,19 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const prevOpenWindowIdRef = useRef<string | null>(null);
   const { toast } = useToast();
 
+  // Running score from leaderboard
+  const [myScore, setMyScore] = useState<{ total_points: number; correct_predictions: number; total_predictions: number } | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('leaderboard')
+      .select('total_points, correct_predictions, total_predictions')
+      .eq('match_id', matchId)
+      .eq('mobile', mobile)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setMyScore(data); });
+  }, [matchId, mobile]);
+
   const fetchWindows = useCallback(async () => {
     const [windowsRes, flagsRes] = await Promise.all([
       supabase

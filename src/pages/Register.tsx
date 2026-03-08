@@ -473,6 +473,10 @@ export default function RegisterPage() {
       return toast({ variant: 'destructive', title: 'Enter your full name' });
     if (!mobileValid)
       return toast({ variant: 'destructive', title: 'Invalid mobile', description: 'Enter a 10-digit mobile number' });
+    // Persist form state so it survives accidental navigation
+    sessionStorage.setItem('reg_fullName', fullName.trim());
+    sessionStorage.setItem('reg_mobile', mobile);
+    sessionStorage.setItem('reg_email', email);
     setStep(1);
   };
 
