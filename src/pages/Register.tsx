@@ -1523,10 +1523,17 @@ export default function RegisterPage() {
                 </p>
               )}
               {downloadProgress ? (
-                <div className="flex items-center justify-center gap-2 mt-2 text-xs text-primary">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Downloading pass {downloadProgress.done + 1} of {downloadProgress.total}…
-                </div>
+                downloadProgress.allDone ? (
+                  <div className="flex items-center justify-center gap-2 mt-2 text-xs text-success font-semibold">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    All {downloadProgress.total} pass{downloadProgress.total > 1 ? 'es' : ''} downloaded ✓
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 mt-2 text-xs text-primary">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Downloading pass {downloadProgress.done + 1} of {downloadProgress.total}…
+                  </div>
+                )
               ) : (
                 <p className="text-xs text-success/70 mt-1">✓ Passes downloaded</p>
               )}

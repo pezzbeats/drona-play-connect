@@ -116,6 +116,7 @@ function GameLoginCard() {
               maxLength={4}
               value={pin}
               onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onKeyDown={e => { if (e.key === 'Enter') handleLogin(); }}
             />
           </div>
         </div>

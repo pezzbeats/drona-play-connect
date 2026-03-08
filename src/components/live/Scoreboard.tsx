@@ -382,7 +382,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
             <p className="font-display text-xl font-bold text-foreground">Innings Break</p>
             <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-border/30">
               <span className="text-sm text-muted-foreground font-medium">
-                1st: {state.innings1_score}/{state.innings1_wickets} ({Number(state.innings1_overs).toFixed(1)} ov)
+                1st: {state.innings1_score}/{state.innings1_wickets} ({(() => { const o = Number(state.innings1_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)
               </span>
             </div>
             <div className="text-sm text-primary mt-2 font-semibold">
