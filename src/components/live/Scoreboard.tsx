@@ -276,13 +276,13 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
                     <span className="flex flex-col items-center">
                       <span className="font-bold text-[10px] uppercase mb-0.5">Inn 1</span>
                       <span className="font-display font-bold text-foreground">{state.innings1_score}/{state.innings1_wickets}</span>
-                      <span>({Number(state.innings1_overs).toFixed(1)} ov)</span>
+                      <span>({(() => { const o = Number(state.innings1_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
                     </span>
                     <div className="w-px bg-border/40" />
                     <span className="flex flex-col items-center">
                       <span className="font-bold text-[10px] uppercase mb-0.5">Inn 2</span>
                       <span className="font-display font-bold text-foreground">{state.innings2_score}/{state.innings2_wickets}</span>
-                      <span>({Number(state.innings2_overs).toFixed(1)} ov)</span>
+                      <span>({(() => { const o = Number(state.innings2_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
                     </span>
                     <div className="w-px bg-border/40" />
                     <span className="flex flex-col items-center justify-center">
