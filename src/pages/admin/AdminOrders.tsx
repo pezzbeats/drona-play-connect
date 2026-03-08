@@ -9,13 +9,17 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import {
   Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp,
   ExternalLink, AlertTriangle, Shield, Banknote, RefreshCw, Download,
   MessageCircle, KeyRound, QrCode, User, CreditCard, CheckSquare2,
-  Copy, Clock, Ticket, Zap, X, Users, ShieldCheck,
+  Copy, Clock, Ticket, Zap, X, Users, ShieldCheck, CalendarIcon, CalendarX,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
@@ -413,6 +417,10 @@ export default function AdminOrders() {
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
 
+  // Date range filter
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+
   const { toast } = useToast();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -700,9 +708,20 @@ export default function AdminOrders() {
       o.purchaser_mobile?.includes(search);
     const isPaidFully = ['paid_verified', 'paid_manual_verified'].includes(o.payment_status);
     const hasBalanceDue = (o.advance_paid ?? 0) > 0 && !isPaidFully;
-    if (statusFilter === 'balance_due') return matchSearch && hasBalanceDue;
-    const matchStatus = statusFilter === 'all' || o.payment_status === statusFilter;
-    return matchSearch && matchStatus;
+    if (statusFilter === 'balance_due' && !(!isPaidFully && (o.advance_paid ?? 0) > 0)) return false;
+    if (statusFilter !== 'balance_due') {
+      const matchStatus = statusFilter === 'all' || o.payment_status === statusFilter;
+      if (!matchStatus) return false;
+    }
+    if (dateFrom) {
+      const created = new Date(o.created_at);
+      if (created < startOfDay(dateFrom)) return false;
+    }
+    if (dateTo) {
+      const created = new Date(o.created_at);
+      if (created > endOfDay(dateTo)) return false;
+    }
+    return matchSearch;
   });
 
   const selectedOrders = filtered.filter(o => selectedIds.has(o.id));
@@ -1398,30 +1417,83 @@ export default function AdminOrders() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="glass-input pl-9 h-12 text-base"
-            placeholder="Search name or mobile..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="glass-input pl-9 h-12 text-base"
+              placeholder="Search name or mobile..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="glass-input h-12 sm:w-52">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="unpaid">Unpaid</SelectItem>
+              <SelectItem value="pending_verification">Pending</SelectItem>
+              <SelectItem value="paid_verified">Paid Verified</SelectItem>
+              <SelectItem value="paid_rejected">Rejected</SelectItem>
+              <SelectItem value="paid_manual_verified">Manual Verified</SelectItem>
+              <SelectItem value="balance_due">⚠ Balance Due</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="glass-input h-12 sm:w-52">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="unpaid">Unpaid</SelectItem>
-            <SelectItem value="pending_verification">Pending</SelectItem>
-            <SelectItem value="paid_verified">Paid Verified</SelectItem>
-            <SelectItem value="paid_rejected">Rejected</SelectItem>
-            <SelectItem value="paid_manual_verified">Manual Verified</SelectItem>
-            <SelectItem value="balance_due">⚠ Balance Due</SelectItem>
-          </SelectContent>
-        </Select>
+
+        {/* Date range row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <CalendarIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="h-9 px-3 text-xs font-medium glass-input border-border/50">
+                {dateFrom ? format(dateFrom, 'dd MMM yyyy') : 'From date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateFrom}
+                onSelect={setDateFrom}
+                initialFocus
+                className="p-3 pointer-events-auto"
+                disabled={(d) => dateTo ? d > dateTo : false}
+              />
+            </PopoverContent>
+          </Popover>
+          <span className="text-muted-foreground text-xs">—</span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="h-9 px-3 text-xs font-medium glass-input border-border/50">
+                {dateTo ? format(dateTo, 'dd MMM yyyy') : 'To date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateTo}
+                onSelect={setDateTo}
+                initialFocus
+                className="p-3 pointer-events-auto"
+                disabled={(d) => dateFrom ? d < dateFrom : false}
+              />
+            </PopoverContent>
+          </Popover>
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2 text-xs text-muted-foreground hover:text-destructive"
+              onClick={() => { setDateFrom(undefined); setDateTo(undefined); }}
+            >
+              <CalendarX className="h-3.5 w-3.5 mr-1" />
+              Clear dates
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Broadcast action bar — appears when items are selected */}
