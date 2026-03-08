@@ -130,8 +130,8 @@ function LiveContent({
             <h1 className="font-display text-base font-bold gradient-text leading-tight truncate">{matchName}</h1>
             <p className="text-xs text-muted-foreground">{session.mobile}</p>
           </div>
-          <GlassButton variant="ghost" size="sm" onClick={() => setShowExitConfirm(true)} className="shrink-0 ml-2">
-            Exit
+          <GlassButton variant="ghost" size="sm" onClick={() => setShowExitConfirm(true)} className="shrink-0 ml-2 gap-1.5">
+            <LogOut className="h-3.5 w-3.5" /> Exit
           </GlassButton>
         </div>
       </div>
