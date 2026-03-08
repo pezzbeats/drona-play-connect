@@ -1422,25 +1422,6 @@ export default function RegisterPage() {
                     </div>
                   </button>
 
-                  {/* ── UPI QR ── */}
-                  <button
-                    onClick={() => setPaymentMethod('upi_qr')}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                      paymentMethod === 'upi_qr' ? 'border-success bg-success/10' : 'border-border hover:border-success/40'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentMethod === 'upi_qr' ? 'bg-success/20' : 'bg-muted/40'}`}>
-                        <Smartphone className={`h-5 w-5 ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-muted-foreground'}`} />
-                      </div>
-                      <div>
-                        <span className={`font-display font-bold text-base ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-foreground'}`}>Pay via UPI / QR</span>
-                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR code & upload screenshot — AI verification</p>
-                      </div>
-                      {paymentMethod === 'upi_qr' && <CheckCircle2 className="h-5 w-5 text-success ml-auto flex-shrink-0" />}
-                    </div>
-                  </button>
-
                   {/* ── Pay at Hotel ── */}
                   <button
                     onClick={() => setPaymentMethod('pay_at_hotel')}
@@ -1466,6 +1447,25 @@ export default function RegisterPage() {
                       <span>Passes marked <strong>Unpaid</strong>. Pay the full amount at the venue before entry.</span>
                     </div>
                   )}
+
+                  {/* ── UPI QR ── */}
+                  <button
+                    onClick={() => setPaymentMethod('upi_qr')}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      paymentMethod === 'upi_qr' ? 'border-success bg-success/10' : 'border-border hover:border-success/40'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentMethod === 'upi_qr' ? 'bg-success/20' : 'bg-muted/40'}`}>
+                        <Smartphone className={`h-5 w-5 ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <span className={`font-display font-bold text-base ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-foreground'}`}>Pay via UPI / QR</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR code & upload screenshot — AI verification</p>
+                      </div>
+                      {paymentMethod === 'upi_qr' && <CheckCircle2 className="h-5 w-5 text-success ml-auto flex-shrink-0" />}
+                    </div>
+                  </button>
 
                   <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1 pt-1">
                     <Star className="h-3 w-3" />
