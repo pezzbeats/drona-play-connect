@@ -518,6 +518,8 @@ export default function RegisterPage() {
       setOrderId(data.order_id);
       if (method === 'pay_at_hotel') {
         setTickets(data.tickets || []);
+        // Clear saved form state — booking complete
+        ['reg_fullName', 'reg_mobile', 'reg_email', 'reg_seatsCount'].forEach(k => sessionStorage.removeItem(k));
         setStep(3);
       }
       setLoading(false);
