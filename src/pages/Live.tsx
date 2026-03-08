@@ -8,7 +8,7 @@ import { Scoreboard } from '@/components/live/Scoreboard';
 import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
-import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X } from 'lucide-react';
+import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X, Medal } from 'lucide-react';
 
 type Tab = 'score' | 'predict' | 'leaderboard';
 
@@ -26,7 +26,8 @@ function LiveContent({
   session,
   onLogout,
   initialTab = 'score',
-  matchEnded = false,
+  matchEnded: initialMatchEnded = false,
+  onMatchEnded,
 }: {
   matchId: string;
   matchName: string;
@@ -35,6 +36,7 @@ function LiveContent({
   onLogout: () => void;
   initialTab?: Tab;
   matchEnded?: boolean;
+  onMatchEnded?: () => void;
 }) {
   const [matchName, setMatchName] = useState(initialMatchName);
   const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
@@ -42,6 +44,9 @@ function LiveContent({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [guessNudge, setGuessNudge] = useState(false);
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Personal rank chip state
+  const [myRank, setMyRank] = useState<{ rank_position: number | null; total_points: number } | null>(null);
 
   // Auto-dismiss nudge after 5 s
   useEffect(() => {
@@ -59,7 +64,18 @@ function LiveContent({
     }
   }, [predictionsEnabled, activeTab]);
 
-  // ── Realtime: watch matches row for admin toggles + new prediction windows ──
+  // Fetch initial personal rank
+  useEffect(() => {
+    supabase
+      .from('leaderboard')
+      .select('rank_position, total_points')
+      .eq('match_id', matchId)
+      .eq('mobile', session.mobile)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setMyRank(data); });
+  }, [matchId, session.mobile]);
+
+  // ── Realtime: watch matches row + prediction windows + personal leaderboard ──
   const matchSubscriptions = useMemo<ChannelSubscription[]>(() => [
     {
       event: 'UPDATE',
@@ -70,6 +86,10 @@ function LiveContent({
         if (payload.new) {
           setPredictionsEnabled(!!payload.new.predictions_enabled);
           if (payload.new.name) setMatchName(payload.new.name);
+          // Reactive match-end detection — notify shell to re-render
+          if (payload.new.status === 'ended') {
+            onMatchEnded?.();
+          }
         }
       },
     },
@@ -93,7 +113,6 @@ function LiveContent({
       table: 'prediction_windows',
       filter: `match_id=eq.${matchId}`,
       callback: (payload) => {
-        // Re-opened window: new status is 'open' but old status was not
         if (payload.new?.status === 'open' && payload.old?.status !== 'open') {
           setActiveTab(prev => {
             if (prev !== 'predict') setGuessNudge(true);
@@ -102,19 +121,31 @@ function LiveContent({
         }
       },
     },
-  ], [matchId]);
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'leaderboard',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new?.mobile === session.mobile) {
+          setMyRank({ rank_position: payload.new.rank_position, total_points: payload.new.total_points });
+        }
+      },
+    },
+  ], [matchId, session.mobile, onMatchEnded]);
 
   const refetchMatch = useCallback(async () => {
     const { data } = await supabase
       .from('matches')
-      .select('name, predictions_enabled')
+      .select('name, predictions_enabled, status')
       .eq('id', matchId)
       .single();
     if (data) {
       setMatchName(data.name);
       setPredictionsEnabled(data.predictions_enabled);
+      if (data.status === 'ended') onMatchEnded?.();
     }
-  }, [matchId]);
+  }, [matchId, onMatchEnded]);
 
   const { connected, reconnecting } = useRealtimeChannel(
     `live-match-${matchId}`,
@@ -143,7 +174,7 @@ function LiveContent({
       </div>
 
       {/* ── Match ended banner ── */}
-      {matchEnded && (
+      {initialMatchEnded && (
         <div className="relative z-20 shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold bg-muted/30 border-b border-border/40 text-muted-foreground">
           🏆 This match has ended — view the final leaderboard below
         </div>
@@ -176,12 +207,23 @@ function LiveContent({
 
       {/* Compact sticky header */}
       <div className="sticky top-0 z-20 bg-[hsl(var(--background)/0.85)] backdrop-blur-md border-b border-border/40 px-4 py-3 shrink-0">
-        <div className="flex items-center justify-between max-w-lg mx-auto">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between max-w-lg mx-auto gap-2">
+          <div className="min-w-0 flex-1">
             <h1 className="font-display text-base font-bold gradient-text leading-tight truncate">{matchName}</h1>
             <p className="text-xs text-muted-foreground">{session.mobile}</p>
           </div>
-          <GlassButton variant="ghost" size="sm" onClick={() => setShowExitConfirm(true)} className="shrink-0 ml-2 gap-1.5">
+          {/* Personal rank chip — visible once the player has guessed */}
+          {myRank && myRank.rank_position != null && (
+            <button
+              onClick={() => setActiveTab('leaderboard')}
+              className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/15 border border-primary/30 text-xs font-bold text-primary hover:bg-primary/25 transition-colors"
+              title="View leaderboard"
+            >
+              <Medal className="h-3 w-3" />
+              #{myRank.rank_position} · {myRank.total_points}pts
+            </button>
+          )}
+          <GlassButton variant="ghost" size="sm" onClick={() => setShowExitConfirm(true)} className="shrink-0 gap-1.5">
             <LogOut className="h-3.5 w-3.5" /> Exit
           </GlassButton>
         </div>
@@ -354,6 +396,11 @@ export default function LivePage() {
     navigate('/play');
   };
 
+  // Called by LiveContent when a realtime update signals match ended
+  const handleMatchEnded = useCallback(() => {
+    setMatchStatus('ended');
+  }, []);
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <BackgroundOrbs />
@@ -372,6 +419,7 @@ export default function LivePage() {
         onLogout={handleLogout}
         initialTab="leaderboard"
         matchEnded
+        onMatchEnded={handleMatchEnded}
       />
     );
   }
@@ -400,6 +448,7 @@ export default function LivePage() {
       predictionsEnabled={predictionsEnabled}
       session={session}
       onLogout={handleLogout}
+      onMatchEnded={handleMatchEnded}
     />
   );
 }
