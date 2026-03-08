@@ -1517,7 +1517,14 @@ export default function RegisterPage() {
                   ✅ Verified at {new Date(paymentVerifiedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground mt-1 opacity-75">Pass downloading automatically…</p>
+              {downloadProgress ? (
+                <div className="flex items-center justify-center gap-2 mt-2 text-xs text-primary">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Downloading pass {downloadProgress.done + 1} of {downloadProgress.total}…
+                </div>
+              ) : (
+                <p className="text-xs text-success/70 mt-1">✓ Passes downloaded</p>
+              )}
             </div>
 
             {/* Hidden high-res QR canvases for buildPassCanvas */}
