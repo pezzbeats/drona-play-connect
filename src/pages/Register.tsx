@@ -1151,8 +1151,19 @@ export default function RegisterPage() {
               </div>
               <div>
                 <Label className="text-foreground mb-1.5 block">Email (optional)</Label>
-                <Input className="glass-input" placeholder="your@email.com" type="email"
-                  value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+                <Input
+                  className={`glass-input ${emailError ? 'border-destructive' : ''}`}
+                  placeholder="your@email.com"
+                  type="email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); if (emailError) setEmailError(''); }}
+                  onBlur={() => {
+                    if (email && !isEmailValid(email)) setEmailError('Please enter a valid email address');
+                    else setEmailError('');
+                  }}
+                  autoComplete="email"
+                />
+                {emailError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {emailError}</p>}
               </div>
               <p className="text-xs text-muted-foreground text-center">
                 By continuing, you agree to our{' '}
