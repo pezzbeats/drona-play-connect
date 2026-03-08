@@ -1575,6 +1575,7 @@ export default function AdminOrders() {
                       {currentTab === 'passes' && renderPassesTab(order, order.id)}
                       {currentTab === 'gamepin' && renderGamePinTab(order, order.id)}
                       {currentTab === 'whatsapp' && renderWhatsAppTab(order, order.id)}
+                      {currentTab === 'consent' && renderConsentTab(order)}
                     </div>
                   </div>
                 )}
