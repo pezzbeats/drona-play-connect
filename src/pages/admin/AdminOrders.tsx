@@ -26,7 +26,7 @@ import hotelLogo from '@/assets/hotel-logo.png';
 
 type OverrideTarget = { orderId: string; verdict: 'paid_manual_verified' | 'paid_rejected' } | null;
 type AdvanceFormState = { orderId: string; amount: string; method: string } | null;
-type DetailTab = 'overview' | 'passes' | 'gamepin' | 'whatsapp';
+type DetailTab = 'overview' | 'passes' | 'gamepin' | 'whatsapp' | 'consent';
 
 interface TicketRow {
   id: string;
