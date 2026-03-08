@@ -9,13 +9,17 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import {
   Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp,
   ExternalLink, AlertTriangle, Shield, Banknote, RefreshCw, Download,
   MessageCircle, KeyRound, QrCode, User, CreditCard, CheckSquare2,
-  Copy, Clock, Ticket, Zap, X, Users, ShieldCheck,
+  Copy, Clock, Ticket, Zap, X, Users, ShieldCheck, CalendarIcon, CalendarX,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
