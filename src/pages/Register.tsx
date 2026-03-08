@@ -969,7 +969,7 @@ export default function RegisterPage() {
   };
 
   const buildConfirmationWALink = (): string => {
-    const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${mobile}`;
+    const ticketUrl = `https://cricket.dronapalace.com/ticket?mobile=${mobile}`;
     const matchName = activeMatch?.name ?? 'T20 Fan Night';
     const matchOpp = activeMatch?.opponent ? ` vs ${activeMatch.opponent}` : '';
     const matchVenue = activeMatch?.venue ?? '';
