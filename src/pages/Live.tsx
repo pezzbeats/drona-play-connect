@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
@@ -8,7 +8,7 @@ import { Scoreboard } from '@/components/live/Scoreboard';
 import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
-import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut } from 'lucide-react';
+import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X } from 'lucide-react';
 
 type Tab = 'score' | 'predict' | 'leaderboard';
 
@@ -40,6 +40,17 @@ function LiveContent({
   const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [guessNudge, setGuessNudge] = useState(false);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Auto-dismiss nudge after 5 s
+  useEffect(() => {
+    if (guessNudge) {
+      clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = setTimeout(() => setGuessNudge(false), 5000);
+    }
+    return () => clearTimeout(nudgeTimerRef.current);
+  }, [guessNudge]);
 
   // Auto-switch away from Guess tab if admin disables predictions
   useEffect(() => {
@@ -48,7 +59,7 @@ function LiveContent({
     }
   }, [predictionsEnabled, activeTab]);
 
-  // ── Realtime: watch matches row for admin toggles ────────────────────────
+  // ── Realtime: watch matches row for admin toggles + new prediction windows ──
   const matchSubscriptions = useMemo<ChannelSubscription[]>(() => [
     {
       event: 'UPDATE',
@@ -59,6 +70,23 @@ function LiveContent({
         if (payload.new) {
           setPredictionsEnabled(!!payload.new.predictions_enabled);
           if (payload.new.name) setMatchName(payload.new.name);
+        }
+      },
+    },
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'prediction_windows',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        // Only nudge if the window is 'open' and user isn't already on the Guess tab
+        if (payload.new?.status === 'open') {
+          setActiveTab(prev => {
+            if (prev !== 'predict') {
+              setGuessNudge(true);
+            }
+            return prev;
+          });
         }
       },
     },
@@ -181,6 +209,40 @@ function LiveContent({
           <div className="mt-6 disclaimer-bar rounded-lg p-3 text-xs">
             🎯 <strong>Disclaimer:</strong> Fun entertainment game only. No real money, no gambling. All guesses are for fun.
           </div>
+        </div>
+      </div>
+
+      {/* ── Guess nudge banner — slides up above tab bar ── */}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-400 ease-out ${
+          guessNudge && predictionsEnabled ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
+        }`}
+        style={{ paddingBottom: 'calc(68px + env(safe-area-inset-bottom))' }}
+      >
+        <div className="max-w-lg mx-auto px-3 pb-2">
+          <button
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-success/95 backdrop-blur-md border border-success/60 shadow-[0_4px_24px_hsl(142_70%_35%/0.45)] text-left active:scale-[0.98] transition-transform"
+            onClick={() => {
+              setActiveTab('predict');
+              setGuessNudge(false);
+              clearTimeout(nudgeTimerRef.current);
+            }}
+          >
+            <Zap className="h-5 w-5 text-white shrink-0 animate-pulse" />
+            <span className="flex-1 text-sm font-bold text-white leading-tight">
+              New guess available! Tap to guess →
+            </span>
+            <button
+              className="shrink-0 text-white/70 hover:text-white transition-colors p-0.5"
+              onClick={e => {
+                e.stopPropagation();
+                setGuessNudge(false);
+                clearTimeout(nudgeTimerRef.current);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </button>
         </div>
       </div>
 
