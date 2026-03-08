@@ -217,7 +217,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
                 {state.super_over_score ?? 0}/{state.super_over_wickets ?? 0}
               </div>
               <div className="text-muted-foreground text-sm mt-2 font-medium">
-                {Number(state.super_over_overs ?? 0).toFixed(1)} overs · Super Over
+                {(() => { const o = Number(state.super_over_overs ?? 0); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} overs · Super Over
               </div>
 
               {/* Target line for innings B */}
@@ -276,13 +276,13 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
                     <span className="flex flex-col items-center">
                       <span className="font-bold text-[10px] uppercase mb-0.5">Inn 1</span>
                       <span className="font-display font-bold text-foreground">{state.innings1_score}/{state.innings1_wickets}</span>
-                      <span>({Number(state.innings1_overs).toFixed(1)} ov)</span>
+                      <span>({(() => { const o = Number(state.innings1_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
                     </span>
                     <div className="w-px bg-border/40" />
                     <span className="flex flex-col items-center">
                       <span className="font-bold text-[10px] uppercase mb-0.5">Inn 2</span>
                       <span className="font-display font-bold text-foreground">{state.innings2_score}/{state.innings2_wickets}</span>
-                      <span>({Number(state.innings2_overs).toFixed(1)} ov)</span>
+                      <span>({(() => { const o = Number(state.innings2_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
                     </span>
                     <div className="w-px bg-border/40" />
                     <span className="flex flex-col items-center justify-center">
@@ -310,12 +310,12 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
                 {score}/{wickets}
               </div>
               <div className="text-muted-foreground text-sm mt-2 font-medium">
-                {Number(overs).toFixed(1)} overs · Innings {currentInnings}
+                {(() => { const o = Number(overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} overs · Innings {currentInnings}
               </div>
               {state.target_runs && currentInnings === 2 && (
                 <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/25">
                   <span className="text-xs text-primary font-semibold">
-                    Target {state.target_runs} · Need {Math.max(0, state.target_runs - (score || 0))} in {Math.max(0, 20 - Number(overs)).toFixed(1)} ov
+                    Target {state.target_runs} · Need {Math.max(0, state.target_runs - (score || 0))} in {(() => { const r = Math.max(0, 20 - Number(overs)); return r === Math.floor(r) ? Math.floor(r) : r.toFixed(1); })()} ov
                   </span>
                 </div>
               )}
@@ -328,13 +328,13 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
                 <span className="flex flex-col items-center">
                   <span className="section-title mb-0.5">Inn 1</span>
                   <span className="font-display font-bold text-foreground">{state.innings1_score}/{state.innings1_wickets}</span>
-                  <span>({Number(state.innings1_overs).toFixed(1)} ov)</span>
+                  <span>({(() => { const o = Number(state.innings1_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
                 </span>
                 <div className="w-px bg-border/40" />
                 <span className="flex flex-col items-center">
                   <span className="section-title mb-0.5">Inn 2</span>
                   <span className="font-display font-bold text-foreground">{state.innings2_score}/{state.innings2_wickets}</span>
-                  <span>({Number(state.innings2_overs).toFixed(1)} ov)</span>
+                  <span>({(() => { const o = Number(state.innings2_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
                 </span>
               </div>
             )}
@@ -382,7 +382,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
             <p className="font-display text-xl font-bold text-foreground">Innings Break</p>
             <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-border/30">
               <span className="text-sm text-muted-foreground font-medium">
-                1st: {state.innings1_score}/{state.innings1_wickets} ({Number(state.innings1_overs).toFixed(1)} ov)
+                1st: {state.innings1_score}/{state.innings1_wickets} ({(() => { const o = Number(state.innings1_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)
               </span>
             </div>
             <div className="text-sm text-primary mt-2 font-semibold">

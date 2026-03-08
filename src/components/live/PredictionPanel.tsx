@@ -1,9 +1,9 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, CheckCircle2, Clock, AlertTriangle, PauseCircle, Loader2 } from 'lucide-react';
+import { Lock, CheckCircle2, Clock, AlertTriangle, PauseCircle, Loader2, Target } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
 // ── Standardised ball outcome set (mirrors AdminControl.BALL_OUTCOMES) ────────
@@ -70,6 +70,19 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const [animatingWindowId, setAnimatingWindowId] = useState<string | null>(null);
   const prevOpenWindowIdRef = useRef<string | null>(null);
   const { toast } = useToast();
+
+  // Running score from leaderboard
+  const [myScore, setMyScore] = useState<{ total_points: number; correct_predictions: number; total_predictions: number } | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('leaderboard')
+      .select('total_points, correct_predictions, total_predictions')
+      .eq('match_id', matchId)
+      .eq('mobile', mobile)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setMyScore(data); });
+  }, [matchId, mobile]);
 
   const fetchWindows = useCallback(async () => {
     const [windowsRes, flagsRes] = await Promise.all([
@@ -221,6 +234,19 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   return (
     <div className="space-y-3">
+      {/* Running score banner */}
+      {myScore && myScore.total_predictions > 0 && (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/25">
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary flex-shrink-0" />
+            <span className="text-sm font-bold text-primary">{myScore.total_points} pts</span>
+          </div>
+          <span className="text-xs text-muted-foreground font-medium">
+            {myScore.correct_predictions}/{myScore.total_predictions} correct
+          </span>
+        </div>
+      )}
+
       {/* Persistent legal disclaimer */}
       <div className="disclaimer-bar rounded-lg px-4 py-3 flex items-start gap-2 text-xs">
         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />

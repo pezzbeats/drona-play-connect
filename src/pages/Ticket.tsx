@@ -940,7 +940,7 @@ export default function TicketPage() {
                 onDownload={downloadPassAsPng}
                 onShare={whatsappShare}
                 onRemind={
-                  isAdmin && !paidTickets && Math.max(0, (ticket.order as any)?.total_amount - (ticket.order as any)?.advance_paid) > 0
+                  !paidTickets && Math.max(0, (ticket.order as any)?.total_amount - (ticket.order as any)?.advance_paid) > 0
                     ? () => window.open(buildReminderLink(ticket), '_blank')
                     : undefined
                 }
@@ -950,7 +950,11 @@ export default function TicketPage() {
         </div>
 
         <p className="text-xs text-center text-muted-foreground mt-6 no-print">
-          Questions? Contact hotel reception.
+          Questions?{' '}
+          <a href="tel:7217016170" className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">
+            Contact hotel reception
+          </a>
+          {' '}· +91 72170 16170
         </p>
       </div>
     </div>

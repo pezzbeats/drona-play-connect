@@ -322,9 +322,10 @@ export default function RegisterPage() {
   const previewMatchId = new URLSearchParams(window.location.search).get('preview');
   const isPreviewMode = !!previewMatchId;
 
-  const [fullName, setFullName] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [email, setEmail] = useState('');
+  // Restore form state from sessionStorage if available (prevents data loss on navigation)
+  const [fullName, setFullName] = useState(() => sessionStorage.getItem('reg_fullName') || '');
+  const [mobile, setMobile] = useState(() => sessionStorage.getItem('reg_mobile') || '');
+  const [email, setEmail] = useState(() => sessionStorage.getItem('reg_email') || '');
   const [emailError, setEmailError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const mobileValid = /^\d{10}$/.test(mobile);
@@ -362,7 +363,7 @@ export default function RegisterPage() {
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
   // Auto-download full pass PNGs when step 3 loads (staggered to avoid browser blocking)
-  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number; allDone?: boolean } | null>(null);
   useEffect(() => {
     if (step !== 3 || tickets.length === 0 || !activeMatch) return;
     let cancelled = false;
@@ -391,7 +392,11 @@ export default function RegisterPage() {
           if (tickets.length > 1) await new Promise(r => setTimeout(r, 350));
         } catch { /* silent */ }
       }
-      if (!cancelled) setDownloadProgress(null);
+      if (!cancelled) {
+        // Show success confirmation for 1.5s before clearing
+        setDownloadProgress(prev => prev ? { ...prev, allDone: true } : null);
+        setTimeout(() => { if (!cancelled) setDownloadProgress(null); }, 1500);
+      }
     };
     run();
     return () => { cancelled = true; };
@@ -468,6 +473,10 @@ export default function RegisterPage() {
       return toast({ variant: 'destructive', title: 'Enter your full name' });
     if (!mobileValid)
       return toast({ variant: 'destructive', title: 'Invalid mobile', description: 'Enter a 10-digit mobile number' });
+    // Persist form state so it survives accidental navigation
+    sessionStorage.setItem('reg_fullName', fullName.trim());
+    sessionStorage.setItem('reg_mobile', mobile);
+    sessionStorage.setItem('reg_email', email);
     setStep(1);
   };
 
@@ -1108,7 +1117,8 @@ export default function RegisterPage() {
               <div>
                 <Label className="text-foreground mb-1.5 block">Full Name *</Label>
                 <Input ref={nameRef} className={`glass-input ${nameError ? 'border-destructive' : ''}`}
-                  placeholder="Enter your full name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" />
+                  placeholder="e.g. Rajesh Kumar" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name"
+                  onKeyDown={e => { if (e.key === 'Enter' && fullName.trim().length >= 2) document.querySelector<HTMLInputElement>('input[type="tel"]')?.focus(); }} />
                 {nameError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Please enter your full name</p>}
               </div>
               <div>
@@ -1444,7 +1454,7 @@ export default function RegisterPage() {
                   {paymentMethod === 'pay_at_hotel' && (
                     <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-sm text-warning flex items-start gap-2">
                       <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      <span>Passes marked <strong>Unpaid</strong>. Pay the full amount at the venue before entry.</span>
+                      <span><strong>Your seat is reserved ✓</strong> Pay ₹{priceQuote?.total ?? ''} cash or UPI at the hotel on arrival before entry.</span>
                     </div>
                   )}
 
@@ -1518,10 +1528,17 @@ export default function RegisterPage() {
                 </p>
               )}
               {downloadProgress ? (
-                <div className="flex items-center justify-center gap-2 mt-2 text-xs text-primary">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Downloading pass {downloadProgress.done + 1} of {downloadProgress.total}…
-                </div>
+                downloadProgress.allDone ? (
+                  <div className="flex items-center justify-center gap-2 mt-2 text-xs text-success font-semibold">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    All {downloadProgress.total} pass{downloadProgress.total > 1 ? 'es' : ''} downloaded ✓
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 mt-2 text-xs text-primary">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Downloading pass {downloadProgress.done + 1} of {downloadProgress.total}…
+                  </div>
+                )
               ) : (
                 <p className="text-xs text-success/70 mt-1">✓ Passes downloaded</p>
               )}

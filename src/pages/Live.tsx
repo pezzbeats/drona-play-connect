@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -8,7 +8,7 @@ import { Scoreboard } from '@/components/live/Scoreboard';
 import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
-import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff } from 'lucide-react';
+import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut } from 'lucide-react';
 
 type Tab = 'score' | 'predict' | 'leaderboard';
 
@@ -130,8 +130,8 @@ function LiveContent({
             <h1 className="font-display text-base font-bold gradient-text leading-tight truncate">{matchName}</h1>
             <p className="text-xs text-muted-foreground">{session.mobile}</p>
           </div>
-          <GlassButton variant="ghost" size="sm" onClick={() => setShowExitConfirm(true)} className="shrink-0 ml-2">
-            Exit
+          <GlassButton variant="ghost" size="sm" onClick={() => setShowExitConfirm(true)} className="shrink-0 ml-2 gap-1.5">
+            <LogOut className="h-3.5 w-3.5" /> Exit
           </GlassButton>
         </div>
       </div>
@@ -276,11 +276,16 @@ export default function LivePage() {
   if (!matchId || !session) return (
     <div className="min-h-screen flex items-center justify-center p-4 relative">
       <BackgroundOrbs />
-      <GlassCard className="p-8 text-center max-w-sm relative z-10">
-        <div className="text-4xl mb-4">🏏</div>
-        <h2 className="font-display text-xl font-bold text-foreground mb-2">No Active Match</h2>
-        <p className="text-muted-foreground text-sm mb-4">No match is currently live.</p>
-        <GlassButton variant="primary" size="md" onClick={() => navigate('/play')}>Back to Login</GlassButton>
+      <GlassCard className="p-8 text-center max-w-sm relative z-10 space-y-4">
+        <div className="text-4xl">🏏</div>
+        <h2 className="font-display text-xl font-bold text-foreground">No Active Match</h2>
+        <p className="text-muted-foreground text-sm">No match is currently live. The match may have ended or not started yet.</p>
+        <div className="flex flex-col gap-2">
+          <GlassButton variant="primary" size="md" onClick={() => navigate('/play')}>Back to Login</GlassButton>
+          <Link to="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2">
+            Go to Home
+          </Link>
+        </div>
       </GlassCard>
     </div>
   );
