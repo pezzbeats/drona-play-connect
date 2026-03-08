@@ -102,6 +102,13 @@ function LiveContent({
         🎯 <strong>Fun Game only.</strong> No betting, no wagering. Entertainment only.
       </div>
 
+      {/* ── Match ended banner ── */}
+      {matchEnded && (
+        <div className="relative z-20 shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold bg-muted/30 border-b border-border/40 text-muted-foreground">
+          🏆 This match has ended — view the final leaderboard below
+        </div>
+      )}
+
       {/* ── Reconnecting / offline banner ── */}
       <div
         className={`relative z-20 shrink-0 overflow-hidden transition-all duration-500 ease-in-out ${
