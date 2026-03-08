@@ -26,7 +26,8 @@ function LiveContent({
   session,
   onLogout,
   initialTab = 'score',
-  matchEnded = false,
+  matchEnded: initialMatchEnded = false,
+  onMatchEnded,
 }: {
   matchId: string;
   matchName: string;
@@ -35,6 +36,7 @@ function LiveContent({
   onLogout: () => void;
   initialTab?: Tab;
   matchEnded?: boolean;
+  onMatchEnded?: () => void;
 }) {
   const [matchName, setMatchName] = useState(initialMatchName);
   const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
@@ -42,6 +44,9 @@ function LiveContent({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [guessNudge, setGuessNudge] = useState(false);
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Personal rank chip state
+  const [myRank, setMyRank] = useState<{ rank_position: number | null; total_points: number } | null>(null);
 
   // Auto-dismiss nudge after 5 s
   useEffect(() => {
