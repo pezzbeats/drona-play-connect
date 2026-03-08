@@ -353,11 +353,16 @@ export default function IndexPage() {
             {get('hero_subtitle', 'An Exclusive Cricket Celebration Experience')}
           </p>
 
-          {/* Venue badge chip */}
-          <div className="inline-flex items-center gap-2 glass-card px-4 py-2 rounded-full border border-secondary/30 text-secondary text-sm font-semibold">
+          {/* Venue badge chip — tappable map link */}
+          <a
+            href="https://maps.google.com/?q=Hotel+Drona+Palace+Kashipur+Uttarakhand"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 glass-card px-4 py-2 rounded-full border border-secondary/30 text-secondary text-sm font-semibold hover:border-secondary/60 hover:bg-secondary/10 transition-colors"
+          >
             <MapPin className="h-3.5 w-3.5" />
             {get('hero_venue_badge', 'Hosted at Hotel Drona Palace, Kashipur')}
-          </div>
+          </a>
         </div>
 
         {loading ? (
