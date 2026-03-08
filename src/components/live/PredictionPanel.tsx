@@ -268,11 +268,20 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
     <div className="space-y-3">
       {/* Running score banner */}
       {myScore !== null && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/25">
-          <Target className="h-4 w-4 text-primary flex-shrink-0" />
-          <span className="text-sm font-bold text-primary">
-            Your Score: {myScore.total_points} pts
+        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-500 ${
+          scoreFlash
+            ? 'bg-success/20 border-success/50 shadow-[0_0_16px_hsl(var(--success)/0.35)]'
+            : 'bg-primary/10 border-primary/25'
+        }`}>
+          <Target className={`h-4 w-4 flex-shrink-0 transition-colors duration-300 ${scoreFlash ? 'text-success' : 'text-primary'}`} />
+          <span className={`text-sm font-bold transition-colors duration-300 ${scoreFlash ? 'text-success' : 'text-primary'}`}>
+            Your Score: {displayPoints} pts
           </span>
+          {scoreDelta !== null && (
+            <span className="text-xs font-black text-success bg-success/15 border border-success/40 rounded-full px-2 py-0.5 animate-fade-in">
+              +{scoreDelta}
+            </span>
+          )}
           <span className="text-muted-foreground font-medium text-xs ml-auto">
             · {myScore.correct_predictions}/{myScore.total_predictions} correct
           </span>
