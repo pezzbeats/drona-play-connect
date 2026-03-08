@@ -239,20 +239,21 @@ const MatchSectionSkeleton = () => (
 );
 
 export default function IndexPage() {
-  const { get, loading: configLoading } = useSiteConfig();
+  const { get } = useSiteConfig();
   const [match, setMatch] = useState<ActiveMatch | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [pricing, setPricing] = useState<PricingRule | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [barDismissed, setBarDismissed] = useState(() => sessionStorage.getItem('barDismissed') === '1');
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 8000);
-    fetchData().finally(() => clearTimeout(timeout));
+    const timeout = setTimeout(() => setLoading(false), 10000); // safety net
+    fetchData(0).finally(() => clearTimeout(timeout));
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (attempt = 0): Promise<void> => {
+    if (attempt === 0) setLoading(true);
     try {
       const { data: matchData, error: matchError } = await supabase
         .from('matches')
@@ -260,7 +261,9 @@ export default function IndexPage() {
         .eq('is_active_for_registration', true)
         .maybeSingle();
 
-      if (matchError) console.error('[Index] Error fetching active match:', matchError);
+      if (matchError) throw matchError; // surface errors — don't swallow
+
+      setFetchError(false);
 
       if (matchData) {
         setMatch(matchData);
@@ -275,9 +278,17 @@ export default function IndexPage() {
           setBannerUrl(url?.publicUrl || null);
         }
         if (pricingRes.data) setPricing(pricingRes.data);
+      } else {
+        setMatch(null);
       }
     } catch (e) {
-      console.error('[Index] fetchData error:', e);
+      console.error(`[Index] fetchData error (attempt ${attempt + 1}):`, e);
+      if (attempt < 2) {
+        // Exponential backoff: 1.5s, 3s
+        setTimeout(() => fetchData(attempt + 1), 1500 * (attempt + 1));
+        return; // keep loading spinner visible during retry
+      }
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
