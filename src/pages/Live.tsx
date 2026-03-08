@@ -212,6 +212,40 @@ function LiveContent({
         </div>
       </div>
 
+      {/* ── Guess nudge banner — slides up above tab bar ── */}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-400 ease-out ${
+          guessNudge && predictionsEnabled ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
+        }`}
+        style={{ paddingBottom: 'calc(68px + env(safe-area-inset-bottom))' }}
+      >
+        <div className="max-w-lg mx-auto px-3 pb-2">
+          <button
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-success/95 backdrop-blur-md border border-success/60 shadow-[0_4px_24px_hsl(142_70%_35%/0.45)] text-left active:scale-[0.98] transition-transform"
+            onClick={() => {
+              setActiveTab('predict');
+              setGuessNudge(false);
+              clearTimeout(nudgeTimerRef.current);
+            }}
+          >
+            <Zap className="h-5 w-5 text-white shrink-0 animate-pulse" />
+            <span className="flex-1 text-sm font-bold text-white leading-tight">
+              New guess available! Tap to guess →
+            </span>
+            <button
+              className="shrink-0 text-white/70 hover:text-white transition-colors p-0.5"
+              onClick={e => {
+                e.stopPropagation();
+                setGuessNudge(false);
+                clearTimeout(nudgeTimerRef.current);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </button>
+        </div>
+      </div>
+
       {/* Fixed bottom tab bar */}
       <div
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/50 bg-[hsl(var(--background)/0.92)] backdrop-blur-xl"
