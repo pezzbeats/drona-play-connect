@@ -976,75 +976,105 @@ function MatchLineupTab() {
     setSaving(true);
 
     try {
-      // Upsert/create players for filled rows, then upsert lineup entries
       const filledRows = rows
         .map((r, i) => ({ ...r, batting_order: i + 1 }))
         .filter(r => r.name.trim());
 
+      if (filledRows.length === 0) {
+        toast({ variant: 'destructive', title: 'No players entered' });
+        return;
+      }
+
       // 1. Delete existing lineup entries for this team+match
-      await supabase
+      const { error: deleteError } = await supabase
         .from('match_lineup')
         .delete()
         .eq('match_id', activeMatch.id)
         .eq('team_id', teamId);
+      if (deleteError) throw deleteError;
 
-      // 2. For each filled row, upsert the player and create lineup entry
-      for (const row of filledRows) {
-        let playerId = row.player_id;
+      // 2. Separate rows with known player_id vs new/unknown ones
+      const rowsWithId = filledRows.filter(r => r.player_id);
+      const rowsWithoutId = filledRows.filter(r => !r.player_id);
 
-        // Upsert player: if we have an existing player_id, update them; else find by name+team or create
-        if (playerId) {
-          await supabase.from('players').update({
+      // 3. Bulk update existing players (parallel)
+      if (rowsWithId.length > 0) {
+        await Promise.all(rowsWithId.map(row =>
+          supabase.from('players').update({
             name: row.name.trim(),
             role: row.role,
             jersey_number: row.jersey_number ? parseInt(row.jersey_number) : null,
             team_id: teamId,
-          }).eq('id', playerId);
-        } else {
-          // Try to find existing player by name in this team
-          const { data: existing } = await supabase
-            .from('players')
-            .select('id')
-            .eq('name', row.name.trim())
-            .eq('team_id', teamId)
-            .maybeSingle();
+          }).eq('id', row.player_id!)
+        ));
+      }
 
-          if (existing) {
-            playerId = existing.id;
-            await supabase.from('players').update({
-              role: row.role,
-              jersey_number: row.jersey_number ? parseInt(row.jersey_number) : null,
-            }).eq('id', playerId);
-          } else {
-            const { data: newPlayer } = await supabase
-              .from('players')
-              .insert({
-                name: row.name.trim(),
-                role: row.role,
-                jersey_number: row.jersey_number ? parseInt(row.jersey_number) : null,
-                team_id: teamId,
-              })
-              .select('id')
-              .single();
-            playerId = newPlayer?.id;
-          }
-        }
+      // 4. For new rows: bulk fetch existing by name to avoid duplicates
+      const newNames = rowsWithoutId.map(r => r.name.trim());
+      let existingByName: Record<string, string> = {};
+      if (newNames.length > 0) {
+        const { data: existingPlayers } = await supabase
+          .from('players')
+          .select('id, name')
+          .eq('team_id', teamId)
+          .in('name', newNames);
+        existingByName = Object.fromEntries((existingPlayers || []).map(p => [p.name, p.id]));
+      }
 
-        if (!playerId) continue;
+      // 5. Bulk update already-existing players found by name (parallel)
+      const foundRows = rowsWithoutId.filter(r => existingByName[r.name.trim()]);
+      const brandNewRows = rowsWithoutId.filter(r => !existingByName[r.name.trim()]);
 
-        // 3. Insert lineup entry
-        await supabase.from('match_lineup').insert({
+      if (foundRows.length > 0) {
+        await Promise.all(foundRows.map(row =>
+          supabase.from('players').update({
+            role: row.role,
+            jersey_number: row.jersey_number ? parseInt(row.jersey_number) : null,
+          }).eq('id', existingByName[row.name.trim()])
+        ));
+      }
+
+      // 6. Bulk insert brand-new players
+      const newPlayerIdMap: Record<string, string> = {};
+      if (brandNewRows.length > 0) {
+        const { data: inserted, error: insertErr } = await supabase
+          .from('players')
+          .insert(brandNewRows.map(r => ({
+            name: r.name.trim(),
+            role: r.role,
+            jersey_number: r.jersey_number ? parseInt(r.jersey_number) : null,
+            team_id: teamId,
+          })))
+          .select('id, name');
+        if (insertErr) throw insertErr;
+        (inserted || []).forEach(p => { newPlayerIdMap[p.name] = p.id; });
+      }
+
+      // 7. Build resolved player IDs for all rows
+      const resolveId = (row: typeof filledRows[0]): string | null => {
+        if (row.player_id) return row.player_id;
+        const name = row.name.trim();
+        return existingByName[name] || newPlayerIdMap[name] || null;
+      };
+
+      // 8. Bulk insert lineup entries
+      const lineupInserts = filledRows
+        .map(row => ({ row, pid: resolveId(row) }))
+        .filter(({ pid }) => !!pid)
+        .map(({ row, pid }) => ({
           match_id: activeMatch.id,
           team_id: teamId,
-          player_id: playerId,
+          player_id: pid!,
           batting_order: row.batting_order,
           is_captain: row.is_captain,
           is_wk: row.is_wk,
-        });
-      }
+        }));
+
+      const { error: lineupErr } = await supabase.from('match_lineup').insert(lineupInserts);
+      if (lineupErr) throw lineupErr;
 
       toast({ title: '✅ Lineup saved!' });
-      fetchData(); // reload to get player IDs
+      fetchData();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed to save', description: e.message });
     } finally {
