@@ -35,6 +35,7 @@ function LiveContent({
   const [matchName, setMatchName] = useState(initialMatchName);
   const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
   const [activeTab, setActiveTab] = useState<Tab>('score');
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   // Auto-switch away from Guess tab if admin disables predictions
   useEffect(() => {
