@@ -79,8 +79,14 @@ function GameLoginCard() {
           <p className="text-xs text-muted-foreground">Enter your gate PIN to play now</p>
         </div>
         <div className="ml-auto">
-          <span className="text-xs font-bold bg-success/15 border border-success/30 text-success rounded-full px-2.5 py-1 uppercase tracking-wider">
-            🎮 Live
+          <span className={`text-xs font-bold border rounded-full px-2.5 py-1 uppercase tracking-wider ${
+            matchStatus === 'live'
+              ? 'bg-success/15 border-success/30 text-success'
+              : matchStatus
+              ? 'bg-primary/10 border-primary/30 text-primary'
+              : 'bg-muted/30 border-border text-muted-foreground'
+          }`}>
+            {matchStatus === 'live' ? '🎮 Live' : matchStatus ? '⏳ Soon' : '🎮 Play'}
           </span>
         </div>
       </div>
