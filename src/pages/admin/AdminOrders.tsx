@@ -15,7 +15,7 @@ import {
   Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp,
   ExternalLink, AlertTriangle, Shield, Banknote, RefreshCw, Download,
   MessageCircle, KeyRound, QrCode, User, CreditCard, CheckSquare2,
-  Copy, Clock, Ticket, Zap, X, Users,
+  Copy, Clock, Ticket, Zap, X, Users, ShieldCheck,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
@@ -26,7 +26,7 @@ import hotelLogo from '@/assets/hotel-logo.png';
 
 type OverrideTarget = { orderId: string; verdict: 'paid_manual_verified' | 'paid_rejected' } | null;
 type AdvanceFormState = { orderId: string; amount: string; method: string } | null;
-type DetailTab = 'overview' | 'passes' | 'gamepin' | 'whatsapp';
+type DetailTab = 'overview' | 'passes' | 'gamepin' | 'whatsapp' | 'consent';
 
 interface TicketRow {
   id: string;
@@ -1218,6 +1218,92 @@ export default function AdminOrders() {
     );
   };
 
+  const renderConsentTab = (order: any) => {
+    const [consentData, setConsentData] = React.useState<any>(null);
+    const [consentLoading, setConsentLoading] = React.useState(true);
+
+    React.useEffect(() => {
+      (async () => {
+        setConsentLoading(true);
+        const { data } = await supabase
+          .from('game_consents' as any)
+          .select('*')
+          .eq('mobile', order.purchaser_mobile)
+          .eq('match_id', order.match_id)
+          .maybeSingle();
+        setConsentData(data ?? null);
+        setConsentLoading(false);
+      })();
+    }, [order.purchaser_mobile, order.match_id]);
+
+    if (consentLoading) {
+      return (
+        <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading consent...
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {/* Status chip */}
+        <div className="glass-card-sunken p-3 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Game Consent Status</p>
+          </div>
+          {consentData ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-success/15 text-success border border-success/30">
+                  ✅ Accepted
+                </span>
+                <span className="text-xs text-muted-foreground">Terms v{consentData.terms_version}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mt-2">
+                <div>
+                  <p className="text-muted-foreground">Accepted At</p>
+                  <p className="text-foreground font-medium">{new Date(consentData.accepted_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Terms Version</p>
+                  <p className="text-foreground font-medium">{consentData.terms_version}</p>
+                </div>
+                {consentData.ip_address && (
+                  <div>
+                    <p className="text-muted-foreground">IP Address</p>
+                    <p className="text-foreground font-mono">{consentData.ip_address}</p>
+                  </div>
+                )}
+                {consentData.user_agent && (
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground">Device / Browser</p>
+                    <p className="text-foreground truncate text-xs opacity-80">{consentData.user_agent.slice(0, 80)}{consentData.user_agent.length > 80 ? '…' : ''}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-muted/30 text-muted-foreground border border-border/40">
+                ○ Not Yet Accepted
+              </span>
+              <p className="text-xs text-muted-foreground">User has not completed the consent step for this match.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Legal context note */}
+        <div className="glass-card-sunken p-3 rounded-xl">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Legal Note</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Consent is recorded once per match per mobile number. It confirms that the user has read and agreed to the entertainment-only participation terms before accessing the prediction game.
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   const renderWhatsAppTab = (order: any, orderId: string) => {
     const tickets = orderTickets[orderId] || [];
     const match = order.match;
@@ -1465,6 +1551,7 @@ export default function AdminOrders() {
                           { id: 'passes', label: 'Passes', icon: Ticket },
                           { id: 'gamepin', label: 'Game PIN', icon: KeyRound },
                           { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
+                          { id: 'consent', label: 'Consent', icon: ShieldCheck },
                         ] as { id: DetailTab; label: string; icon: React.ElementType }[]
                       ).map(tab => (
                         <button
@@ -1488,6 +1575,7 @@ export default function AdminOrders() {
                       {currentTab === 'passes' && renderPassesTab(order, order.id)}
                       {currentTab === 'gamepin' && renderGamePinTab(order, order.id)}
                       {currentTab === 'whatsapp' && renderWhatsAppTab(order, order.id)}
+                      {currentTab === 'consent' && renderConsentTab(order)}
                     </div>
                   </div>
                 )}
