@@ -563,6 +563,8 @@ export default function RegisterPage() {
           }
           setTickets(verifyData.tickets || []);
           setPaymentVerifiedAt(new Date().toISOString());
+          // Clear saved form state — booking complete
+          ['reg_fullName', 'reg_mobile', 'reg_email', 'reg_seatsCount'].forEach(k => sessionStorage.removeItem(k));
           setStep(3);
           toast({ title: '✅ Payment Confirmed!', description: 'Your passes are ready.' });
         } catch (e: any) {
