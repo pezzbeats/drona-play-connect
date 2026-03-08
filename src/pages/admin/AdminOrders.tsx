@@ -323,8 +323,30 @@ async function buildPassCanvas(ticket: TicketRow, order: any, match: any): Promi
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WhatsApp message builder
+// WhatsApp message builders
 // ─────────────────────────────────────────────────────────────────────────────
+
+function buildReminderMessage(order: any): string {
+  const balance = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+  const passUrl = `https://cricket.dronapalace.com/ticket?mobile=${order.purchaser_mobile}`;
+  const match = order.match;
+  return [
+    `🏏 T20 Fan Night — Payment Reminder`,
+    ``,
+    `Hi ${order.purchaser_full_name}!`,
+    balance > 0
+      ? `You have a balance of ₹${balance} pending for your booking.`
+      : `Your booking payment is pending. Please complete it to confirm your seat(s).`,
+    ``,
+    match?.name ? `Match: ${match.name}${match.opponent ? ` vs ${match.opponent}` : ''}` : null,
+    match?.start_time ? `Date: ${new Date(match.start_time).toLocaleString('en-IN')}` : null,
+    `Seats: ${order.seats_count}`,
+    ``,
+    `Pay & view passes: ${passUrl}`,
+    ``,
+    `— Hotel Drona Palace`,
+  ].filter(Boolean).join('\n');
+}
 
 function buildWhatsAppMessage(order: any, match: any, tickets: TicketRow[]): string {
   const passUrl = `https://cricket.dronapalace.com/ticket?mobile=${order.purchaser_mobile}`;
