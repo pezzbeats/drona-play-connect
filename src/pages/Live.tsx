@@ -25,16 +25,20 @@ function LiveContent({
   predictionsEnabled: initialPredictionsEnabled,
   session,
   onLogout,
+  initialTab = 'score',
+  matchEnded = false,
 }: {
   matchId: string;
   matchName: string;
   predictionsEnabled: boolean;
   session: GameSession;
   onLogout: () => void;
+  initialTab?: Tab;
+  matchEnded?: boolean;
 }) {
   const [matchName, setMatchName] = useState(initialMatchName);
   const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
-  const [activeTab, setActiveTab] = useState<Tab>('score');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   // Auto-switch away from Guess tab if admin disables predictions
