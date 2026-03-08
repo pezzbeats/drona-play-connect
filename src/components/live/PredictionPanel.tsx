@@ -1,9 +1,9 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, CheckCircle2, Clock, AlertTriangle, PauseCircle, Loader2 } from 'lucide-react';
+import { Lock, CheckCircle2, Clock, AlertTriangle, PauseCircle, Loader2, Target } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
 // ── Standardised ball outcome set (mirrors AdminControl.BALL_OUTCOMES) ────────
