@@ -417,6 +417,10 @@ export default function AdminOrders() {
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
 
+  // Date range filter
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+
   const { toast } = useToast();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
