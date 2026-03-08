@@ -325,10 +325,12 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const mobileValid = /^\d{10}$/.test(mobile);
   const mobileError = mobile.length > 0 && !mobileValid;
   const nameError = fullName.length > 0 && fullName.trim().length < 2;
+  const isEmailValid = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 
   // Eligibility check state
   const [eligibilityStatus, setEligibilityStatus] = useState<'idle' | 'checking' | 'eligible' | 'standard'>('idle');
@@ -360,14 +362,16 @@ export default function RegisterPage() {
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
   // Auto-download full pass PNGs when step 3 loads (staggered to avoid browser blocking)
-  // After all downloads complete, auto-open WhatsApp with booking confirmation
+  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
     if (step !== 3 || tickets.length === 0 || !activeMatch) return;
     let cancelled = false;
+    setDownloadProgress({ done: 0, total: tickets.length });
     const run = async () => {
       await new Promise(r => setTimeout(r, 800));
-      for (const ticket of tickets) {
+      for (let i = 0; i < tickets.length; i++) {
         if (cancelled) return;
+        const ticket = tickets[i];
         const shaped = buildTicketShape(ticket);
         try {
           const canvas = await buildPassCanvas(shaped);
@@ -382,15 +386,12 @@ export default function RegisterPage() {
               setTimeout(() => { URL.revokeObjectURL(url); resolve(); }, 2000);
             });
           });
+          setDownloadProgress({ done: i + 1, total: tickets.length });
           // Stagger each download by 350ms so the browser doesn't block them
           if (tickets.length > 1) await new Promise(r => setTimeout(r, 350));
         } catch { /* silent */ }
       }
-      // After downloads, auto-open WhatsApp with confirmation (may be blocked on some browsers — fallback button shown in UI)
-      if (!cancelled) {
-        await new Promise(r => setTimeout(r, 500));
-        window.open(buildConfirmationWALink(), '_blank');
-      }
+      if (!cancelled) setDownloadProgress(null);
     };
     run();
     return () => { cancelled = true; };
@@ -1150,8 +1151,19 @@ export default function RegisterPage() {
               </div>
               <div>
                 <Label className="text-foreground mb-1.5 block">Email (optional)</Label>
-                <Input className="glass-input" placeholder="your@email.com" type="email"
-                  value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+                <Input
+                  className={`glass-input ${emailError ? 'border-destructive' : ''}`}
+                  placeholder="your@email.com"
+                  type="email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); if (emailError) setEmailError(''); }}
+                  onBlur={() => {
+                    if (email && !isEmailValid(email)) setEmailError('Please enter a valid email address');
+                    else setEmailError('');
+                  }}
+                  autoComplete="email"
+                />
+                {emailError && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {emailError}</p>}
               </div>
               <p className="text-xs text-muted-foreground text-center">
                 By continuing, you agree to our{' '}
@@ -1410,25 +1422,6 @@ export default function RegisterPage() {
                     </div>
                   </button>
 
-                  {/* ── UPI QR ── */}
-                  <button
-                    onClick={() => setPaymentMethod('upi_qr')}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                      paymentMethod === 'upi_qr' ? 'border-success bg-success/10' : 'border-border hover:border-success/40'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentMethod === 'upi_qr' ? 'bg-success/20' : 'bg-muted/40'}`}>
-                        <Smartphone className={`h-5 w-5 ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-muted-foreground'}`} />
-                      </div>
-                      <div>
-                        <span className={`font-display font-bold text-base ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-foreground'}`}>Pay via UPI / QR</span>
-                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR code & upload screenshot — AI verification</p>
-                      </div>
-                      {paymentMethod === 'upi_qr' && <CheckCircle2 className="h-5 w-5 text-success ml-auto flex-shrink-0" />}
-                    </div>
-                  </button>
-
                   {/* ── Pay at Hotel ── */}
                   <button
                     onClick={() => setPaymentMethod('pay_at_hotel')}
@@ -1454,6 +1447,25 @@ export default function RegisterPage() {
                       <span>Passes marked <strong>Unpaid</strong>. Pay the full amount at the venue before entry.</span>
                     </div>
                   )}
+
+                  {/* ── UPI QR ── */}
+                  <button
+                    onClick={() => setPaymentMethod('upi_qr')}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      paymentMethod === 'upi_qr' ? 'border-success bg-success/10' : 'border-border hover:border-success/40'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentMethod === 'upi_qr' ? 'bg-success/20' : 'bg-muted/40'}`}>
+                        <Smartphone className={`h-5 w-5 ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <span className={`font-display font-bold text-base ${paymentMethod === 'upi_qr' ? 'text-success' : 'text-foreground'}`}>Pay via UPI / QR</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">Scan QR code & upload screenshot — AI verification</p>
+                      </div>
+                      {paymentMethod === 'upi_qr' && <CheckCircle2 className="h-5 w-5 text-success ml-auto flex-shrink-0" />}
+                    </div>
+                  </button>
 
                   <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1 pt-1">
                     <Star className="h-3 w-3" />
@@ -1505,7 +1517,14 @@ export default function RegisterPage() {
                   ✅ Verified at {new Date(paymentVerifiedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground mt-1 opacity-75">Pass downloading automatically…</p>
+              {downloadProgress ? (
+                <div className="flex items-center justify-center gap-2 mt-2 text-xs text-primary">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Downloading pass {downloadProgress.done + 1} of {downloadProgress.total}…
+                </div>
+              ) : (
+                <p className="text-xs text-success/70 mt-1">✓ Passes downloaded</p>
+              )}
             </div>
 
             {/* Hidden high-res QR canvases for buildPassCanvas */}
@@ -1727,7 +1746,7 @@ export default function RegisterPage() {
                 color: 'hsl(var(--primary))',
               }}
             >
-              <Download className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" />
               View / Retrieve Your Passes →
             </Link>
 

@@ -228,7 +228,7 @@ export function Leaderboard({ matchId, mobile }: LeaderboardProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-semibold truncate ${isImproved ? 'text-success' : isMe ? 'text-primary' : 'text-foreground'}`}>
-                    {entry.player_name || entry.mobile.slice(-4).padStart(10, '•')}
+                    {entry.player_name || `••••${entry.mobile.slice(-4)}`}
                     {isMe && !isImproved && <span className="ml-1.5 text-xs font-bold bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">you</span>}
                     {isImproved && <span className="ml-1.5 text-xs font-bold bg-success/20 text-success px-1.5 py-0.5 rounded-full">↑ up</span>}
                   </p>
