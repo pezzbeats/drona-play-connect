@@ -339,7 +339,10 @@ export default function RegisterPage() {
 
 
   // Step 2
-  const [seatsCount, setSeatsCount] = useState(1);
+  const [seatsCount, setSeatsCount] = useState(() => {
+    const saved = sessionStorage.getItem('reg_seatsCount');
+    return saved ? Math.max(1, parseInt(saved, 10) || 1) : 1;
+  });
   const [seatingType, setSeatingType] = useState<'regular' | 'family'>('regular');
   const [priceQuote, setPriceQuote] = useState<PriceQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
