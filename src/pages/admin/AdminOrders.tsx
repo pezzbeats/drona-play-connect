@@ -677,6 +677,15 @@ export default function AdminOrders() {
     setTimeout(() => setCopiedOrderId(null), 2000);
   };
 
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const filtered = orders.filter(o => {
     const matchSearch = !search ||
       o.purchaser_full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -687,6 +696,18 @@ export default function AdminOrders() {
     const matchStatus = statusFilter === 'all' || o.payment_status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const selectedOrders = filtered.filter(o => selectedIds.has(o.id));
+
+  const copyAllLinks = () => {
+    const text = selectedOrders
+      .map(o => `${o.purchaser_full_name} (+91${o.purchaser_mobile}): https://wa.me/91${o.purchaser_mobile}?text=${encodeURIComponent(buildReminderMessage(o))}`)
+      .join('\n\n');
+    navigator.clipboard.writeText(text);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+    toast({ title: '✅ Copied!', description: `${selectedOrders.length} WhatsApp links copied to clipboard.` });
+  };
 
   const paymentMethodBadge = (method: string) => {
     const styles: Record<string, string> = {
