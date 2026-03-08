@@ -268,6 +268,44 @@ export type Database = {
           },
         ]
       }
+      game_consents: {
+        Row: {
+          accepted_at: string
+          id: string
+          ip_address: string | null
+          match_id: string
+          mobile: string
+          terms_version: string
+          user_agent: string | null
+        }
+        Insert: {
+          accepted_at?: string
+          id?: string
+          ip_address?: string | null
+          match_id: string
+          mobile: string
+          terms_version?: string
+          user_agent?: string | null
+        }
+        Update: {
+          accepted_at?: string
+          id?: string
+          ip_address?: string | null
+          match_id?: string
+          mobile?: string
+          terms_version?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_consents_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_secrets: {
         Row: {
           key: string
