@@ -362,7 +362,7 @@ export default function RegisterPage() {
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
   // Auto-download full pass PNGs when step 3 loads (staggered to avoid browser blocking)
-  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number; allDone?: boolean } | null>(null);
   useEffect(() => {
     if (step !== 3 || tickets.length === 0 || !activeMatch) return;
     let cancelled = false;
@@ -391,7 +391,11 @@ export default function RegisterPage() {
           if (tickets.length > 1) await new Promise(r => setTimeout(r, 350));
         } catch { /* silent */ }
       }
-      if (!cancelled) setDownloadProgress(null);
+      if (!cancelled) {
+        // Show success confirmation for 1.5s before clearing
+        setDownloadProgress(prev => prev ? { ...prev, allDone: true } : null);
+        setTimeout(() => { if (!cancelled) setDownloadProgress(null); }, 1500);
+      }
     };
     run();
     return () => { cancelled = true; };
