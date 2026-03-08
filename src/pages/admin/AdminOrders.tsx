@@ -1500,27 +1500,31 @@ export default function AdminOrders() {
                     onClick={() => handleExpand(order.id)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground leading-snug">{order.purchaser_full_name}</p>
-                        <p className="text-sm text-muted-foreground">{order.purchaser_mobile}</p>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <StatusBadge status={order.payment_status} />
-                          {paymentMethodBadge(order.payment_method)}
-                          <span className="text-xs text-muted-foreground truncate max-w-[120px]">{order.match?.name}</span>
-                        </div>
-                        {hasAdvance && !isPaidFully && (
-                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">
-                              Adv ₹{order.advance_paid}
-                            </span>
-                            {balanceDue > 0 && (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-warning/15 text-warning border border-warning/40">
-                                ⚠ Due ₹{balanceDue}
-                              </span>
-                            )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-foreground leading-snug">{order.purchaser_full_name}</p>
+                          <p className="text-sm text-muted-foreground">{order.purchaser_mobile}</p>
+                          <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground/70">
+                            <Clock className="h-3 w-3 shrink-0" />
+                            <span>{new Date(order.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
-                        )}
-                      </div>
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <StatusBadge status={order.payment_status} />
+                            {paymentMethodBadge(order.payment_method)}
+                            <span className="text-xs text-muted-foreground truncate max-w-[120px]">{order.match?.name}</span>
+                          </div>
+                          {hasAdvance && !isPaidFully && (
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">
+                                Adv ₹{order.advance_paid}
+                              </span>
+                              {balanceDue > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-warning/15 text-warning border border-warning/40">
+                                  ⚠ Due ₹{balanceDue}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className="font-display font-bold text-primary text-base">₹{order.total_amount}</span>
                         <span className="text-xs text-muted-foreground">{order.seats_count} seat{order.seats_count > 1 ? 's' : ''}</span>
