@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { SkeletonStatCard } from '@/components/ui/SkeletonCard';
-import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight, AlertTriangle } from 'lucide-react';
+import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
+import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight, AlertTriangle, Zap } from 'lucide-react';
 
 interface Stats {
   totalOrders: number;
@@ -64,26 +65,43 @@ export default function AdminDashboard() {
     }
   }, []);
 
-  // Initial load + 60-second auto-refresh
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 60_000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  // Realtime: re-fetch stats on any new order INSERT
+  const realtimeSubscriptions = useMemo<ChannelSubscription[]>(() => [
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'orders',
+      callback: () => { fetchData(); },
+    },
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'orders',
+      callback: () => { fetchData(); },
+    },
+  ], [fetchData]);
+
+  useRealtimeChannel('dashboard-orders', realtimeSubscriptions, fetchData);
+
+  // Initial load
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const statCards = stats ? [
-    { icon: Users,        label: 'Registrations',  value: stats.totalOrders,          color: 'text-primary',     bg: 'bg-primary/10' },
-    { icon: CheckCircle2, label: 'Paid',            value: stats.paidOrders,           color: 'text-success',     bg: 'bg-success/10' },
-    { icon: DollarSign,   label: 'Not Paid',        value: stats.unpaidOrders,         color: 'text-destructive', bg: 'bg-destructive/10' },
-    { icon: TrendingUp,   label: 'Pending',         value: stats.pendingVerification,  color: 'text-warning',     bg: 'bg-warning/10' },
-    { icon: ScanLine,     label: 'Check-ins Today', value: stats.checkedInToday,       color: 'text-secondary',   bg: 'bg-secondary/10' },
-    { icon: Ticket,       label: 'Total Seats',     value: stats.totalSeats,           color: 'text-accent',      bg: 'bg-accent/10' },
+    { icon: Users,        label: 'Registrations',  value: stats.totalOrders,          color: 'text-primary',     bg: 'bg-primary/10',     to: null },
+    { icon: CheckCircle2, label: 'Paid',            value: stats.paidOrders,           color: 'text-success',     bg: 'bg-success/10',     to: '/admin/orders?filter=paid_verified' },
+    { icon: DollarSign,   label: 'Not Paid',        value: stats.unpaidOrders,         color: 'text-destructive', bg: 'bg-destructive/10', to: '/admin/orders?filter=unpaid' },
+    { icon: TrendingUp,   label: 'Pending',         value: stats.pendingVerification,  color: 'text-warning',     bg: 'bg-warning/10',     to: '/admin/orders?filter=pending_verification' },
+    { icon: ScanLine,     label: 'Check-ins Today', value: stats.checkedInToday,       color: 'text-secondary',   bg: 'bg-secondary/10',   to: null },
+    { icon: Ticket,       label: 'Total Seats',     value: stats.totalSeats,           color: 'text-accent',      bg: 'bg-accent/10',      to: null },
   ] : [];
 
   const quickActions = [
     { icon: ScanLine,  label: 'Gate Validate',  desc: 'Scan QR & check-in',         to: '/admin/validate' },
     { icon: BookOpen,  label: 'Manual Booking', desc: 'Book for walk-in guest',      to: '/admin/manual-booking' },
-    { icon: Trophy,    label: 'Manage Matches', desc: 'Create & activate matches',   to: '/admin/matches' },
+    ...(activeMatch?.status === 'live'
+      ? [{ icon: Zap,    label: 'Match Control',  desc: 'Live scoring & guesses',      to: '/admin/control' }]
+      : [{ icon: Trophy, label: 'Manage Matches', desc: 'Create & activate matches',   to: '/admin/matches' }]
+    ),
   ];
 
   return (
@@ -131,19 +149,23 @@ export default function AdminDashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {statCards.map(({ icon: Icon, label, value, color, bg }, i) => (
-            <GlassCard
-              key={label}
-              className="p-4 animate-slide-up"
-              style={{ animationDelay: `${i * 0.05}s` } as React.CSSProperties}
-            >
-              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center mb-2.5`}>
-                <Icon className={`h-4 w-4 ${color}`} />
-              </div>
-              <p className={`stat-number ${color}`}>{value}</p>
-              <p className="text-xs text-muted-foreground mt-1.5 leading-tight">{label}</p>
-            </GlassCard>
-          ))}
+          {statCards.map(({ icon: Icon, label, value, color, bg, to }, i) => {
+            const card = (
+              <GlassCard
+                key={label}
+                className={`p-4 animate-slide-up${to ? ' hover:border-primary/40 cursor-pointer transition-colors' : ''}`}
+                style={{ animationDelay: `${i * 0.05}s` } as React.CSSProperties}
+              >
+                <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center mb-2.5`}>
+                  <Icon className={`h-4 w-4 ${color}`} />
+                </div>
+                <p className={`stat-number ${color}`}>{value}</p>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-tight">{label}</p>
+                {to && <p className="text-xs text-primary mt-1 opacity-70">View →</p>}
+              </GlassCard>
+            );
+            return to ? <Link key={label} to={to}>{card}</Link> : card;
+          })}
         </div>
       )}
 
@@ -172,10 +194,10 @@ export default function AdminDashboard() {
         <div className="space-y-2 sm:grid sm:grid-cols-3 sm:gap-3 sm:space-y-0">
           {quickActions.map(({ icon: Icon, label, desc, to }) => (
             <Link key={to} to={to}>
-              <GlassCard className="p-4 hover:border-primary/40 cursor-pointer group active:scale-95 transition-transform">
+              <GlassCard className={`p-4 hover:border-primary/40 cursor-pointer group active:scale-95 transition-transform${label === 'Match Control' ? ' border-primary/30 bg-primary/5' : ''}`}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                    <Icon className="h-5 w-5 text-primary" />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${label === 'Match Control' ? 'bg-primary/20 group-hover:bg-primary/30' : 'bg-primary/10 group-hover:bg-primary/20'}`}>
+                    <Icon className={`h-5 w-5 ${label === 'Match Control' ? 'text-primary animate-pulse' : 'text-primary'}`} />
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-foreground text-sm">{label}</p>

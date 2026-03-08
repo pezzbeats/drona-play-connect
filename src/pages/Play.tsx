@@ -37,6 +37,17 @@ export default function PlayPage() {
     }
   }, []);
 
+  // Auto-redirect if a valid session already exists
+  useEffect(() => {
+    const raw = localStorage.getItem('game_session');
+    if (raw) {
+      try {
+        const sess = JSON.parse(raw);
+        if (sess?.mobile && sess?.pin) { navigate('/live'); return; }
+      } catch { /* invalid JSON — fall through to show form */ }
+    }
+  }, [navigate]);
+
   useEffect(() => {
     fetchMatchStatus();
 
