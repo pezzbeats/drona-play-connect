@@ -1417,30 +1417,83 @@ export default function AdminOrders() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="glass-input pl-9 h-12 text-base"
-            placeholder="Search name or mobile..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="glass-input pl-9 h-12 text-base"
+              placeholder="Search name or mobile..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="glass-input h-12 sm:w-52">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="unpaid">Unpaid</SelectItem>
+              <SelectItem value="pending_verification">Pending</SelectItem>
+              <SelectItem value="paid_verified">Paid Verified</SelectItem>
+              <SelectItem value="paid_rejected">Rejected</SelectItem>
+              <SelectItem value="paid_manual_verified">Manual Verified</SelectItem>
+              <SelectItem value="balance_due">⚠ Balance Due</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="glass-input h-12 sm:w-52">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="unpaid">Unpaid</SelectItem>
-            <SelectItem value="pending_verification">Pending</SelectItem>
-            <SelectItem value="paid_verified">Paid Verified</SelectItem>
-            <SelectItem value="paid_rejected">Rejected</SelectItem>
-            <SelectItem value="paid_manual_verified">Manual Verified</SelectItem>
-            <SelectItem value="balance_due">⚠ Balance Due</SelectItem>
-          </SelectContent>
-        </Select>
+
+        {/* Date range row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <CalendarIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="h-9 px-3 text-xs font-medium glass-input border-border/50">
+                {dateFrom ? format(dateFrom, 'dd MMM yyyy') : 'From date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateFrom}
+                onSelect={setDateFrom}
+                initialFocus
+                className="p-3 pointer-events-auto"
+                disabled={(d) => dateTo ? d > dateTo : false}
+              />
+            </PopoverContent>
+          </Popover>
+          <span className="text-muted-foreground text-xs">—</span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="h-9 px-3 text-xs font-medium glass-input border-border/50">
+                {dateTo ? format(dateTo, 'dd MMM yyyy') : 'To date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateTo}
+                onSelect={setDateTo}
+                initialFocus
+                className="p-3 pointer-events-auto"
+                disabled={(d) => dateFrom ? d < dateFrom : false}
+              />
+            </PopoverContent>
+          </Popover>
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2 text-xs text-muted-foreground hover:text-destructive"
+              onClick={() => { setDateFrom(undefined); setDateTo(undefined); }}
+            >
+              <CalendarX className="h-3.5 w-3.5 mr-1" />
+              Clear dates
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Broadcast action bar — appears when items are selected */}
