@@ -20,8 +20,19 @@ function GameLoginCard() {
   const [mobile, setMobile] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const [matchStatus, setMatchStatus] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Fetch active match status for the badge
+  useEffect(() => {
+    supabase
+      .from('matches')
+      .select('status')
+      .eq('is_active_for_registration', true)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setMatchStatus(data.status); });
+  }, []);
 
   const handleLogin = async () => {
     if (!/^\d{10}$/.test(mobile)) {
