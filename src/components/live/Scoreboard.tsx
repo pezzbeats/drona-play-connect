@@ -217,7 +217,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
                 {state.super_over_score ?? 0}/{state.super_over_wickets ?? 0}
               </div>
               <div className="text-muted-foreground text-sm mt-2 font-medium">
-                {Number(state.super_over_overs ?? 0).toFixed(1)} overs · Super Over
+                {(() => { const o = Number(state.super_over_overs ?? 0); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} overs · Super Over
               </div>
 
               {/* Target line for innings B */}
