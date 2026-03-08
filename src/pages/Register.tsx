@@ -362,14 +362,16 @@ export default function RegisterPage() {
   const [paymentVerifiedAt, setPaymentVerifiedAt] = useState<string | null>(null);
 
   // Auto-download full pass PNGs when step 3 loads (staggered to avoid browser blocking)
-  // After all downloads complete, auto-open WhatsApp with booking confirmation
+  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
     if (step !== 3 || tickets.length === 0 || !activeMatch) return;
     let cancelled = false;
+    setDownloadProgress({ done: 0, total: tickets.length });
     const run = async () => {
       await new Promise(r => setTimeout(r, 800));
-      for (const ticket of tickets) {
+      for (let i = 0; i < tickets.length; i++) {
         if (cancelled) return;
+        const ticket = tickets[i];
         const shaped = buildTicketShape(ticket);
         try {
           const canvas = await buildPassCanvas(shaped);
@@ -384,15 +386,12 @@ export default function RegisterPage() {
               setTimeout(() => { URL.revokeObjectURL(url); resolve(); }, 2000);
             });
           });
+          setDownloadProgress({ done: i + 1, total: tickets.length });
           // Stagger each download by 350ms so the browser doesn't block them
           if (tickets.length > 1) await new Promise(r => setTimeout(r, 350));
         } catch { /* silent */ }
       }
-      // After downloads, auto-open WhatsApp with confirmation (may be blocked on some browsers — fallback button shown in UI)
-      if (!cancelled) {
-        await new Promise(r => setTimeout(r, 500));
-        window.open(buildConfirmationWALink(), '_blank');
-      }
+      if (!cancelled) setDownloadProgress(null);
     };
     run();
     return () => { cancelled = true; };
