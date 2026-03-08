@@ -226,7 +226,7 @@ export default function IndexPage() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [pricing, setPricing] = useState<PricingRule | null>(null);
   const [loading, setLoading] = useState(true);
-  const [barDismissed, setBarDismissed] = useState(false);
+  const [barDismissed, setBarDismissed] = useState(() => sessionStorage.getItem('barDismissed') === '1');
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 8000);
