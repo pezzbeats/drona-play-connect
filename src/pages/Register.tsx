@@ -325,10 +325,12 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const mobileValid = /^\d{10}$/.test(mobile);
   const mobileError = mobile.length > 0 && !mobileValid;
   const nameError = fullName.length > 0 && fullName.trim().length < 2;
+  const isEmailValid = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 
   // Eligibility check state
   const [eligibilityStatus, setEligibilityStatus] = useState<'idle' | 'checking' | 'eligible' | 'standard'>('idle');
