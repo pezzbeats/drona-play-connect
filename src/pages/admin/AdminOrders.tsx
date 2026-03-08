@@ -15,7 +15,7 @@ import {
   Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp,
   ExternalLink, AlertTriangle, Shield, Banknote, RefreshCw, Download,
   MessageCircle, KeyRound, QrCode, User, CreditCard, CheckSquare2,
-  Copy, Clock, Ticket, Zap, X, Users,
+  Copy, Clock, Ticket, Zap, X, Users, ShieldCheck,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
