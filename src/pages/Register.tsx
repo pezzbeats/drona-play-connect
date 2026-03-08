@@ -1001,7 +1001,7 @@ export default function RegisterPage() {
   };
 
   const handleWhatsAppShare = async () => {
-    const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${mobile}`;
+    const ticketUrl = `https://cricket.dronapalace.com/ticket?mobile=${mobile}`;
     const matchName = activeMatch?.name || 'T20 Fan Night';
     const text = `🎫 My T20 Fan Night Pass — ${matchName} — ${tickets.length} seat${tickets.length > 1 ? 's' : ''}\nView tickets: ${ticketUrl}`;
 
