@@ -396,6 +396,11 @@ export default function LivePage() {
     navigate('/play');
   };
 
+  // Called by LiveContent when a realtime update signals match ended
+  const handleMatchEnded = useCallback(() => {
+    setMatchStatus('ended');
+  }, []);
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <BackgroundOrbs />
@@ -414,6 +419,7 @@ export default function LivePage() {
         onLogout={handleLogout}
         initialTab="leaderboard"
         matchEnded
+        onMatchEnded={handleMatchEnded}
       />
     );
   }
@@ -442,6 +448,7 @@ export default function LivePage() {
       predictionsEnabled={predictionsEnabled}
       session={session}
       onLogout={handleLogout}
+      onMatchEnded={handleMatchEnded}
     />
   );
 }
