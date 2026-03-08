@@ -130,11 +130,30 @@ function LiveContent({
             <h1 className="font-display text-base font-bold gradient-text leading-tight truncate">{matchName}</h1>
             <p className="text-xs text-muted-foreground">{session.mobile}</p>
           </div>
-          <GlassButton variant="ghost" size="sm" onClick={onLogout} className="shrink-0 ml-2">
+          <GlassButton variant="ghost" size="sm" onClick={() => setShowExitConfirm(true)} className="shrink-0 ml-2">
             Exit
           </GlassButton>
         </div>
       </div>
+
+      {/* Exit confirmation dialog */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="glass-card-elevated p-6 max-w-sm w-full text-center space-y-4">
+            <div className="text-3xl">🚪</div>
+            <p className="font-display text-lg font-bold text-foreground">Leave the game?</p>
+            <p className="text-sm text-muted-foreground">You'll be taken back to the login screen. Your score is saved.</p>
+            <div className="flex gap-3">
+              <GlassButton variant="ghost" size="md" className="flex-1" onClick={() => setShowExitConfirm(false)}>
+                Stay
+              </GlassButton>
+              <GlassButton variant="primary" size="md" className="flex-1" onClick={onLogout}>
+                Exit
+              </GlassButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div className="flex-1 relative z-10 overflow-y-auto">
