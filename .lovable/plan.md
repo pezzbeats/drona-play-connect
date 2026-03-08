@@ -1,53 +1,34 @@
 
-## Root Cause — Found
+## What's Left: URL Replacement in Customer-Facing Pages
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+Everything from the recent plans is implemented and working **except one thing**: the base URL replacement to `cricket.dronapalace.com` was applied inside the **admin Bookings module** but was **missed in the customer-facing pages** that also generate WhatsApp share links.
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+### 3 remaining occurrences of `drona-play-connect.lovable.app`
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+| File | Line | Context |
+|---|---|---|
+| `src/pages/Ticket.tsx` | 64 | `buildReminderLink()` — admin balance reminder WhatsApp message |
+| `src/pages/Ticket.tsx` | 731 | `whatsappShare()` — customer "Share" button on each pass |
+| `src/pages/Register.tsx` | 972 | `buildConfirmationWALink()` — booking confirmation WhatsApp message |
+| `src/pages/Register.tsx` | 1004 | `handleWhatsAppShare()` — Web Share API fallback to WhatsApp |
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
-```
-
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
-
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
-
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
-
-## Changes
-
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
+All 4 occurrences follow the same pattern:
 ```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
+// Before
+`https://drona-play-connect.lovable.app/ticket?mobile=${...}`
 
-// After:
-const [loading, setLoading] = useState(false);
+// After
+`https://cricket.dronapalace.com/ticket?mobile=${...}`
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+### Changes
 
-## Why this is the correct fix
+**`src/pages/Ticket.tsx`** — 2 line edits:
+- Line 64: replace URL in `buildReminderLink`
+- Line 731: replace URL in `whatsappShare`
 
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+**`src/pages/Register.tsx`** — 2 line edits:
+- Line 972: replace URL in `buildConfirmationWALink`
+- Line 1004: replace URL in `handleWhatsAppShare`
 
-## Files Changed
-| File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+No logic changes, no new state, no structural edits — pure string replacement in 4 lines across 2 files.
