@@ -1164,6 +1164,15 @@ function MatchLineupTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminTeams() {
+  const [activeTab, setActiveTab] = useState('lineup');
+  // Track which tabs have been visited so we only mount them once
+  const [visited, setVisited] = useState<Set<string>>(new Set(['lineup']));
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    setVisited(prev => new Set([...prev, val]));
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -1171,7 +1180,7 @@ export default function AdminTeams() {
         <p className="text-sm text-muted-foreground mt-1">Manage teams, players, assign match rosters, and enter playing XI lineups for Live Control.</p>
       </div>
 
-      <Tabs defaultValue="lineup">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="mb-4">
           <TabsTrigger value="lineup">🏏 Lineup</TabsTrigger>
           <TabsTrigger value="roster">Match Roster</TabsTrigger>
@@ -1179,10 +1188,10 @@ export default function AdminTeams() {
           <TabsTrigger value="players">Players</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="lineup"><MatchLineupTab /></TabsContent>
-        <TabsContent value="roster"><MatchRosterTab /></TabsContent>
-        <TabsContent value="teams"><TeamsTab /></TabsContent>
-        <TabsContent value="players"><PlayersTab /></TabsContent>
+        <TabsContent value="lineup">{visited.has('lineup') && <MatchLineupTab />}</TabsContent>
+        <TabsContent value="roster">{visited.has('roster') && <MatchRosterTab />}</TabsContent>
+        <TabsContent value="teams">{visited.has('teams') && <TeamsTab />}</TabsContent>
+        <TabsContent value="players">{visited.has('players') && <PlayersTab />}</TabsContent>
       </Tabs>
     </div>
   );
