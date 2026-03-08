@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
@@ -8,7 +8,7 @@ import { Scoreboard } from '@/components/live/Scoreboard';
 import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
-import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut } from 'lucide-react';
+import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X } from 'lucide-react';
 
 type Tab = 'score' | 'predict' | 'leaderboard';
 
