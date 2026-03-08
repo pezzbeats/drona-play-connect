@@ -406,6 +406,12 @@ export default function AdminOrders() {
   const [checkingInTicket, setCheckingInTicket] = useState<string | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
 
+  // Broadcast selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+
   const { toast } = useToast();
   const { user } = useAuth();
 
