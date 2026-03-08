@@ -7,13 +7,14 @@ import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Search, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp,
   ExternalLink, AlertTriangle, Shield, Banknote, RefreshCw, Download,
   MessageCircle, KeyRound, QrCode, User, CreditCard, CheckSquare2,
-  Copy, Clock, Ticket, Zap,
+  Copy, Clock, Ticket, Zap, X, Users,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
@@ -322,8 +323,30 @@ async function buildPassCanvas(ticket: TicketRow, order: any, match: any): Promi
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WhatsApp message builder
+// WhatsApp message builders
 // ─────────────────────────────────────────────────────────────────────────────
+
+function buildReminderMessage(order: any): string {
+  const balance = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+  const passUrl = `https://cricket.dronapalace.com/ticket?mobile=${order.purchaser_mobile}`;
+  const match = order.match;
+  return [
+    `🏏 T20 Fan Night — Payment Reminder`,
+    ``,
+    `Hi ${order.purchaser_full_name}!`,
+    balance > 0
+      ? `You have a balance of ₹${balance} pending for your booking.`
+      : `Your booking payment is pending. Please complete it to confirm your seat(s).`,
+    ``,
+    match?.name ? `Match: ${match.name}${match.opponent ? ` vs ${match.opponent}` : ''}` : null,
+    match?.start_time ? `Date: ${new Date(match.start_time).toLocaleString('en-IN')}` : null,
+    `Seats: ${order.seats_count}`,
+    ``,
+    `Pay & view passes: ${passUrl}`,
+    ``,
+    `— Hotel Drona Palace`,
+  ].filter(Boolean).join('\n');
+}
 
 function buildWhatsAppMessage(order: any, match: any, tickets: TicketRow[]): string {
   const passUrl = `https://cricket.dronapalace.com/ticket?mobile=${order.purchaser_mobile}`;
@@ -382,6 +405,12 @@ export default function AdminOrders() {
   const [freshPin, setFreshPin] = useState<Record<string, string>>({});
   const [checkingInTicket, setCheckingInTicket] = useState<string | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
+
+  // Broadcast selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -648,6 +677,15 @@ export default function AdminOrders() {
     setTimeout(() => setCopiedOrderId(null), 2000);
   };
 
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const filtered = orders.filter(o => {
     const matchSearch = !search ||
       o.purchaser_full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -658,6 +696,18 @@ export default function AdminOrders() {
     const matchStatus = statusFilter === 'all' || o.payment_status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const selectedOrders = filtered.filter(o => selectedIds.has(o.id));
+
+  const copyAllLinks = () => {
+    const text = selectedOrders
+      .map(o => `${o.purchaser_full_name} (+91${o.purchaser_mobile}): https://wa.me/91${o.purchaser_mobile}?text=${encodeURIComponent(buildReminderMessage(o))}`)
+      .join('\n\n');
+    navigator.clipboard.writeText(text);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+    toast({ title: '✅ Copied!', description: `${selectedOrders.length} WhatsApp links copied to clipboard.` });
+  };
 
   const paymentMethodBadge = (method: string) => {
     const styles: Record<string, string> = {
@@ -1280,6 +1330,35 @@ export default function AdminOrders() {
         </Select>
       </div>
 
+      {/* Broadcast action bar — appears when items are selected */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 flex-wrap px-4 py-3 rounded-xl border border-success/40 bg-success/8 backdrop-blur-sm sticky top-2 z-10">
+          <span className="text-sm font-semibold text-success flex items-center gap-1.5">
+            <Users className="h-4 w-4" />
+            {selectedIds.size} selected
+          </span>
+          <div className="flex-1" />
+          <GlassButton
+            variant="success"
+            size="sm"
+            className="h-9 text-xs font-semibold"
+            onClick={() => setBroadcastOpen(true)}
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            Send Reminders
+          </GlassButton>
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            className="h-9 text-xs"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear
+          </GlassButton>
+        </div>
+      )}
+
       {/* List */}
       {loading ? (
         <div className="space-y-2">
@@ -1299,54 +1378,73 @@ export default function AdminOrders() {
             const hasAdvance = (order.advance_paid ?? 0) > 0;
             const isPaidFully = ['paid_verified', 'paid_manual_verified'].includes(order.payment_status);
             const isExpanded = expandedId === order.id;
+            const isSelected = selectedIds.has(order.id);
             const currentTab: DetailTab = activeTab[order.id] || 'overview';
 
             return (
-              <GlassCard key={order.id} className="overflow-hidden">
+              <GlassCard key={order.id} className={`overflow-hidden transition-all duration-150 ${isSelected ? 'ring-1 ring-success/50' : ''}`}>
                 {/* Summary row */}
-                <button
-                  className="w-full p-4 text-left active:bg-muted/10"
-                  onClick={() => handleExpand(order.id)}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-foreground leading-snug">{order.purchaser_full_name}</p>
-                      <p className="text-sm text-muted-foreground">{order.purchaser_mobile}</p>
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <StatusBadge status={order.payment_status} />
-                        {paymentMethodBadge(order.payment_method)}
-                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">{order.match?.name}</span>
-                      </div>
-                      {hasAdvance && !isPaidFully && (
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">
-                            Adv ₹{order.advance_paid}
-                          </span>
-                          {balanceDue > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-warning/15 text-warning border border-warning/40">
-                              ⚠ Due ₹{balanceDue}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className="font-display font-bold text-primary text-base">₹{order.total_amount}</span>
-                      <span className="text-xs text-muted-foreground">{order.seats_count} seat{order.seats_count > 1 ? 's' : ''}</span>
-                      {(() => {
-                        const snapshot = order.pricing_model_snapshot;
-                        const seats: any[] = Array.isArray(snapshot?.seats) ? snapshot.seats : [];
-                        const hasSpecial = seats.some((s: any) => s.reason === 'semifinal_attendee' || s.reason === 'loyal_base');
-                        return hasSpecial
-                          ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">⭐ Special</span>
-                          : <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted/40 text-muted-foreground border border-border/30">Standard</span>;
-                      })()}
-                      {isExpanded
-                        ? <ChevronUp className="h-4 w-4 text-muted-foreground mt-1" />
-                        : <ChevronDown className="h-4 w-4 text-muted-foreground mt-1" />}
-                    </div>
+                <div className="flex items-stretch">
+                  {/* Checkbox column */}
+                  <div
+                    className="flex items-center justify-center px-3 shrink-0 cursor-pointer"
+                    onClick={(e) => toggleSelect(order.id, e)}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        next.has(order.id) ? next.delete(order.id) : next.add(order.id);
+                        return next;
+                      })}
+                      className="h-4 w-4"
+                    />
                   </div>
-                </button>
+                  {/* Main expand button */}
+                  <button
+                    className="flex-1 p-4 pl-0 text-left active:bg-muted/10"
+                    onClick={() => handleExpand(order.id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-foreground leading-snug">{order.purchaser_full_name}</p>
+                        <p className="text-sm text-muted-foreground">{order.purchaser_mobile}</p>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <StatusBadge status={order.payment_status} />
+                          {paymentMethodBadge(order.payment_method)}
+                          <span className="text-xs text-muted-foreground truncate max-w-[120px]">{order.match?.name}</span>
+                        </div>
+                        {hasAdvance && !isPaidFully && (
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">
+                              Adv ₹{order.advance_paid}
+                            </span>
+                            {balanceDue > 0 && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-warning/15 text-warning border border-warning/40">
+                                ⚠ Due ₹{balanceDue}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="font-display font-bold text-primary text-base">₹{order.total_amount}</span>
+                        <span className="text-xs text-muted-foreground">{order.seats_count} seat{order.seats_count > 1 ? 's' : ''}</span>
+                        {(() => {
+                          const snapshot = order.pricing_model_snapshot;
+                          const seats: any[] = Array.isArray(snapshot?.seats) ? snapshot.seats : [];
+                          const hasSpecial = seats.some((s: any) => s.reason === 'semifinal_attendee' || s.reason === 'loyal_base');
+                          return hasSpecial
+                            ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success border border-success/30">⭐ Special</span>
+                            : <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted/40 text-muted-foreground border border-border/30">Standard</span>;
+                        })()}
+                        {isExpanded
+                          ? <ChevronUp className="h-4 w-4 text-muted-foreground mt-1" />
+                          : <ChevronDown className="h-4 w-4 text-muted-foreground mt-1" />}
+                      </div>
+                    </div>
+                  </button>
+                </div>
 
                 {/* Expanded panel */}
                 {isExpanded && (
@@ -1388,6 +1486,98 @@ export default function AdminOrders() {
               </GlassCard>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Broadcast Modal ── */}
+      {broadcastOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-background/70 backdrop-blur-sm"
+          onClick={() => setBroadcastOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-lg bg-card border border-border/60 rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85dvh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 shrink-0">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-success" />
+                <h2 className="font-display font-bold text-foreground text-base">
+                  Send Reminders — {selectedOrders.length} booking{selectedOrders.length !== 1 ? 's' : ''}
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <GlassButton
+                  variant={copiedAll ? 'success' : 'ghost'}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={copyAllLinks}
+                >
+                  {copiedAll ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedAll ? 'Copied!' : 'Copy All'}
+                </GlassButton>
+                <button
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                  onClick={() => setBroadcastOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal body — scrollable list */}
+            <div className="overflow-y-auto flex-1 p-4 space-y-3">
+              {selectedOrders.map(order => {
+                const balance = Math.max(0, (order.total_amount ?? 0) - (order.advance_paid ?? 0));
+                const message = buildReminderMessage(order);
+                const waLink = `https://wa.me/91${order.purchaser_mobile}?text=${encodeURIComponent(message)}`;
+                const isCopied = copiedLinkId === order.id;
+
+                return (
+                  <div key={order.id} className="glass-card-sunken p-3 rounded-xl space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground text-sm leading-snug truncate">{order.purchaser_full_name}</p>
+                        <p className="text-xs text-muted-foreground">+91{order.purchaser_mobile}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <StatusBadge status={order.payment_status} />
+                        {balance > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-warning/15 text-warning border border-warning/40">
+                            ₹{balance} due
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <GlassButton
+                        variant="success"
+                        size="sm"
+                        className="flex-1 h-9 text-xs font-semibold"
+                        onClick={() => window.open(waLink, '_blank', 'noopener,noreferrer')}
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        Open WhatsApp
+                      </GlassButton>
+                      <GlassButton
+                        variant={isCopied ? 'success' : 'ghost'}
+                        size="sm"
+                        className="h-9 text-xs px-3"
+                        onClick={() => {
+                          navigator.clipboard.writeText(waLink);
+                          setCopiedLinkId(order.id);
+                          setTimeout(() => setCopiedLinkId(null), 2000);
+                        }}
+                      >
+                        {isCopied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      </GlassButton>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>
