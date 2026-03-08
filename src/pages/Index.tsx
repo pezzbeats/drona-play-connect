@@ -486,7 +486,7 @@ export default function IndexPage() {
                   🎫 <span>Ticket Pricing</span>
                 </h3>
                 <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 text-center">
+                <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 text-center">
                     <p className="text-xs text-muted-foreground mb-1">New Attendee</p>
                     <p className="font-display text-4xl font-bold gradient-text leading-none">₹{pricing.base_price_new}</p>
                     <p className="text-xs text-muted-foreground mt-1">per seat</p>
@@ -504,6 +504,9 @@ export default function IndexPage() {
                     </div>
                   )}
                 </div>
+                <p className="text-xs text-success/80 text-center font-medium">
+                  ✅ Includes venue access, food & beverages
+                </p>
                 <p className="text-xs text-muted-foreground text-center">
                   Group & family discounts available · Pay at venue or via UPI
                 </p>
