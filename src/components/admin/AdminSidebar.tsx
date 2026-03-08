@@ -28,7 +28,7 @@ const navItems: NavItem[] = [
   { icon: ScanLine,        label: 'Gate Validate',  to: '/admin/validate' },
   { icon: Trophy,          label: 'Matches',        to: '/admin/matches',       minRole: 'operator' },
   { icon: Users,           label: 'Teams & Players',to: '/admin/teams',         minRole: 'operator' },
-  { icon: ShoppingBag,     label: 'Orders',         to: '/admin/orders',        minRole: 'operator' },
+  { icon: ShoppingBag,     label: 'Bookings',        to: '/admin/orders',        minRole: 'operator' },
   { icon: BookOpen,        label: 'Manual Booking', to: '/admin/manual-booking',minRole: 'operator' },
   { icon: Radio,           label: 'Live Control',   to: '/admin/control',       minRole: 'operator' },
   { icon: BarChart2,       label: 'Analytics',      to: '/admin/analytics',     minRole: 'operator' },

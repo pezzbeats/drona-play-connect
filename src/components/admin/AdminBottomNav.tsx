@@ -26,7 +26,7 @@ const ROLE_LEVEL: Record<NonNullable<AdminRole>, number> = {
 const allNavItems: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard',      to: '/admin/dashboard' },
   { icon: ScanLine,        label: 'Gate Validate',  to: '/admin/validate' },
-  { icon: ShoppingBag,     label: 'Orders',         to: '/admin/orders',        minRole: 'operator' },
+  { icon: ShoppingBag,     label: 'Bookings',        to: '/admin/orders',        minRole: 'operator' },
   { icon: Radio,           label: 'Live Control',   to: '/admin/control',       minRole: 'operator' },
   { icon: Trophy,          label: 'Matches',        to: '/admin/matches',       minRole: 'operator' },
   { icon: Users,           label: 'Teams',          to: '/admin/teams',         minRole: 'operator' },
