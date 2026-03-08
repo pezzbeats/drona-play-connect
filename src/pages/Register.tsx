@@ -339,7 +339,10 @@ export default function RegisterPage() {
 
 
   // Step 2
-  const [seatsCount, setSeatsCount] = useState(1);
+  const [seatsCount, setSeatsCount] = useState(() => {
+    const saved = sessionStorage.getItem('reg_seatsCount');
+    return saved ? Math.max(1, parseInt(saved, 10) || 1) : 1;
+  });
   const [seatingType, setSeatingType] = useState<'regular' | 'family'>('regular');
   const [priceQuote, setPriceQuote] = useState<PriceQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -477,6 +480,7 @@ export default function RegisterPage() {
     sessionStorage.setItem('reg_fullName', fullName.trim());
     sessionStorage.setItem('reg_mobile', mobile);
     sessionStorage.setItem('reg_email', email);
+    sessionStorage.setItem('reg_seatsCount', seatsCount.toString());
     setStep(1);
   };
 
@@ -514,6 +518,8 @@ export default function RegisterPage() {
       setOrderId(data.order_id);
       if (method === 'pay_at_hotel') {
         setTickets(data.tickets || []);
+        // Clear saved form state — booking complete
+        ['reg_fullName', 'reg_mobile', 'reg_email', 'reg_seatsCount'].forEach(k => sessionStorage.removeItem(k));
         setStep(3);
       }
       setLoading(false);
@@ -557,6 +563,8 @@ export default function RegisterPage() {
           }
           setTickets(verifyData.tickets || []);
           setPaymentVerifiedAt(new Date().toISOString());
+          // Clear saved form state — booking complete
+          ['reg_fullName', 'reg_mobile', 'reg_email', 'reg_seatsCount'].forEach(k => sessionStorage.removeItem(k));
           setStep(3);
           toast({ title: '✅ Payment Confirmed!', description: 'Your passes are ready.' });
         } catch (e: any) {

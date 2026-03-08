@@ -74,15 +74,43 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   // Running score from leaderboard
   const [myScore, setMyScore] = useState<{ total_points: number; correct_predictions: number; total_predictions: number } | null>(null);
 
-  useEffect(() => {
-    supabase
+  const fetchMyScore = useCallback(async () => {
+    const { data } = await supabase
       .from('leaderboard')
       .select('total_points, correct_predictions, total_predictions')
       .eq('match_id', matchId)
       .eq('mobile', mobile)
-      .maybeSingle()
-      .then(({ data }) => { if (data) setMyScore(data); });
+      .maybeSingle();
+    if (data) setMyScore(data);
   }, [matchId, mobile]);
+
+  useEffect(() => { fetchMyScore(); }, [fetchMyScore]);
+
+  // Realtime: update myScore whenever the leaderboard row changes
+  const scoreSubscriptions = useMemo<ChannelSubscription[]>(() => [
+    {
+      event: 'UPDATE', schema: 'public', table: 'leaderboard',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new && (payload.new as any).mobile === mobile) {
+          const { total_points, correct_predictions, total_predictions } = payload.new as any;
+          setMyScore({ total_points, correct_predictions, total_predictions });
+        }
+      },
+    },
+    {
+      event: 'INSERT', schema: 'public', table: 'leaderboard',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new && (payload.new as any).mobile === mobile) {
+          const { total_points, correct_predictions, total_predictions } = payload.new as any;
+          setMyScore({ total_points, correct_predictions, total_predictions });
+        }
+      },
+    },
+  ], [matchId, mobile]);
+
+  useRealtimeChannel(`score-panel-${matchId}-${mobile}`, scoreSubscriptions, fetchMyScore);
 
   const fetchWindows = useCallback(async () => {
     const [windowsRes, flagsRes] = await Promise.all([
@@ -235,14 +263,14 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   return (
     <div className="space-y-3">
       {/* Running score banner */}
-      {myScore && myScore.total_predictions > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/25">
-          <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-primary flex-shrink-0" />
-            <span className="text-sm font-bold text-primary">{myScore.total_points} pts</span>
-          </div>
-          <span className="text-xs text-muted-foreground font-medium">
-            {myScore.correct_predictions}/{myScore.total_predictions} correct
+      {myScore !== null && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/25">
+          <Target className="h-4 w-4 text-primary flex-shrink-0" />
+          <span className="text-sm font-bold text-primary">
+            Your Score: {myScore.total_points} pts
+          </span>
+          <span className="text-muted-foreground font-medium text-xs ml-auto">
+            · {myScore.correct_predictions}/{myScore.total_predictions} correct
           </span>
         </div>
       )}

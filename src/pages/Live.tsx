@@ -25,16 +25,20 @@ function LiveContent({
   predictionsEnabled: initialPredictionsEnabled,
   session,
   onLogout,
+  initialTab = 'score',
+  matchEnded = false,
 }: {
   matchId: string;
   matchName: string;
   predictionsEnabled: boolean;
   session: GameSession;
   onLogout: () => void;
+  initialTab?: Tab;
+  matchEnded?: boolean;
 }) {
   const [matchName, setMatchName] = useState(initialMatchName);
   const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
-  const [activeTab, setActiveTab] = useState<Tab>('score');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   // Auto-switch away from Guess tab if admin disables predictions
@@ -97,6 +101,13 @@ function LiveContent({
       <div className="disclaimer-bar text-center text-xs py-1.5 px-4 relative z-10 shrink-0">
         🎯 <strong>Fun Game only.</strong> No betting, no wagering. Entertainment only.
       </div>
+
+      {/* ── Match ended banner ── */}
+      {matchEnded && (
+        <div className="relative z-20 shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold bg-muted/30 border-b border-border/40 text-muted-foreground">
+          🏆 This match has ended — view the final leaderboard below
+        </div>
+      )}
 
       {/* ── Reconnecting / offline banner ── */}
       <div
@@ -220,6 +231,7 @@ export default function LivePage() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [matchName, setMatchName] = useState('');
   const [predictionsEnabled, setPredictionsEnabled] = useState(false);
+  const [matchStatus, setMatchStatus] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { initSession(); }, []);
@@ -234,25 +246,27 @@ export default function LivePage() {
 
       const { data: match } = await supabase
         .from('matches')
-        .select('id, name, predictions_enabled')
+        .select('id, name, predictions_enabled, status')
         .eq('is_active_for_registration', true)
         .single();
 
       if (!match) {
         if (sess.match_id) {
           const { data: sessionMatch } = await supabase
-            .from('matches').select('id, name, predictions_enabled')
+            .from('matches').select('id, name, predictions_enabled, status')
             .eq('id', sess.match_id).single();
           if (sessionMatch) {
             setMatchId(sessionMatch.id);
             setMatchName(sessionMatch.name);
             setPredictionsEnabled(sessionMatch.predictions_enabled);
+            setMatchStatus(sessionMatch.status);
           }
         }
       } else {
         setMatchId(match.id);
         setMatchName(match.name);
         setPredictionsEnabled(match.predictions_enabled);
+        setMatchStatus(match.status);
         const updated = { ...sess, match_id: match.id };
         localStorage.setItem('game_session', JSON.stringify(updated));
         setSession(updated);
@@ -272,6 +286,21 @@ export default function LivePage() {
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
+
+  // Match ended — render LiveContent defaulted to leaderboard tab
+  if (matchId && session && matchStatus === 'ended') {
+    return (
+      <LiveContent
+        matchId={matchId}
+        matchName={matchName}
+        predictionsEnabled={false}
+        session={session}
+        onLogout={handleLogout}
+        initialTab="leaderboard"
+        matchEnded
+      />
+    );
+  }
 
   if (!matchId || !session) return (
     <div className="min-h-screen flex items-center justify-center p-4 relative">
