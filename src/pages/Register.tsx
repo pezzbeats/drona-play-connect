@@ -322,9 +322,10 @@ export default function RegisterPage() {
   const previewMatchId = new URLSearchParams(window.location.search).get('preview');
   const isPreviewMode = !!previewMatchId;
 
-  const [fullName, setFullName] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [email, setEmail] = useState('');
+  // Restore form state from sessionStorage if available (prevents data loss on navigation)
+  const [fullName, setFullName] = useState(() => sessionStorage.getItem('reg_fullName') || '');
+  const [mobile, setMobile] = useState(() => sessionStorage.getItem('reg_mobile') || '');
+  const [email, setEmail] = useState(() => sessionStorage.getItem('reg_email') || '');
   const [emailError, setEmailError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const mobileValid = /^\d{10}$/.test(mobile);
