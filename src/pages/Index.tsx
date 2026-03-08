@@ -557,6 +557,18 @@ export default function IndexPage() {
               </GlassCard>
             </div>
           </>
+        ) : fetchError ? (
+          /* ─── FETCH ERROR — RETRY ─── */
+          <GlassCard className="p-8 text-center mb-6 animate-slide-up" style={{ borderColor: 'hsl(355 80% 55% / 0.3)' } as React.CSSProperties}>
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="font-display text-xl font-bold text-foreground mb-2">Couldn't Load Event Info</h2>
+            <p className="text-muted-foreground text-sm mb-5">
+              There was a connection issue loading the event. Please try again.
+            </p>
+            <GlassButton variant="primary" size="md" onClick={() => fetchData(0)}>
+              Retry Loading
+            </GlassButton>
+          </GlassCard>
         ) : (
           /* ─── NO ACTIVE MATCH — COMING SOON ─── */
           <GlassCard className="p-8 text-center mb-6 animate-slide-up" glow>
@@ -578,10 +590,17 @@ export default function IndexPage() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm mb-5">
+            <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm mb-3">
               <Clock className="h-4 w-4" />
               <span>Check back soon for the next event</span>
             </div>
+            {/* Refresh button — lets users retry without full page reload */}
+            <button
+              onClick={() => fetchData(0)}
+              className="text-xs text-muted-foreground/60 hover:text-muted-foreground underline underline-offset-2 transition-colors mb-4 block mx-auto"
+            >
+              Refresh
+            </button>
             {/* WhatsApp contact CTA when no active match */}
             <a
               href="https://wa.me/917217016170?text=Hi%2C%20I%27d%20like%20to%20enquire%20about%20the%20next%20T20%20Fan%20Night%20event."
