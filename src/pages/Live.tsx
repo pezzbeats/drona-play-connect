@@ -220,6 +220,7 @@ export default function LivePage() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [matchName, setMatchName] = useState('');
   const [predictionsEnabled, setPredictionsEnabled] = useState(false);
+  const [matchStatus, setMatchStatus] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { initSession(); }, []);
@@ -234,25 +235,27 @@ export default function LivePage() {
 
       const { data: match } = await supabase
         .from('matches')
-        .select('id, name, predictions_enabled')
+        .select('id, name, predictions_enabled, status')
         .eq('is_active_for_registration', true)
         .single();
 
       if (!match) {
         if (sess.match_id) {
           const { data: sessionMatch } = await supabase
-            .from('matches').select('id, name, predictions_enabled')
+            .from('matches').select('id, name, predictions_enabled, status')
             .eq('id', sess.match_id).single();
           if (sessionMatch) {
             setMatchId(sessionMatch.id);
             setMatchName(sessionMatch.name);
             setPredictionsEnabled(sessionMatch.predictions_enabled);
+            setMatchStatus(sessionMatch.status);
           }
         }
       } else {
         setMatchId(match.id);
         setMatchName(match.name);
         setPredictionsEnabled(match.predictions_enabled);
+        setMatchStatus(match.status);
         const updated = { ...sess, match_id: match.id };
         localStorage.setItem('game_session', JSON.stringify(updated));
         setSession(updated);
@@ -272,6 +275,21 @@ export default function LivePage() {
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
+
+  // Match ended — render LiveContent defaulted to leaderboard tab
+  if (matchId && session && matchStatus === 'ended') {
+    return (
+      <LiveContent
+        matchId={matchId}
+        matchName={matchName}
+        predictionsEnabled={false}
+        session={session}
+        onLogout={handleLogout}
+        initialTab="leaderboard"
+        matchEnded
+      />
+    );
+  }
 
   if (!matchId || !session) return (
     <div className="min-h-screen flex items-center justify-center p-4 relative">

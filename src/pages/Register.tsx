@@ -480,6 +480,7 @@ export default function RegisterPage() {
     sessionStorage.setItem('reg_fullName', fullName.trim());
     sessionStorage.setItem('reg_mobile', mobile);
     sessionStorage.setItem('reg_email', email);
+    sessionStorage.setItem('reg_seatsCount', seatsCount.toString());
     setStep(1);
   };
 

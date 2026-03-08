@@ -263,14 +263,14 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   return (
     <div className="space-y-3">
       {/* Running score banner */}
-      {myScore && myScore.total_predictions > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/25">
-          <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-primary flex-shrink-0" />
-            <span className="text-sm font-bold text-primary">{myScore.total_points} pts</span>
-          </div>
-          <span className="text-xs text-muted-foreground font-medium">
-            {myScore.correct_predictions}/{myScore.total_predictions} correct
+      {myScore !== null && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/25">
+          <Target className="h-4 w-4 text-primary flex-shrink-0" />
+          <span className="text-sm font-bold text-primary">
+            Your Score: {myScore.total_points} pts
+          </span>
+          <span className="text-muted-foreground font-medium text-xs ml-auto">
+            · {myScore.correct_predictions}/{myScore.total_predictions} correct
           </span>
         </div>
       )}
