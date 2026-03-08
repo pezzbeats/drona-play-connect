@@ -1551,6 +1551,7 @@ export default function AdminOrders() {
                           { id: 'passes', label: 'Passes', icon: Ticket },
                           { id: 'gamepin', label: 'Game PIN', icon: KeyRound },
                           { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
+                          { id: 'consent', label: 'Consent', icon: ShieldCheck },
                         ] as { id: DetailTab; label: string; icon: React.ElementType }[]
                       ).map(tab => (
                         <button
