@@ -388,6 +388,9 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
             <div className="text-sm text-primary mt-2 font-semibold">
               Target: {(state.innings1_score || 0) + 1} runs
             </div>
+            <p className="text-xs text-muted-foreground mt-3 animate-pulse">
+              2nd innings starting soon…
+            </p>
           </div>
         )}
 

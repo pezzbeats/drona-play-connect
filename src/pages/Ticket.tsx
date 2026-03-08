@@ -848,7 +848,7 @@ export default function TicketPage() {
   }
 
   // ── FOUND PHASE ──────────────────────────────────────────────────────────
-  const order = tickets[0]?.order as any;
+  const order = tickets[activeIdx]?.order as any ?? tickets[0]?.order as any;
   const match = order?.match;
   const paymentStatus = order?.payment_status;
   const paidTickets = isPaid(paymentStatus);
@@ -874,13 +874,24 @@ export default function TicketPage() {
           </p>
         </div>
 
-        {/* Print button */}
+        {/* Print + Refresh buttons */}
         <div className="flex gap-2 mb-4 no-print">
           <GlassButton variant="ghost" size="sm" className="flex-1" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" /> Print All
+            <Printer className="h-4 w-4" /> Print
+          </GlassButton>
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            className="flex-1"
+            onClick={() => {
+              const mob = currentTicket ? (currentTicket.order as any)?.purchaser_mobile : mobileInput;
+              if (mob) fetchTickets(null, mob);
+            }}
+          >
+            <RefreshCw className="h-4 w-4" /> Refresh
           </GlassButton>
           <GlassButton variant="ghost" size="sm" className="flex-1" onClick={() => whatsappShare(currentTicket)}>
-            <MessageCircle className="h-4 w-4" /> WhatsApp
+            <MessageCircle className="h-4 w-4" /> Share
           </GlassButton>
           {isAdmin && !paidTickets && Math.max(0, (currentTicket?.order as any)?.total_amount - (currentTicket?.order as any)?.advance_paid) > 0 && (
             <a
@@ -899,7 +910,7 @@ export default function TicketPage() {
           )}
         </div>
 
-        {/* Multi-ticket navigation */}
+        {/* Multi-ticket navigation — single-pass display */}
         {tickets.length > 1 && (
           <div className="flex items-center justify-between mb-3 no-print">
             <GlassButton variant="ghost" size="sm" onClick={() => setActiveIdx(i => Math.max(0, i - 1))} disabled={activeIdx === 0}>
@@ -914,7 +925,7 @@ export default function TicketPage() {
           </div>
         )}
 
-        {/* Ticket cards */}
+        {/* Single ticket card — only show active one */}
         <div className="space-y-6">
           {tickets.map((ticket, i) => (
             <div
