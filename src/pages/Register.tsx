@@ -1445,7 +1445,7 @@ export default function RegisterPage() {
                   {paymentMethod === 'pay_at_hotel' && (
                     <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-sm text-warning flex items-start gap-2">
                       <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      <span>Passes marked <strong>Unpaid</strong>. Pay the full amount at the venue before entry.</span>
+                      <span><strong>Your seat is reserved ✓</strong> Pay ₹{priceQuote?.total ?? ''} cash or UPI at the hotel on arrival before entry.</span>
                     </div>
                   )}
 
