@@ -79,12 +79,24 @@ function LiveContent({
       table: 'prediction_windows',
       filter: `match_id=eq.${matchId}`,
       callback: (payload) => {
-        // Only nudge if the window is 'open' and user isn't already on the Guess tab
         if (payload.new?.status === 'open') {
           setActiveTab(prev => {
-            if (prev !== 'predict') {
-              setGuessNudge(true);
-            }
+            if (prev !== 'predict') setGuessNudge(true);
+            return prev;
+          });
+        }
+      },
+    },
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'prediction_windows',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        // Re-opened window: new status is 'open' but old status was not
+        if (payload.new?.status === 'open' && payload.old?.status !== 'open') {
+          setActiveTab(prev => {
+            if (prev !== 'predict') setGuessNudge(true);
             return prev;
           });
         }
