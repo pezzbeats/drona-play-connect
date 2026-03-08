@@ -59,7 +59,7 @@ function LiveContent({
     }
   }, [predictionsEnabled, activeTab]);
 
-  // ── Realtime: watch matches row for admin toggles ────────────────────────
+  // ── Realtime: watch matches row for admin toggles + new prediction windows ──
   const matchSubscriptions = useMemo<ChannelSubscription[]>(() => [
     {
       event: 'UPDATE',
@@ -70,6 +70,23 @@ function LiveContent({
         if (payload.new) {
           setPredictionsEnabled(!!payload.new.predictions_enabled);
           if (payload.new.name) setMatchName(payload.new.name);
+        }
+      },
+    },
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'prediction_windows',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        // Only nudge if the window is 'open' and user isn't already on the Guess tab
+        if (payload.new?.status === 'open') {
+          setActiveTab(prev => {
+            if (prev !== 'predict') {
+              setGuessNudge(true);
+            }
+            return prev;
+          });
         }
       },
     },
