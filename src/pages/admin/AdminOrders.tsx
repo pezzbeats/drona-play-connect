@@ -708,9 +708,20 @@ export default function AdminOrders() {
       o.purchaser_mobile?.includes(search);
     const isPaidFully = ['paid_verified', 'paid_manual_verified'].includes(o.payment_status);
     const hasBalanceDue = (o.advance_paid ?? 0) > 0 && !isPaidFully;
-    if (statusFilter === 'balance_due') return matchSearch && hasBalanceDue;
-    const matchStatus = statusFilter === 'all' || o.payment_status === statusFilter;
-    return matchSearch && matchStatus;
+    if (statusFilter === 'balance_due' && !(!isPaidFully && (o.advance_paid ?? 0) > 0)) return false;
+    if (statusFilter !== 'balance_due') {
+      const matchStatus = statusFilter === 'all' || o.payment_status === statusFilter;
+      if (!matchStatus) return false;
+    }
+    if (dateFrom) {
+      const created = new Date(o.created_at);
+      if (created < startOfDay(dateFrom)) return false;
+    }
+    if (dateTo) {
+      const created = new Date(o.created_at);
+      if (created > endOfDay(dateTo)) return false;
+    }
+    return matchSearch;
   });
 
   const selectedOrders = filtered.filter(o => selectedIds.has(o.id));
