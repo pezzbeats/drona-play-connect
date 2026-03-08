@@ -15,7 +15,7 @@ export function useSiteConfig(): UseSiteConfigResult {
   const [config, setConfig] = useState<ConfigMap>(cache ?? {});
   const [loading, setLoading] = useState(false);
 
-  const fetch = async () => {
+  const fetchWithRetry = async (attempt = 0): Promise<void> => {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('site_config').select('key, value');
@@ -27,7 +27,13 @@ export function useSiteConfig(): UseSiteConfigResult {
         setConfig(map);
       }
     } catch (e) {
-      console.error('[useSiteConfig] fetch failed:', e);
+      console.error(`[useSiteConfig] fetch failed (attempt ${attempt + 1}):`, e);
+      if (attempt < 1) {
+        // single retry after 2s — covers cold-start network blips
+        setTimeout(() => fetchWithRetry(attempt + 1), 2000);
+        return;
+      }
+      // After retry: silently use fallbacks — non-blocking
     } finally {
       setLoading(false);
     }
@@ -35,11 +41,11 @@ export function useSiteConfig(): UseSiteConfigResult {
 
   useEffect(() => {
     if (!cache) {
-      fetch();
+      fetchWithRetry(0);
     }
   }, []);
 
   const get = (key: string, fallback = '') => config[key] ?? fallback;
 
-  return { get, loading, reload: fetch };
+  return { get, loading, reload: () => fetchWithRetry(0) };
 }

@@ -239,20 +239,21 @@ const MatchSectionSkeleton = () => (
 );
 
 export default function IndexPage() {
-  const { get, loading: configLoading } = useSiteConfig();
+  const { get } = useSiteConfig();
   const [match, setMatch] = useState<ActiveMatch | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [pricing, setPricing] = useState<PricingRule | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [barDismissed, setBarDismissed] = useState(() => sessionStorage.getItem('barDismissed') === '1');
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 8000);
-    fetchData().finally(() => clearTimeout(timeout));
+    const timeout = setTimeout(() => setLoading(false), 10000); // safety net
+    fetchData(0).finally(() => clearTimeout(timeout));
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (attempt = 0): Promise<void> => {
+    if (attempt === 0) setLoading(true);
     try {
       const { data: matchData, error: matchError } = await supabase
         .from('matches')
@@ -260,7 +261,9 @@ export default function IndexPage() {
         .eq('is_active_for_registration', true)
         .maybeSingle();
 
-      if (matchError) console.error('[Index] Error fetching active match:', matchError);
+      if (matchError) throw matchError; // surface errors — don't swallow
+
+      setFetchError(false);
 
       if (matchData) {
         setMatch(matchData);
@@ -275,9 +278,17 @@ export default function IndexPage() {
           setBannerUrl(url?.publicUrl || null);
         }
         if (pricingRes.data) setPricing(pricingRes.data);
+      } else {
+        setMatch(null);
       }
     } catch (e) {
-      console.error('[Index] fetchData error:', e);
+      console.error(`[Index] fetchData error (attempt ${attempt + 1}):`, e);
+      if (attempt < 2) {
+        // Exponential backoff: 1.5s, 3s
+        setTimeout(() => fetchData(attempt + 1), 1500 * (attempt + 1));
+        return; // keep loading spinner visible during retry
+      }
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -546,6 +557,18 @@ export default function IndexPage() {
               </GlassCard>
             </div>
           </>
+        ) : fetchError ? (
+          /* ─── FETCH ERROR — RETRY ─── */
+          <GlassCard className="p-8 text-center mb-6 animate-slide-up" style={{ borderColor: 'hsl(355 80% 55% / 0.3)' } as React.CSSProperties}>
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="font-display text-xl font-bold text-foreground mb-2">Couldn't Load Event Info</h2>
+            <p className="text-muted-foreground text-sm mb-5">
+              There was a connection issue loading the event. Please try again.
+            </p>
+            <GlassButton variant="primary" size="md" onClick={() => fetchData(0)}>
+              Retry Loading
+            </GlassButton>
+          </GlassCard>
         ) : (
           /* ─── NO ACTIVE MATCH — COMING SOON ─── */
           <GlassCard className="p-8 text-center mb-6 animate-slide-up" glow>
@@ -567,10 +590,17 @@ export default function IndexPage() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm mb-5">
+            <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm mb-3">
               <Clock className="h-4 w-4" />
               <span>Check back soon for the next event</span>
             </div>
+            {/* Refresh button — lets users retry without full page reload */}
+            <button
+              onClick={() => fetchData(0)}
+              className="text-xs text-muted-foreground/60 hover:text-muted-foreground underline underline-offset-2 transition-colors mb-4 block mx-auto"
+            >
+              Refresh
+            </button>
             {/* WhatsApp contact CTA when no active match */}
             <a
               href="https://wa.me/917217016170?text=Hi%2C%20I%27d%20like%20to%20enquire%20about%20the%20next%20T20%20Fan%20Night%20event."

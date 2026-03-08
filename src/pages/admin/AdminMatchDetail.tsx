@@ -311,7 +311,13 @@ export default function AdminMatchDetail() {
 
       {/* Status */}
       <GlassCard className="p-5">
-        <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-widest mb-3">Status</h2>
+        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-widest">Match Status</h2>
+          <span className="text-xs text-muted-foreground bg-muted/40 border border-border/50 rounded-lg px-2.5 py-1 leading-snug max-w-xs text-right">
+            ⚡ This controls the <strong>Match Control</strong> phase (draft → live → ended). <br />
+            It is <strong>separate</strong> from the "Active for Registration" toggle above, which controls landing page visibility.
+          </span>
+        </div>
         <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map(opt => (
             <button
@@ -324,6 +330,11 @@ export default function AdminMatchDetail() {
             </button>
           ))}
         </div>
+        {!match?.is_active_for_registration && (
+          <p className="text-xs text-warning mt-3 flex items-center gap-1.5">
+            ⚠️ <span>This match is <strong>not active for registration</strong> — it won't appear on the landing page. Use the <strong>Activate</strong> button in the header to make it visible.</span>
+          </p>
+        )}
       </GlassCard>
 
       {/* Pricing */}
