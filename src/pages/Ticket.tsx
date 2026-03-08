@@ -8,7 +8,7 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { Input } from '@/components/ui/input';
 import {
   Loader2, Share2, ChevronLeft, ChevronRight,
-  ArrowLeft, Download, MessageCircle, Search, Printer
+  ArrowLeft, Download, MessageCircle, Search, Printer, RefreshCw
 } from 'lucide-react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
