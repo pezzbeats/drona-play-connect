@@ -73,6 +73,10 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   // Running score from leaderboard
   const [myScore, setMyScore] = useState<{ total_points: number; correct_predictions: number; total_predictions: number } | null>(null);
+  const [displayPoints, setDisplayPoints] = useState(0);
+  const [scoreDelta, setScoreDelta] = useState<number | null>(null);
+  const [scoreFlash, setScoreFlash] = useState(false);
+  const prevPointsRef = useRef<number>(0);
 
   const fetchMyScore = useCallback(async () => {
     const { data } = await supabase
