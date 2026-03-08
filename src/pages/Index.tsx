@@ -676,7 +676,7 @@ export default function IndexPage() {
                 </button>
               </Link>
               <button
-                onClick={() => setBarDismissed(true)}
+                onClick={() => { setBarDismissed(true); sessionStorage.setItem('barDismissed', '1'); }}
                 aria-label="Dismiss"
                 className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-muted/60 text-muted-foreground hover:bg-muted transition-colors"
               >
