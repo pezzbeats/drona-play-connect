@@ -936,10 +936,10 @@ export default function AdminControl() {
                     ].map(f => (
                       <div key={f.key}>
                         <Label className="text-foreground mb-1 block text-xs">{f.label}</Label>
-                        <Select value={(delivery as any)[f.key]} onValueChange={v => setDelivery(d => ({ ...d, [f.key]: v }))}>
+                        <Select value={(delivery as any)[f.key] || '__none__'} onValueChange={v => setDelivery(d => ({ ...d, [f.key]: v === '__none__' ? '' : v }))}>
                           <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="__none__">None</SelectItem>
                             {f.opts.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
