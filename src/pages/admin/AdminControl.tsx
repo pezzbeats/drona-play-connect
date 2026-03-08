@@ -1192,12 +1192,12 @@ export default function AdminControl() {
                       <span className="text-xs bg-success/20 text-success px-1.5 rounded-full">On Strike</span>
                     </div>
                     <Select
-                      value={liveState.current_striker_id || ''}
-                      onValueChange={id => handleUpdatePlayers({ striker_id: id || null })}
+                      value={liveState.current_striker_id || '__none__'}
+                      onValueChange={id => handleUpdatePlayers({ striker_id: id === '__none__' ? null : id })}
                     >
                       <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="None" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="__none__">None</SelectItem>
                         {effectiveBatting.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1211,12 +1211,12 @@ export default function AdminControl() {
                       <span className="text-xs font-bold text-muted-foreground">NON-STRIKER</span>
                     </div>
                     <Select
-                      value={liveState.current_non_striker_id || ''}
-                      onValueChange={id => handleUpdatePlayers({ non_striker_id: id || null })}
+                      value={liveState.current_non_striker_id || '__none__'}
+                      onValueChange={id => handleUpdatePlayers({ non_striker_id: id === '__none__' ? null : id })}
                     >
                       <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="None" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="__none__">None</SelectItem>
                         {effectiveBatting.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1232,15 +1232,15 @@ export default function AdminControl() {
                     <span className="text-xs font-bold text-primary">CURRENT BOWLER</span>
                   </div>
                   <Select
-                    value={liveState.current_bowler_id || ''}
+                    value={liveState.current_bowler_id || '__none__'}
                     onValueChange={id => {
-                      handleUpdatePlayers({ bowler_id: id || null });
-                      setDelivery(d => ({ ...d, bowler_id: id || '' }));
+                      handleUpdatePlayers({ bowler_id: id === '__none__' ? null : id });
+                      setDelivery(d => ({ ...d, bowler_id: id === '__none__' ? '' : id }));
                     }}
                   >
                     <SelectTrigger className="glass-input h-8 text-xs"><SelectValue placeholder="None" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {effectiveBowling.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
