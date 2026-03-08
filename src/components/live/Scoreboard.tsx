@@ -310,12 +310,12 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
                 {score}/{wickets}
               </div>
               <div className="text-muted-foreground text-sm mt-2 font-medium">
-                {Number(overs).toFixed(1)} overs · Innings {currentInnings}
+                {(() => { const o = Number(overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} overs · Innings {currentInnings}
               </div>
               {state.target_runs && currentInnings === 2 && (
                 <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/25">
                   <span className="text-xs text-primary font-semibold">
-                    Target {state.target_runs} · Need {Math.max(0, state.target_runs - (score || 0))} in {Math.max(0, 20 - Number(overs)).toFixed(1)} ov
+                    Target {state.target_runs} · Need {Math.max(0, state.target_runs - (score || 0))} in {(() => { const r = Math.max(0, 20 - Number(overs)); return r === Math.floor(r) ? Math.floor(r) : r.toFixed(1); })()} ov
                   </span>
                 </div>
               )}
