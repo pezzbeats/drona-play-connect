@@ -1746,7 +1746,7 @@ export default function RegisterPage() {
                 color: 'hsl(var(--primary))',
               }}
             >
-              <Download className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" />
               View / Retrieve Your Passes →
             </Link>
 

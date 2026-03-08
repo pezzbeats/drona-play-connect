@@ -245,7 +245,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         <GlassCard className="p-5 text-center">
           <Clock className="h-8 w-8 text-primary/30 mx-auto mb-2" />
           <p className="text-foreground font-bold">No Active Fun Guess</p>
-          <p className="text-muted-foreground text-sm">Guesses open when an active window appears</p>
+          <p className="text-muted-foreground text-sm">Admin will open the next guess window shortly — stay tuned!</p>
         </GlassCard>
       )}
 
