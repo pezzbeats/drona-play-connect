@@ -116,6 +116,32 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   useRealtimeChannel(`score-panel-${matchId}-${mobile}`, scoreSubscriptions, fetchMyScore);
 
+  // Animate score increment when points increase
+  useEffect(() => {
+    if (!myScore) return;
+    const prev = prevPointsRef.current;
+    const next = myScore.total_points;
+    if (next > prev && prev !== 0) {
+      const delta = next - prev;
+      setScoreDelta(delta);
+      setScoreFlash(true);
+      const steps = Math.min(delta, 10);
+      const intervalMs = 600 / steps;
+      let current = prev;
+      const timer = setInterval(() => {
+        current += Math.ceil(delta / steps);
+        if (current >= next) { current = next; clearInterval(timer); }
+        setDisplayPoints(current);
+      }, intervalMs);
+      const flashTimer = setTimeout(() => { setScoreFlash(false); setScoreDelta(null); }, 1500);
+      prevPointsRef.current = next;
+      return () => { clearInterval(timer); clearTimeout(flashTimer); };
+    } else {
+      setDisplayPoints(next);
+      prevPointsRef.current = next;
+    }
+  }, [myScore?.total_points]);
+
   const fetchWindows = useCallback(async () => {
     const [windowsRes, flagsRes] = await Promise.all([
       supabase
