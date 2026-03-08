@@ -415,6 +415,13 @@ export default function AdminOrders() {
 
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+
+  // Deep-link filter support: /admin/orders?filter=pending_verification
+  useEffect(() => {
+    const filterParam = searchParams.get('filter');
+    if (filterParam) setStatusFilter(filterParam);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchOrders(); }, []);
 
