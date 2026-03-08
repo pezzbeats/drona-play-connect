@@ -61,7 +61,7 @@ function buildReminderLink(ticket: TicketData): string {
   const match = order?.match;
   const balanceDue = Math.max(0, (order?.total_amount ?? 0) - (order?.advance_paid ?? 0));
   const isPartiallyPaid = (order?.advance_paid ?? 0) > 0;
-  const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${order?.purchaser_mobile}`;
+  const ticketUrl = `https://cricket.dronapalace.com/ticket?mobile=${order?.purchaser_mobile}`;
 
   const lines = [
     `Hi ${order?.purchaser_full_name}! 🙏 Your T20 Fan Night Pass (Seat ${ticket.seat_index + 1} of ${order?.seats_count}) is confirmed with Hotel Drona Palace.`,
@@ -728,7 +728,7 @@ export default function TicketPage() {
   const whatsappShare = async (ticket: TicketData) => {
     const order = ticket.order as any;
     const match = order?.match;
-    const ticketUrl = `https://drona-play-connect.lovable.app/ticket?mobile=${order?.purchaser_mobile}`;
+    const ticketUrl = `https://cricket.dronapalace.com/ticket?mobile=${order?.purchaser_mobile}`;
     const text = `🎫 My T20 Fan Night Pass${match?.name ? ` — ${match.name}` : ''} — Seat ${ticket.seat_index + 1}\nView tickets: ${ticketUrl}`;
 
     if (navigator.canShare) {
