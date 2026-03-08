@@ -40,6 +40,17 @@ function LiveContent({
   const [predictionsEnabled, setPredictionsEnabled] = useState(initialPredictionsEnabled);
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [guessNudge, setGuessNudge] = useState(false);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Auto-dismiss nudge after 5 s
+  useEffect(() => {
+    if (guessNudge) {
+      clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = setTimeout(() => setGuessNudge(false), 5000);
+    }
+    return () => clearTimeout(nudgeTimerRef.current);
+  }, [guessNudge]);
 
   // Auto-switch away from Guess tab if admin disables predictions
   useEffect(() => {
