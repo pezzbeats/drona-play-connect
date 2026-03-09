@@ -62,6 +62,8 @@ async function drawToCanvas(
   code: string,
   logoImg: HTMLImageElement,
   expiryStr: string,
+  subtitleText: string,
+  eventNightLabel: string,
 ): Promise<void> {
   canvas.width = W;
   canvas.height = H;
