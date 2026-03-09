@@ -64,6 +64,7 @@ async function drawToCanvas(
   expiryStr: string,
   subtitleText: string,
   eventNightLabel: string,
+  winHeadline: string,
 ): Promise<void> {
   canvas.width = W;
   canvas.height = H;
