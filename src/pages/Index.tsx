@@ -651,9 +651,11 @@ export default function IndexPage() {
           /* ─── NO ACTIVE MATCH — COMING SOON ─── */
           <GlassCard className="p-8 text-center mb-6 animate-slide-up" glow>
             <div className="text-6xl mb-4 drop-shadow-[0_0_24px_hsl(355_80%_55%/0.5)]">🏏</div>
-            <h2 className="font-display text-2xl font-bold gradient-text mb-2">Next Event Coming Soon</h2>
+            <h2 className="font-display text-2xl font-bold gradient-text mb-2">IPL Fan Night 2026 — Coming Soon</h2>
             <p className="text-muted-foreground text-sm mb-6">
-              The next T20 Fan Night is being planned. Stay tuned — registrations will open soon!
+              Get ready for the biggest cricket celebration! IPL Fan Night starts from{' '}
+              <span className="text-secondary font-semibold">28 March 2026</span>.
+              Registrations will open soon — stay tuned!
             </p>
             <div className="grid grid-cols-2 gap-3 mb-6">
               {features.map((f, i) => (
