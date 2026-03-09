@@ -350,9 +350,21 @@ export default function AdminCoupons() {
   const subtitleText = getConfig('coupon_event_subtitle', 'T20 World Cup Final  ·  India vs New Zealand');
   const eventNightLabel = getConfig('coupon_event_night_label', 'T20 World Cup Final Night');
   const winHeadline = getConfig('coupon_win_headline', 'INDIA WON!');
+  const DEFAULT_WA_TEMPLATE =
+    `🏆 Congratulations, {{name}}!\n\n` +
+    `{{event}} 🎉\n\n` +
+    `As a valued guest of Hotel Drona Palace who attended the {{eventLabel}}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
+    `🎟️ Your Coupon Code: {{code}}\n` +
+    `💰 Discount: {{discount}}\n` +
+    `{{expiryLine}}` +
+    `\nValid for redemption at Hotel Drona Palace.\n` +
+    `Present this coupon at the hotel reception.\n\n` +
+    `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`;
+
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('500');
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
+  const [whatsappTemplate, setWhatsappTemplate] = useState(DEFAULT_WA_TEMPLATE);
   const [rows, setRows] = useState<AttendeeRow[]>([]);
   const [coupons, setCoupons] = useState<GeneratedCoupon[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -429,10 +441,11 @@ export default function AdminCoupons() {
     try {
       const saved = localStorage.getItem('drona_coupon_discount');
       if (saved) {
-        const { type, value, expiry } = JSON.parse(saved);
+        const { type, value, expiry, template } = JSON.parse(saved);
         if (type === 'flat' || type === 'percent') setDiscountType(type);
         if (value) setDiscountValue(String(value));
         if (expiry) setExpiryDate(new Date(expiry));
+        if (template) setWhatsappTemplate(template);
       }
     } catch { /* ignore */ }
   }, []);
@@ -442,6 +455,7 @@ export default function AdminCoupons() {
       type: discountType,
       value: discountValue,
       expiry: expiryDate ? expiryDate.toISOString() : null,
+      template: whatsappTemplate,
     }));
     toast({
       title: '✅ Settings saved',
@@ -539,18 +553,25 @@ export default function AdminCoupons() {
     coupons.forEach((c, i) => setTimeout(() => downloadOne(c), i * 300));
   };
 
+  // Helper: interpolate template variables into the WA message
+  const applyTemplate = useCallback((
+    name: string, code: string, discount: string, expiry: string, event: string, eventLabel: string
+  ) => {
+    const expiryLine = expiry ? `📅 Valid until: ${expiry}\n` : '';
+    return whatsappTemplate
+      .replace(/\{\{name\}\}/g, name)
+      .replace(/\{\{code\}\}/g, code)
+      .replace(/\{\{discount\}\}/g, discount)
+      .replace(/\{\{expiry\}\}/g, expiry)
+      .replace(/\{\{expiryLine\}\}/g, expiryLine)
+      .replace(/\{\{event\}\}/g, event)
+      .replace(/\{\{eventLabel\}\}/g, eventLabel);
+  }, [whatsappTemplate]);
+
   const whatsappText = (coupon: GeneratedCoupon) =>
-    encodeURIComponent(
-      `🏆 Congratulations, ${coupon.row.name}!\n\n` +
-      `${subtitleText} 🎉\n\n` +
-      `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
-      `🎟️ Your Coupon Code: ${coupon.code}\n` +
-      `💰 Discount: ${discountText}\n` +
-      (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
-      `\nValid for redemption at Hotel Drona Palace.\n` +
-      `Present this coupon at the hotel reception.\n\n` +
-      `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
-    );
+    encodeURIComponent(applyTemplate(
+      coupon.row.name, coupon.code, discountText, expiryStr, subtitleText, eventNightLabel
+    ));
 
   // Auto-download PNG + open WhatsApp Web with contact pre-selected and text pre-filled
   const sendViaWhatsAppBrowser = useCallback(async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
@@ -578,14 +599,12 @@ export default function AdminCoupons() {
     await sendViaWhatsAppBrowser(coupon.row.mobile, coupon.blob, filename, whatsappText(coupon));
   };
 
-  const dbCouponWhatsappText = (c: DbCoupon) =>
-    encodeURIComponent(
-      `🏆 Congratulations, ${c.customer_name}!\n\n` +
-      `Your exclusive Victory Coupon from Hotel Drona Palace:\n\n` +
-      `🎟️ Code: ${c.code}\n💰 ${c.discount_text}\n` +
-      (c.expiry_date ? `📅 Valid until: ${new Date(c.expiry_date).toLocaleDateString('en-IN')}\n` : '') +
-      `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
-    );
+  const dbCouponWhatsappText = (c: DbCoupon) => {
+    const expiryFmt = c.expiry_date ? new Date(c.expiry_date).toLocaleDateString('en-IN') : '';
+    return encodeURIComponent(applyTemplate(
+      c.customer_name, c.code, c.discount_text, expiryFmt, subtitleText, eventNightLabel
+    ));
+  };
 
   // Regenerate PNG on-demand for DB coupons, copy to clipboard, open WhatsApp Web
   const regenerateAndShare = async (c: DbCoupon) => {
@@ -646,17 +665,7 @@ export default function AdminCoupons() {
 
       // Download + open WhatsApp
       const filename = `WC25-${row.name.replace(/\s+/g, '-')}-${code}.png`;
-      const encodedText = encodeURIComponent(
-        `🏆 Congratulations, ${row.name}!\n\n` +
-        `${subtitleText} 🎉\n\n` +
-        `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
-        `🎟️ Your Coupon Code: ${code}\n` +
-        `💰 Discount: ${discountText}\n` +
-        (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
-        `\nValid for redemption at Hotel Drona Palace.\n` +
-        `Present this coupon at the hotel reception.\n\n` +
-        `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
-      );
+      const encodedText = encodeURIComponent(applyTemplate(row.name, code, discountText, expiryStr, subtitleText, eventNightLabel));
       await sendViaWhatsAppBrowser(row.mobile, blob, filename, encodedText);
 
       setLastSingle({ row, code, blob, objectUrl });
@@ -801,6 +810,36 @@ export default function AdminCoupons() {
           >
             <CheckCircle className="h-4 w-4" /> Save Settings
           </Button>
+        </div>
+
+        {/* WhatsApp Message Template editor */}
+        <div className="space-y-2 border-t border-border/40 pt-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <MessageCircle className="h-3.5 w-3.5 text-green-400" />
+              WhatsApp Message Template
+            </Label>
+            <button
+              type="button"
+              onClick={() => setWhatsappTemplate(DEFAULT_WA_TEMPLATE)}
+              className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+            >
+              Reset to default
+            </button>
+          </div>
+          <textarea
+            value={whatsappTemplate}
+            onChange={e => setWhatsappTemplate(e.target.value)}
+            rows={7}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y font-mono leading-relaxed"
+            placeholder="Enter your WhatsApp message template…"
+          />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Available variables:&nbsp;
+            {['{{name}}', '{{code}}', '{{discount}}', '{{expiry}}', '{{expiryLine}}', '{{event}}', '{{eventLabel}}'].map(v => (
+              <code key={v} className="mx-0.5 px-1 py-0.5 rounded bg-muted text-foreground/80 text-[11px]">{v}</code>
+            ))}
+          </p>
         </div>
 
         <div className="pt-1">
