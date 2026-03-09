@@ -83,6 +83,7 @@ export const LandingFooter: React.FC = () => {
             </h4>
             <nav className="space-y-2 text-xs">
               {[
+                { to: '/about', label: 'About Us' },
                 { to: '/privacy', label: 'Privacy Policy' },
                 { to: '/terms', label: 'Terms & Conditions' },
                 { to: '/refund-policy', label: 'Refund & Cancellation' },
