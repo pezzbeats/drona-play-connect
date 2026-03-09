@@ -314,9 +314,11 @@ async function buildCouponCanvas(
   code: string,
   logoImg: HTMLImageElement,
   expiryStr: string,
+  subtitleText: string,
+  eventNightLabel: string,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas');
-  await drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr);
+  await drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr, subtitleText, eventNightLabel);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
   });
