@@ -82,11 +82,13 @@ function GameLoginCard() {
           <span className={`text-xs font-bold border rounded-full px-2.5 py-1 uppercase tracking-wider ${
             matchStatus === 'live'
               ? 'bg-success/15 border-success/30 text-success'
+              : matchStatus === 'ended'
+              ? 'bg-secondary/15 border-secondary/30 text-secondary'
               : matchStatus
               ? 'bg-primary/10 border-primary/30 text-primary'
               : 'bg-muted/30 border-border text-muted-foreground'
           }`}>
-            {matchStatus === 'live' ? '🎮 Live' : matchStatus ? '⏳ Soon' : '🎮 Play'}
+            {matchStatus === 'live' ? '🎮 Live' : matchStatus === 'ended' ? '🏆 Ended' : matchStatus ? '⏳ Soon' : '🎮 Play'}
           </span>
         </div>
       </div>
