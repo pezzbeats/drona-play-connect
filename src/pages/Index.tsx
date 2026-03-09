@@ -470,12 +470,35 @@ export default function IndexPage() {
                 )}
               </div>
 
-              {/* ─── COUNTDOWN TIMER ─── */}
-              {match.start_time && (
+              {/* ─── COUNTDOWN TIMER / RESULT ─── */}
+              {match.status === 'ended' ? (
+                <div className="mt-5 pt-4 border-t border-border/40">
+                  {/* Victory headline */}
+                  <div className="text-center mb-4">
+                    <p className="font-display font-bold gradient-text-accent leading-none mb-1" style={{ fontSize: 'clamp(1.6rem, 7vw, 2.2rem)' }}>
+                      🏆 India Won!
+                    </p>
+                    <p className="text-sm text-muted-foreground font-medium">by 79 runs · ICC T20 World Cup 2026 Final</p>
+                  </div>
+                  {/* Mini scorecard */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="glass-card-sunken rounded-xl p-3 text-center border border-success/25">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">IND</p>
+                      <p className="font-display font-bold text-success text-xl leading-none">255/5</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">20 overs</p>
+                    </div>
+                    <div className="glass-card-sunken rounded-xl p-3 text-center border border-border/30">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">NZ</p>
+                      <p className="font-display font-bold text-foreground/70 text-xl leading-none">176/10</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">20 overs</p>
+                    </div>
+                  </div>
+                </div>
+              ) : match.start_time ? (
                 <div className="mt-5 pt-4 border-t border-border/40">
                   <CountdownTimer targetTime={match.start_time} variant="full" />
                 </div>
-              )}
+              ) : null}
             </GlassCard>
 
             {/* ─── PRIMARY CTA ─── */}
