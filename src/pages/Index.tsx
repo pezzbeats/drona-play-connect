@@ -503,16 +503,33 @@ export default function IndexPage() {
 
             {/* ─── PRIMARY CTA ─── */}
             <div className="mb-6 animate-slide-up" style={{ animationDelay: '0.27s' } as React.CSSProperties}>
-              <Link to="/register" className="block mb-3">
-                <button className="w-full h-16 btn-gradient rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 animate-glow-pulse transition-transform hover:scale-[1.02] active:scale-[0.98]">
-                  Reserve Your Seats Now <ChevronRight className="h-6 w-6" />
-                </button>
-              </Link>
-              <Link to="/ticket" className="block">
-                <button className="w-full h-16 bg-success text-success-foreground rounded-xl text-base font-display font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_0_20px_hsl(142_70%_45%/0.45)] hover:shadow-[0_0_30px_hsl(142_70%_45%/0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
-                  Already Booked? View Your Passes <ChevronRight className="h-5 w-5" />
-                </button>
-              </Link>
+              {match.status === 'ended' ? (
+                <>
+                  <Link to="/ticket" className="block mb-3">
+                    <button className="w-full h-16 bg-success text-success-foreground rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_0_20px_hsl(142_70%_45%/0.45)] hover:shadow-[0_0_30px_hsl(142_70%_45%/0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+                      View Your Match Passes <ChevronRight className="h-6 w-6" />
+                    </button>
+                  </Link>
+                  <Link to="/live" className="block">
+                    <button className="w-full h-16 bg-secondary/15 border border-secondary/40 text-secondary rounded-xl text-base font-display font-bold tracking-wide flex items-center justify-center gap-2 hover:bg-secondary/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+                      🏆 See Match Results <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/register" className="block mb-3">
+                    <button className="w-full h-16 btn-gradient rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 animate-glow-pulse transition-transform hover:scale-[1.02] active:scale-[0.98]">
+                      Reserve Your Seats Now <ChevronRight className="h-6 w-6" />
+                    </button>
+                  </Link>
+                  <Link to="/ticket" className="block">
+                    <button className="w-full h-16 bg-success text-success-foreground rounded-xl text-base font-display font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_0_20px_hsl(142_70%_45%/0.45)] hover:shadow-[0_0_30px_hsl(142_70%_45%/0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+                      Already Booked? View Your Passes <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* ─── FAN GAME LOGIN ─── */}
