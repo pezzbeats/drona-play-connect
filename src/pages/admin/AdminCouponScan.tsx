@@ -281,7 +281,16 @@ export default function AdminCouponScan() {
 
       if (error) throw error;
 
-      setCoupon(prev => prev ? { ...prev, status: 'redeemed', redeemed_at: new Date().toISOString() } : prev);
+      const now = new Date().toISOString();
+      setCoupon(prev => prev ? { ...prev, status: 'redeemed', redeemed_at: now } : prev);
+      setSessionHistory(prev => [{
+        id: coupon.id,
+        code: coupon.code,
+        customer_name: coupon.customer_name,
+        customer_mobile: coupon.customer_mobile,
+        discount_text: coupon.discount_text,
+        redeemed_at: now,
+      }, ...prev].slice(0, 10));
       setLookupState('redeemed_success');
       playBeep('success');
       vibrate([80, 40, 80, 40, 160]);
