@@ -396,22 +396,28 @@ export default function IndexPage() {
           </a>
 
           {/* Official website deeplink */}
-          <div className="mt-3">
+          <div className="mt-4">
             <a
               href="https://dronapalace.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-display font-bold text-sm tracking-wide transition-all duration-200 hover:scale-105 active:scale-95"
-              style={{
-                background: 'linear-gradient(135deg, hsl(38 75% 52% / 0.18), hsl(38 75% 52% / 0.08))',
-                border: '1.5px solid hsl(38 75% 52% / 0.55)',
-                color: 'hsl(38 75% 60%)',
-                boxShadow: '0 0 18px hsl(38 75% 52% / 0.25)',
-              }}
+              className="inline-flex flex-col items-center gap-0.5 group transition-all duration-200 hover:scale-105 active:scale-95"
             >
-              <span>🌐</span>
-              dronapalace.com
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+              <span className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                Official Hotel Website
+              </span>
+              <span
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-display font-bold text-base tracking-wide"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(38 75% 52% / 0.22), hsl(38 60% 42% / 0.12))',
+                  border: '2px solid hsl(38 75% 52% / 0.7)',
+                  color: 'hsl(38 85% 65%)',
+                  boxShadow: '0 0 28px hsl(38 75% 52% / 0.35), inset 0 1px 0 hsl(38 75% 80% / 0.1)',
+                }}
+              >
+                🏨 dronapalace.com
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+              </span>
             </a>
           </div>
         </div>
