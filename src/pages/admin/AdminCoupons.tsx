@@ -366,8 +366,8 @@ export default function AdminCoupons() {
     const canvas = previewCanvasRef.current;
     if (!canvas || !logoRef.current || !fontReady) return;
     const previewRow: AttendeeRow = { name: 'Guest Name', mobile: '9876543210', valid: true };
-    await drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr);
-  }, [discountText, expiryStr, fontReady]);
+    await drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr, subtitleText, eventNightLabel);
+  }, [discountText, expiryStr, fontReady, subtitleText, eventNightLabel]);
 
   useEffect(() => { renderPreview(); }, [renderPreview]);
 
