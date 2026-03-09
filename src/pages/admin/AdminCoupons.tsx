@@ -128,7 +128,7 @@ async function drawToCanvas(
   // Subtitle
   ctx.font = '500 20px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(245,185,66,0.7)';
-  ctx.fillText('T20 World Cup Final  ·  India vs New Zealand', W / 2, 218);
+  ctx.fillText(subtitleText, W / 2, 218);
 
   // ── Gold divider ─────────────────────────────────────────────────────────────
   const divGrad = ctx.createLinearGradient(60, 0, W - 60, 0);
