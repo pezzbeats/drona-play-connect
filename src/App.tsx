@@ -47,6 +47,7 @@ import AdminEligibility from "./pages/admin/AdminEligibility";
 import AdminTrialGame from "./pages/admin/AdminTrialGame";
 import AdminCoupons from "./pages/admin/AdminCoupons";
 import AdminCouponScan from "./pages/admin/AdminCouponScan";
+import AboutPage from "./pages/About";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import RefundPolicyPage from "./pages/RefundPolicy";
 import EventParticipationTermsPage from "./pages/EventParticipationTerms";
@@ -73,6 +74,7 @@ const App = () => (
             <Route path="/play" element={<PlayPage />} />
             <Route path="/live" element={<LivePage />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="/about" element={<AboutPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
             <Route path="/refund-policy" element={<RefundPolicyPage />} />
             <Route path="/event-terms" element={<EventParticipationTermsPage />} />
