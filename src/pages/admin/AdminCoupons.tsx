@@ -283,15 +283,20 @@ function parseCSV(text: string): AttendeeRow[] {
     });
 }
 
+type DiscountType = 'flat' | 'percent';
+
 export default function AdminCoupons() {
   const { toast } = useToast();
-  const [discountText, setDiscountText] = useState('₹500 Off');
+  const [discountType, setDiscountType] = useState<DiscountType>('flat');
+  const [discountValue, setDiscountValue] = useState('500');
   const [rows, setRows] = useState<AttendeeRow[]>([]);
   const [coupons, setCoupons] = useState<GeneratedCoupon[]>([]);
   const [generating, setGenerating] = useState(false);
   const [fontReady, setFontReady] = useState(false);
   const logoRef = useRef<HTMLImageElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const discountText = discountType === 'flat' ? `₹${discountValue} Off` : `${discountValue}% Off`;
 
   // Preload font + logo on mount
   useEffect(() => {
