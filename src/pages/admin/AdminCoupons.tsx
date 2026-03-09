@@ -377,6 +377,7 @@ export default function AdminCoupons() {
   const [dbLoading, setDbLoading] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'redeemed' | 'expired'>('all');
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   const fetchDbCoupons = useCallback(async () => {
     setDbLoading(true);
@@ -556,17 +557,22 @@ export default function AdminCoupons() {
     window.open(`https://wa.me/91${mobile}?text=${encodedText}`, '_blank');
   };
 
+  // Share PNG + text via OS share sheet (works on Android Chrome & iOS Safari)
   const shareOne = async (coupon: GeneratedCoupon) => {
-    if (navigator.share && navigator.canShare) {
-      const file = new File([coupon.blob], `${coupon.code}.png`, { type: 'image/png' });
-      if (navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: `Victory Coupon for ${coupon.row.name}` });
-          return;
-        } catch { /* fall through */ }
-      }
+    const file = new File([coupon.blob], `${coupon.code}.png`, { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          text: decodeURIComponent(whatsappText(coupon)),
+          title: `Victory Coupon for ${coupon.row.name}`,
+        });
+        return;
+      } catch { /* user cancelled — fall through */ }
     }
+    // Desktop fallback: download the image + open WhatsApp text link
     downloadOne(coupon);
+    openWhatsApp(coupon.row.mobile, whatsappText(coupon));
   };
 
   const dbCouponWhatsappText = (c: DbCoupon) =>
@@ -577,6 +583,34 @@ export default function AdminCoupons() {
       (c.expiry_date ? `📅 Valid until: ${new Date(c.expiry_date).toLocaleDateString('en-IN')}\n` : '') +
       `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
     );
+
+  // Regenerate PNG on-demand for DB coupons, then share via OS share sheet
+  const regenerateAndShare = async (c: DbCoupon) => {
+    if (!logoRef.current) {
+      toast({ title: 'Logo not loaded', variant: 'destructive' });
+      return;
+    }
+    setSharingId(c.id);
+    try {
+      const attendeeRow: AttendeeRow = { name: c.customer_name, mobile: c.customer_mobile, valid: true };
+      const expiryForCanvas = c.expiry_date ? format(new Date(c.expiry_date), 'dd/MM/yyyy') : '';
+      const blob = await buildCouponCanvas(attendeeRow, c.discount_text, c.code, logoRef.current, expiryForCanvas, subtitleText, eventNightLabel, winHeadline);
+      const file = new File([blob], `${c.code}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          text: decodeURIComponent(dbCouponWhatsappText(c)),
+          title: `Victory Coupon – ${c.customer_name}`,
+        });
+      } else {
+        // Desktop fallback
+        const objectUrl = URL.createObjectURL(blob);
+        downloadOne({ row: attendeeRow, code: c.code, blob, objectUrl });
+        openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c));
+      }
+    } catch { /* user cancelled */ }
+    finally { setSharingId(null); }
+  };
 
   const validCount = rows.filter(r => r.valid).length;
 
@@ -826,17 +860,23 @@ export default function AdminCoupons() {
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => openWhatsApp(c.row.mobile, whatsappText(c))}
+                    onClick={() => shareOne(c)}
                     className="flex items-center gap-1.5 flex-1 sm:flex-none bg-green-600 hover:bg-green-500 text-white border-0"
+                    title="Share coupon image + message via WhatsApp"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    Share Image
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openWhatsApp(c.row.mobile, whatsappText(c))}
+                    className="flex items-center gap-1.5 flex-1 sm:flex-none text-green-400 border-green-700/50 hover:bg-green-900/20"
+                    title="Open this contact directly in WhatsApp (text only)"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
-                    WhatsApp
+                    Open Chat
                   </Button>
-                  {navigator.share && (
-                    <Button size="sm" variant="ghost" onClick={() => shareOne(c)} className="flex items-center gap-1.5 flex-1 sm:flex-none" title="Share image">
-                      <Share2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}
@@ -954,14 +994,27 @@ export default function AdminCoupons() {
                       }
                     </td>
                     <td className="px-3 py-2">
-                      <button
-                        onClick={() => openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))}
-                        title={`Send to +91 ${c.customer_mobile} on WhatsApp`}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        Send
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => regenerateAndShare(c)}
+                          disabled={sharingId === c.id}
+                          title="Regenerate coupon PNG and share via WhatsApp (image + text)"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-60 disabled:cursor-wait"
+                        >
+                          {sharingId === c.id
+                            ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            : <Share2 className="h-3.5 w-3.5" />
+                          }
+                          {sharingId === c.id ? 'Building…' : 'Share Image'}
+                        </button>
+                        <button
+                          onClick={() => openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))}
+                          title={`Open +91${c.customer_mobile} directly in WhatsApp`}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium border border-green-700/50 text-green-400 hover:bg-green-900/20 transition-colors"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

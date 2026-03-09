@@ -1,67 +1,53 @@
 
-## Root Cause & Fix: Share PNG Coupon via WhatsApp
+## Root Cause — Found
 
-### Problem
-Currently both buttons work text-only:
-- **Generated coupons "WhatsApp" button** (line 829): calls `openWhatsApp()` → `wa.me` URL → text only
-- **All Coupons table "Send" button** (line 958): also calls `openWhatsApp()` → `wa.me` URL → text only
-- The `shareOne()` function (lines 559–570) does use `navigator.share({ files })` correctly but only shares the image with no text, and is hidden behind a separate `Share2` icon button
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-The **only browser-compatible way** to send a PNG to WhatsApp is `navigator.share({ files: [pngFile], text: message })` — this opens the OS native share sheet where the user picks WhatsApp, and the image + message land in the chat together. The `wa.me` URL scheme is permanently text-only.
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-### Two-button strategy (best UX)
-For each coupon, expose **two distinct actions**:
-1. **"Share Image" button** — `navigator.share({ files: [png], text: message })` — sends PNG + pre-filled text via OS share sheet (user picks WhatsApp). Works on Android Chrome & iOS Safari.
-2. **"Open Chat" link** — `wa.me/91{mobile}` — opens the specific contact in WhatsApp directly (no image, but instant contact open for follow-up).
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-This is needed because `navigator.share` cannot pre-select a contact, and `wa.me` cannot attach a file. Both are needed together.
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
+```
 
-### Changes to `src/pages/admin/AdminCoupons.tsx`
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-**1. Fix `shareOne()` — add text to the share call (line 564)**
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
 ```ts
 // Before:
-await navigator.share({ files: [file], title: `Victory Coupon for ${coupon.row.name}` });
+const [loading, setLoading] = useState(!cache);
+
 // After:
-await navigator.share({ files: [file], text: decodeURIComponent(whatsappText(coupon)), title: `Victory Coupon for ${coupon.row.name}` });
+const [loading, setLoading] = useState(false);
 ```
 
-**2. Replace generated coupons action buttons (lines 823–839)**
-Replace the current 3-button layout (Download / WhatsApp / Share2) with:
-- **Download** (unchanged)
-- **"📤 Share on WhatsApp"** — calls updated `shareOne(c)` which does `navigator.share({ files, text })`. Falls back to `downloadOne(c)` if not supported.
-- **"Open Chat ↗"** (small secondary) — calls `openWhatsApp(c.row.mobile, whatsappText(c))` — opens the direct contact
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
-**3. Add `[sharingId, setSharingId]` state + `regenerateAndShare()` for the All Coupons table**
+## Why this is the correct fix
 
-```ts
-const [sharingId, setSharingId] = useState<string | null>(null);
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
-const regenerateAndShare = async (c: DbCoupon) => {
-  if (!logoRef.current) { toast({ title: 'Logo not loaded', variant: 'destructive' }); return; }
-  setSharingId(c.id);
-  try {
-    const attendeeRow: AttendeeRow = { name: c.customer_name, mobile: c.customer_mobile, valid: true };
-    const expiryForCanvas = c.expiry_date ? format(new Date(c.expiry_date), 'dd/MM/yyyy') : '';
-    const blob = await buildCouponCanvas(attendeeRow, c.discount_text, c.code, logoRef.current, expiryForCanvas, subtitleText, eventNightLabel, winHeadline);
-    const file = new File([blob], `${c.code}.png`, { type: 'image/png' });
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], text: decodeURIComponent(dbCouponWhatsappText(c)), title: `Victory Coupon – ${c.customer_name}` });
-    } else {
-      // Desktop fallback: download the PNG + open WhatsApp text
-      downloadOne({ row: attendeeRow, code: c.code, blob, objectUrl: URL.createObjectURL(blob) });
-      openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c));
-    }
-  } catch { /* user cancelled share */ }
-  finally { setSharingId(null); }
-};
-```
-
-**4. Replace All Coupons table "Send" button (lines 956–965)** with two buttons:
-- **"📤 Share Image"** — calls `regenerateAndShare(c)` — shows spinner when `sharingId === c.id`
-- **"↗"** small icon button — calls `openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))` to open the contact chat
-
-### Files changed
-- `src/pages/admin/AdminCoupons.tsx` only
-
-> **Note**: `navigator.share({ files })` only works on **Android Chrome** and **iOS Safari**. On desktop browsers it falls back to download + text-only WA link. This is a platform limitation, not a code limitation.
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
