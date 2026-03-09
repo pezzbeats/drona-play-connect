@@ -40,6 +40,7 @@ const allNavItems: NavItem[] = [
   { icon: FileText,        label: 'Site Content',   to: '/admin/site-config',   minRole: 'operator' },
   { icon: CreditCard,      label: 'Payments',       to: '/admin/payments',      minRole: 'operator' },
   { icon: FlaskConical,    label: 'Trial Game',     to: '/admin/trial-game',    minRole: 'operator' },
+  { icon: Gift,            label: 'Victory Coupons',to: '/admin/coupons',       minRole: 'operator' },
 ];
 
 // Primary 4 bottom nav slots (always visible if role permits)
