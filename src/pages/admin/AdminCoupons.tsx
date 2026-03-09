@@ -286,7 +286,7 @@ async function drawToCanvas(
   // ── Footer strip ─────────────────────────────────────────────────────────────
   ctx.font = '400 13px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('As a valued guest who attended the T20 World Cup Final Night', W / 2, 990);
+  ctx.fillText(`As a valued guest who attended the ${eventNightLabel}`, W / 2, 990);
 
   ctx.font = '400 12px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(245,185,66,0.4)';
