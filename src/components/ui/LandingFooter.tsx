@@ -43,12 +43,18 @@ export const LandingFooter: React.FC = () => {
               href="https://dronapalace.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-bold transition-all hover:opacity-80"
-              style={{ color: 'hsl(var(--secondary))' }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-display font-bold text-sm tracking-wide transition-all duration-200 hover:scale-105 active:scale-95 group"
+              style={{
+                background: 'linear-gradient(135deg, hsl(38 75% 52% / 0.2), hsl(38 60% 42% / 0.1))',
+                border: '1.5px solid hsl(38 75% 52% / 0.6)',
+                color: 'hsl(38 85% 62%)',
+                boxShadow: '0 0 16px hsl(38 75% 52% / 0.25)',
+              }}
             >
-              <span>🌐</span>
-              dronapalace.com
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+              🏨
+              <span>Hotel Drona Palace</span>
+              <span className="text-xs font-normal opacity-70" style={{ color: 'hsl(38 75% 72%)' }}>dronapalace.com</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
             </a>
           </div>
 
