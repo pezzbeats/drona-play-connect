@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Trophy, Users, ScanLine, ShoppingBag,
   BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio, Star,
   BarChart2, Activity, HeartPulse, ShieldCheck, FileText, CreditCard, ListChecks,
-  FlaskConical,
+  FlaskConical, Gift,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
