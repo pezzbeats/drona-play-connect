@@ -124,7 +124,7 @@ async function drawToCanvas(
   ctx.fillStyle = titleGrad;
   ctx.font = 'bold 58px "Cinzel", "Georgia", serif';
   ctx.letterSpacing = '4px';
-  ctx.fillText('INDIA WON!', W / 2, 182);
+  ctx.fillText(winHeadline, W / 2, 182);
 
   // Subtitle
   ctx.font = '500 20px "Cinzel", "Georgia", serif';
