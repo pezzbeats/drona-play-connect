@@ -65,6 +65,7 @@ export default function AdminCouponScan() {
   const [codeInput, setCodeInput] = useState('');
   const [lookupState, setLookupState] = useState<LookupState>('idle');
   const [coupon, setCoupon] = useState<CouponRecord | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<RedemptionHistoryEntry[]>([]);
 
   // Camera state
   const [cameraOpen, setCameraOpen] = useState(false);
