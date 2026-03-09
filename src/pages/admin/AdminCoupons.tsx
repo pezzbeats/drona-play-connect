@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2, CalendarIcon, Search, RefreshCw, Filter } from 'lucide-react';
+import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2, CalendarIcon, Search, RefreshCw, Filter, UserPlus, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -553,7 +553,7 @@ export default function AdminCoupons() {
     );
 
   // Auto-download PNG + open WhatsApp Web with contact pre-selected and text pre-filled
-  const sendViaWhatsAppBrowser = async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
+  const sendViaWhatsAppBrowser = useCallback(async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
     // 1. Auto-download the PNG
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -571,7 +571,7 @@ export default function AdminCoupons() {
       description: '1️⃣ Image downloaded  →  2️⃣ WhatsApp chat opened  →  3️⃣ Click 📎 in WhatsApp, find the file and send.',
       duration: 10000,
     });
-  };
+  }, [toast]);
 
   const shareOne = async (coupon: GeneratedCoupon) => {
     const filename = `WC25-${coupon.row.name.replace(/\s+/g, '-')}-${coupon.code}.png`;
@@ -604,6 +604,74 @@ export default function AdminCoupons() {
       setSharingId(null);
     }
   };
+
+  // ── Quick Add single coupon state ─────────────────────────────────────────
+  const [singleName, setSingleName] = useState('');
+  const [singleMobile, setSingleMobile] = useState('');
+  const [singleGenerating, setSingleGenerating] = useState(false);
+  const [lastSingle, setLastSingle] = useState<GeneratedCoupon | null>(null);
+  const singleNameRef = useRef<HTMLInputElement>(null);
+
+  const generateAndSendSingle = useCallback(async () => {
+    const trimName = singleName.trim();
+    if (!trimName) {
+      toast({ title: 'Name required', description: 'Please enter the customer name.', variant: 'destructive' });
+      return;
+    }
+    if (!/^\d{10}$/.test(singleMobile.trim())) {
+      toast({ title: 'Invalid mobile', description: 'Enter a 10-digit Indian mobile number.', variant: 'destructive' });
+      return;
+    }
+    if (!logoRef.current) {
+      toast({ title: 'Logo not loaded yet', description: 'Please wait a moment and try again.', variant: 'destructive' });
+      return;
+    }
+    setSingleGenerating(true);
+    try {
+      const row: AttendeeRow = { name: trimName, mobile: singleMobile.trim(), valid: true };
+      const code = generateCode(row.mobile);
+      const blob = await buildCouponCanvas(row, discountText, code, logoRef.current, expiryStr, subtitleText, eventNightLabel, winHeadline);
+      const objectUrl = URL.createObjectURL(blob);
+
+      // Save to DB
+      const { error: dbError } = await supabase.from('coupons' as any).insert({
+        code,
+        customer_name: row.name,
+        customer_mobile: row.mobile,
+        discount_text: discountText,
+        expiry_date: expiryDate ? format(expiryDate, 'yyyy-MM-dd') : null,
+        status: 'active',
+      });
+      if (dbError) console.warn('DB save failed:', dbError.message);
+
+      // Download + open WhatsApp
+      const filename = `WC25-${row.name.replace(/\s+/g, '-')}-${code}.png`;
+      const encodedText = encodeURIComponent(
+        `🏆 Congratulations, ${row.name}!\n\n` +
+        `${subtitleText} 🎉\n\n` +
+        `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
+        `🎟️ Your Coupon Code: ${code}\n` +
+        `💰 Discount: ${discountText}\n` +
+        (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
+        `\nValid for redemption at Hotel Drona Palace.\n` +
+        `Present this coupon at the hotel reception.\n\n` +
+        `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
+      );
+      await sendViaWhatsAppBrowser(row.mobile, blob, filename, encodedText);
+
+      setLastSingle({ row, code, blob, objectUrl });
+      setSingleName('');
+      setSingleMobile('');
+      fetchDbCoupons();
+      // Focus name field for next entry
+      setTimeout(() => singleNameRef.current?.focus(), 100);
+    } catch (err) {
+      console.error('Single coupon error', err);
+      toast({ title: 'Generation failed', description: 'Something went wrong. Please try again.', variant: 'destructive' });
+    } finally {
+      setSingleGenerating(false);
+    }
+  }, [singleName, singleMobile, discountText, expiryStr, expiryDate, subtitleText, eventNightLabel, winHeadline, toast, fetchDbCoupons, sendViaWhatsAppBrowser]);
 
   const validCount = rows.filter(r => r.valid).length;
 
@@ -768,6 +836,82 @@ export default function AdminCoupons() {
         <p className="text-center text-xs text-muted-foreground">
           Showing sample data — each coupon has a unique QR code scannable at the hotel
         </p>
+      </GlassCard>
+
+      {/* Quick Add — Single Coupon */}
+      <GlassCard className="p-5 space-y-4 border border-success/20">
+        <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
+          <UserPlus className="h-4 w-4 text-success" /> Quick Add — Single Coupon
+          <span className="ml-auto text-xs text-muted-foreground font-normal normal-case tracking-normal">
+            India vs NZ · generates + sends instantly
+          </span>
+        </h2>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Customer Name</Label>
+            <Input
+              ref={singleNameRef}
+              value={singleName}
+              onChange={e => setSingleName(e.target.value)}
+              placeholder="e.g. Rahul Sharma"
+              onKeyDown={e => e.key === 'Enter' && generateAndSendSingle()}
+            />
+          </div>
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Mobile (10-digit)</Label>
+            <Input
+              value={singleMobile}
+              onChange={e => setSingleMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="9876543210"
+              inputMode="numeric"
+              maxLength={10}
+              onKeyDown={e => e.key === 'Enter' && generateAndSendSingle()}
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={generateAndSendSingle}
+          disabled={singleGenerating || !fontReady}
+          className="w-full h-12 bg-success text-success-foreground hover:bg-success/90 font-semibold text-base flex items-center gap-2"
+        >
+          {singleGenerating ? (
+            <>
+              <RefreshCw className="h-5 w-5 animate-spin" /> Generating &amp; Sending…
+            </>
+          ) : (
+            <>
+              <Send className="h-5 w-5" /> 🚀 Generate &amp; Send via WhatsApp
+            </>
+          )}
+        </Button>
+
+        {lastSingle && (
+          <div className="flex items-center gap-4 p-3 rounded-xl border border-success/30 bg-success/5">
+            <img
+              src={lastSingle.objectUrl}
+              alt="last coupon"
+              className="h-20 w-14 object-cover rounded-lg border border-border/40 shadow"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{lastSingle.row.name}</p>
+              <p className="text-xs text-muted-foreground">{lastSingle.row.mobile}</p>
+              <p className="text-xs font-mono text-amber-400 mt-1">{lastSingle.code}</p>
+              <p className="text-xs text-success mt-1 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" /> Sent · WhatsApp opened
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 text-xs"
+              onClick={() => { setLastSingle(null); setTimeout(() => singleNameRef.current?.focus(), 50); }}
+            >
+              + Send Another
+            </Button>
+          </div>
+        )}
       </GlassCard>
 
       {/* Upload card */}
