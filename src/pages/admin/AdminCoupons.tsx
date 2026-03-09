@@ -598,7 +598,8 @@ export default function AdminCoupons() {
       const attendeeRow: AttendeeRow = { name: c.customer_name, mobile: c.customer_mobile, valid: true };
       const expiryForCanvas = c.expiry_date ? format(new Date(c.expiry_date), 'dd/MM/yyyy') : '';
       const blob = await buildCouponCanvas(attendeeRow, c.discount_text, c.code, logoRef.current, expiryForCanvas, subtitleText, eventNightLabel, winHeadline);
-      await sendViaWhatsAppBrowser(c.customer_mobile, blob, dbCouponWhatsappText(c));
+      const filename = `WC25-${c.customer_name.replace(/\s+/g, '-')}-${c.code}.png`;
+      await sendViaWhatsAppBrowser(c.customer_mobile, blob, filename, dbCouponWhatsappText(c));
     } finally {
       setSharingId(null);
     }
