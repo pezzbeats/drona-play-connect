@@ -190,6 +190,11 @@ export default function AdminCouponScan() {
           // Mark as expired in DB (best-effort)
           await supabase.from('coupons' as any).update({ status: 'expired' }).eq('id', c.id);
           c.status = 'expired';
+          toast({
+            variant: 'destructive',
+            title: '⏰ Coupon auto-expired',
+            description: `Expired on ${format(new Date(c.expiry_date), 'dd MMM yyyy')} — marked in database.`,
+          });
         }
       }
 
