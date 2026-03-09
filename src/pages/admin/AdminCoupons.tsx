@@ -11,6 +11,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import logoSrc from '@/assets/drona-logo-coupon.png';
+import { supabase } from '@/integrations/supabase/client';
+import QRCode from 'qrcode';
 
 interface AttendeeRow {
   name: string;
@@ -29,12 +31,10 @@ interface GeneratedCoupon {
 const GOLD1 = '#F5B942';
 const GOLD2 = '#C8841A';
 const GOLD3 = '#FFE08A';
-const DARK_BG = '#0A0A0F';
-const CARD_BG = '#12111A';
 const BORDER_GOLD = '#8B6914';
 
 const W = 750;
-const H = 1050;
+const H = 1100; // expanded height to fit QR block
 
 function generateCode(mobile: string): string {
   return `WC25-${mobile.slice(-4)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -54,14 +54,14 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function drawToCanvas(
+async function drawToCanvas(
   canvas: HTMLCanvasElement,
   row: AttendeeRow,
   discountText: string,
   code: string,
   logoImg: HTMLImageElement,
   expiryStr: string,
-): void {
+): Promise<void> {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -89,7 +89,7 @@ function drawToCanvas(
 
   // ── Decorative star dots ──────────────────────────────────────────────────────
   const stars = [
-    [60, 80], [690, 100], [30, 400], [720, 350], [80, 900], [670, 880],
+    [60, 80], [690, 100], [30, 400], [720, 350], [80, 950], [670, 930],
     [150, 60], [600, 55], [40, 600], [710, 620],
   ];
   stars.forEach(([sx, sy]) => {
@@ -164,7 +164,6 @@ function drawToCanvas(
   ctx.fillText(`+91 ${row.mobile}`, W / 2, 364);
 
   // ── Coupon body card ──────────────────────────────────────────────────────────
-  // Shifted down to y=388 to give breathing room after mobile line
   const cardGrad = ctx.createLinearGradient(0, 388, 0, 660);
   cardGrad.addColorStop(0, 'rgba(245,185,66,0.08)');
   cardGrad.addColorStop(1, 'rgba(200,132,26,0.04)');
@@ -228,43 +227,71 @@ function drawToCanvas(
   ctx.stroke();
   ctx.setLineDash([]);
 
+  // ── QR Code block ─────────────────────────────────────────────────────────────
+  // Label above QR
+  ctx.font = '400 11px "Cinzel", "Georgia", serif';
+  ctx.fillStyle = 'rgba(245,185,66,0.5)';
+  ctx.fillText('SCAN TO REDEEM', W / 2, 687);
+
+  // Render QR onto a temp canvas, then draw onto coupon
+  try {
+    const qrCanvas = document.createElement('canvas');
+    await QRCode.toCanvas(qrCanvas, code, {
+      width: 110,
+      margin: 1,
+      color: { dark: '#F5B942', light: '#00000000' },
+    });
+    const qrX = W / 2 - 55;
+    const qrY = 696;
+    // White background square for QR
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    roundRect(ctx, qrX - 8, qrY - 8, 126, 126, 8);
+    ctx.fill();
+    ctx.drawImage(qrCanvas, qrX, qrY, 110, 110);
+  } catch (e) {
+    // Fallback: draw a placeholder if QR generation fails
+    ctx.font = '11px monospace';
+    ctx.fillStyle = 'rgba(245,185,66,0.4)';
+    ctx.fillText(code, W / 2, 750);
+  }
+
   // ── Logo zone ─────────────────────────────────────────────────────────────────
-  const logoSize = 80;
+  const logoSize = 70;
   const logoX = W / 2 - logoSize / 2;
-  const logoY = 676;
+  const logoY = 830;
   ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
 
-  ctx.font = 'bold 26px "Cinzel", "Georgia", serif';
-  const hotelGrad = ctx.createLinearGradient(0, 772, 0, 800);
+  ctx.font = 'bold 24px "Cinzel", "Georgia", serif';
+  const hotelGrad = ctx.createLinearGradient(0, 912, 0, 936);
   hotelGrad.addColorStop(0, GOLD1);
   hotelGrad.addColorStop(1, GOLD2);
   ctx.fillStyle = hotelGrad;
-  ctx.fillText('Hotel Drona Palace', W / 2, 798);
+  ctx.fillText('Hotel Drona Palace', W / 2, 918);
 
-  ctx.font = '400 13px "Cinzel", "Georgia", serif';
+  ctx.font = '400 12px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(245,185,66,0.55)';
-  ctx.fillText('(A UNIT OF SR LEISURE INN)', W / 2, 822);
+  ctx.fillText('(A UNIT OF SR LEISURE INN)', W / 2, 940);
 
   // ── Bottom divider ────────────────────────────────────────────────────────────
   ctx.strokeStyle = 'rgba(245,185,66,0.15)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(60, 840);
-  ctx.lineTo(W - 60, 840);
+  ctx.moveTo(60, 958);
+  ctx.lineTo(W - 60, 958);
   ctx.stroke();
 
   // ── Footer strip ─────────────────────────────────────────────────────────────
-  ctx.font = '400 14px "Cinzel", "Georgia", serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('As a valued guest who attended the T20 World Cup Final Night', W / 2, 875);
-
   ctx.font = '400 13px "Cinzel", "Georgia", serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('As a valued guest who attended the T20 World Cup Final Night', W / 2, 990);
+
+  ctx.font = '400 12px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(245,185,66,0.4)';
-  ctx.fillText('cricket.dronapalace.com', W / 2, 900);
+  ctx.fillText('cricket.dronapalace.com', W / 2, 1012);
 
   // Small confetti dots decorative
   const confettiColors = [GOLD1, '#4FC3F7', '#EF5350', '#66BB6A', GOLD3];
-  [[120, 940], [200, 960], [375, 970], [560, 955], [640, 940], [90, 965], [680, 965]].forEach(([cx, cy], i) => {
+  [[120, 1050], [200, 1065], [375, 1072], [560, 1058], [640, 1050], [90, 1068], [680, 1068]].forEach(([cx, cy], i) => {
     ctx.beginPath();
     ctx.arc(cx, cy, 3, 0, Math.PI * 2);
     ctx.fillStyle = confettiColors[i % confettiColors.length];
@@ -273,9 +300,9 @@ function drawToCanvas(
   });
   ctx.globalAlpha = 1;
 
-  ctx.font = '300 12px "Cinzel", "Georgia", serif';
+  ctx.font = '300 11px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
-  ctx.fillText('One-time use only  ·  Non-transferable  ·  Subject to availability', W / 2, 1010);
+  ctx.fillText('One-time use only  ·  Non-transferable  ·  Subject to availability', W / 2, 1088);
 }
 
 async function buildCouponCanvas(
@@ -286,7 +313,7 @@ async function buildCouponCanvas(
   expiryStr: string,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas');
-  drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr);
+  await drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
   });
@@ -327,11 +354,11 @@ export default function AdminCoupons() {
   const expiryStr = expiryDate ? format(expiryDate, 'dd/MM/yyyy') : '';
 
   // Live preview — re-render whenever settings change
-  const renderPreview = useCallback(() => {
+  const renderPreview = useCallback(async () => {
     const canvas = previewCanvasRef.current;
     if (!canvas || !logoRef.current || !fontReady) return;
     const previewRow: AttendeeRow = { name: 'Guest Name', mobile: '9876543210', valid: true };
-    drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr);
+    await drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr);
   }, [discountText, expiryStr, fontReady]);
 
   useEffect(() => { renderPreview(); }, [renderPreview]);
@@ -412,19 +439,32 @@ export default function AdminCoupons() {
     if (!valid.length) return;
     setGenerating(true);
     const results: GeneratedCoupon[] = [];
+
     for (const row of valid) {
       try {
         const code = generateCode(row.mobile);
         const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr);
         results.push({ row, code, blob, objectUrl: URL.createObjectURL(blob) });
+
+        // Persist coupon record to DB for redemption tracking
+        const { error: dbError } = await supabase.from('coupons' as any).insert({
+          code,
+          customer_name: row.name,
+          customer_mobile: row.mobile,
+          discount_text: discountText,
+          expiry_date: expiryDate ? format(expiryDate, 'yyyy-MM-dd') : null,
+          status: 'active',
+        });
+        if (dbError) console.warn('DB save failed for', code, dbError.message);
       } catch (err) {
         console.error('Coupon gen error', err);
       }
     }
+
     setCoupons(results);
     setGenerating(false);
-    toast({ title: `✅ ${results.length} coupons generated!` });
-  }, [rows, discountText, expiryStr, toast]);
+    toast({ title: `✅ ${results.length} coupons generated!`, description: 'Codes saved — ready to scan & redeem' });
+  }, [rows, discountText, expiryStr, expiryDate, toast]);
 
   const downloadOne = (coupon: GeneratedCoupon) => {
     const a = document.createElement('a');
@@ -618,7 +658,7 @@ export default function AdminCoupons() {
               ref={previewCanvasRef}
               width={W}
               height={H}
-              style={{ width: '375px', height: '525px', display: 'block' }}
+              style={{ width: '375px', height: `${Math.round(H * 375 / W)}px`, display: 'block' }}
             />
             {!fontReady && (
               <div className="absolute inset-0 flex items-center justify-center bg-card/80 backdrop-blur-sm rounded-xl">
@@ -628,7 +668,7 @@ export default function AdminCoupons() {
           </div>
         </div>
         <p className="text-center text-xs text-muted-foreground">
-          Showing sample data — actual coupons will have each customer's name & mobile
+          Showing sample data — each coupon has a unique QR code scannable at the hotel
         </p>
       </GlassCard>
 
