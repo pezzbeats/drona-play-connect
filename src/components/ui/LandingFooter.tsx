@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail, Building2 } from 'lucide-react';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
+import hotelLogo from '@/assets/hotel-logo.png';
 
 export const LandingFooter: React.FC = () => {
   const { get } = useSiteConfig();
@@ -25,9 +26,15 @@ export const LandingFooter: React.FC = () => {
 
           {/* Col 1 — About Organiser */}
           <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">🏏</span>
-              <span className="font-display font-bold text-lg gradient-text">{heroTitle}</span>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full"
+                style={{ background: 'hsl(38 60% 10%)', border: '1.5px solid hsl(38 75% 52% / 0.55)', boxShadow: '0 0 14px hsl(38 75% 52% / 0.45)' }}>
+                <img src={hotelLogo} alt="Hotel Drona Palace" className="w-7 h-7 object-contain" style={{ filter: 'drop-shadow(0 0 4px hsl(38 75% 52% / 0.8))' }} />
+              </div>
+              <div>
+                <p className="font-display font-bold text-base gradient-text leading-tight">{heroTitle}</p>
+                <p className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>Hotel Drona Palace</p>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed mb-3">
               {aboutText}
