@@ -1,53 +1,64 @@
 
-## Root Cause — Found
+## The Real Problem: WhatsApp Cannot Receive Images Programmatically from a Browser
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+### Root cause — why nothing has worked so far
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+WhatsApp has a hard platform limitation:
+- `wa.me` URL scheme → text only, no file attachment possible
+- `web.whatsapp.com/send?phone=...` → opens chat with text, but **cannot inject an image via URL or clipboard** — WhatsApp Web explicitly blocks programmatic clipboard injection
+- `navigator.share({ files })` → works on mobile via OS share sheet, but user said "do it directly through browser"
+- Clipboard API → the image is copied to clipboard, but WhatsApp Web ignores it and does not auto-paste on focus
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+**The clipboard.write() approach currently in the code is silently failing or being ignored by WhatsApp Web entirely.** There is no browser API that forces WhatsApp Web to attach a file.
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
-```
+### What IS actually achievable in a browser
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+The only reliable browser-side workflow for sending both text AND image to WhatsApp is:
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+1. **Auto-download the PNG** (guaranteed to work, no permission needed)
+2. **Open WhatsApp Web with the specific contact + pre-filled text**
+3. **Show a clear in-app instruction toast** telling the admin: "PNG saved to downloads — click the 📎 paperclip in WhatsApp to attach it"
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+This workflow requires exactly 2 extra clicks from the admin (click paperclip → select the downloaded file) and is completely reliable. The current clipboard approach requires the same manual step but is less reliable and confusing.
 
-## Changes
+### Changes to `src/pages/admin/AdminCoupons.tsx`
 
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
+**Replace `sendViaWhatsAppBrowser`** — remove all clipboard logic entirely. New logic:
 
 ```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
+const sendViaWhatsAppBrowser = async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
+  // 1. Auto-download the PNG
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
 
-// After:
-const [loading, setLoading] = useState(false);
+  // 2. Open WhatsApp Web with specific contact + text
+  window.open(`https://web.whatsapp.com/send?phone=91${mobile}&text=${encodedText}`, '_blank');
+
+  // 3. Clear instruction toast
+  toast({
+    title: '📥 Coupon PNG downloaded!',
+    description: 'Click the 📎 paperclip in WhatsApp to attach and send the image.',
+    duration: 8000,
+  });
+};
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+**Update callers:**
+- `shareOne(coupon)`: pass `WC25-${coupon.row.name}-${coupon.code}.png` as filename
+- `regenerateAndShare(c)`: pass `WC25-${c.customer_name}-${c.code}.png` as filename
 
-## Why this is the correct fix
+**Update button labels** to reflect the new workflow:
+- "Share Image" button tooltip: "Downloads PNG + opens WhatsApp chat"
 
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+No other changes needed. The rest of the UI (button layout, table actions) stays the same.
 
-## Files Changed
-| File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+### Why this is the correct and honest fix
+
+There is no browser API that attaches a file to WhatsApp directly — this is a WhatsApp security boundary. The download + open chat workflow is the standard method used by every WhatsApp marketing tool that operates in-browser. The admin does one extra tap (paperclip → file) which is unavoidable.
+
+### Files changed
+- `src/pages/admin/AdminCoupons.tsx` only — remove clipboard logic, add auto-download, update toast message
