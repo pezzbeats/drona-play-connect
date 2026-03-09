@@ -552,27 +552,29 @@ export default function AdminCoupons() {
       `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
     );
 
-  // Always opens the specific contact directly in WhatsApp — no OS share sheet
-  const openWhatsApp = (mobile: string, encodedText: string) => {
-    window.open(`https://wa.me/91${mobile}?text=${encodedText}`, '_blank');
+  // Copy PNG blob to clipboard + open WhatsApp Web with contact pre-selected
+  const sendViaWhatsAppBrowser = async (mobile: string, blob: Blob, encodedText: string) => {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob }),
+      ]);
+      toast({
+        title: '📋 Image copied!',
+        description: 'WhatsApp is opening — paste the image in the chat (Ctrl+V or long-press)',
+      });
+    } catch {
+      toast({
+        title: 'Clipboard blocked',
+        description: 'WhatsApp is opening — send the image manually',
+        variant: 'destructive',
+      });
+    }
+    // Open WhatsApp Web directly in the contact's chat with pre-filled text
+    window.open(`https://web.whatsapp.com/send?phone=91${mobile}&text=${encodedText}`, '_blank');
   };
 
-  // Share PNG + text via OS share sheet (works on Android Chrome & iOS Safari)
   const shareOne = async (coupon: GeneratedCoupon) => {
-    const file = new File([coupon.blob], `${coupon.code}.png`, { type: 'image/png' });
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          text: decodeURIComponent(whatsappText(coupon)),
-          title: `Victory Coupon for ${coupon.row.name}`,
-        });
-        return;
-      } catch { /* user cancelled — fall through */ }
-    }
-    // Desktop fallback: download the image + open WhatsApp text link
-    downloadOne(coupon);
-    openWhatsApp(coupon.row.mobile, whatsappText(coupon));
+    await sendViaWhatsAppBrowser(coupon.row.mobile, coupon.blob, whatsappText(coupon));
   };
 
   const dbCouponWhatsappText = (c: DbCoupon) =>
@@ -584,7 +586,7 @@ export default function AdminCoupons() {
       `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
     );
 
-  // Regenerate PNG on-demand for DB coupons, then share via OS share sheet
+  // Regenerate PNG on-demand for DB coupons, copy to clipboard, open WhatsApp Web
   const regenerateAndShare = async (c: DbCoupon) => {
     if (!logoRef.current) {
       toast({ title: 'Logo not loaded', variant: 'destructive' });
@@ -595,21 +597,10 @@ export default function AdminCoupons() {
       const attendeeRow: AttendeeRow = { name: c.customer_name, mobile: c.customer_mobile, valid: true };
       const expiryForCanvas = c.expiry_date ? format(new Date(c.expiry_date), 'dd/MM/yyyy') : '';
       const blob = await buildCouponCanvas(attendeeRow, c.discount_text, c.code, logoRef.current, expiryForCanvas, subtitleText, eventNightLabel, winHeadline);
-      const file = new File([blob], `${c.code}.png`, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          text: decodeURIComponent(dbCouponWhatsappText(c)),
-          title: `Victory Coupon – ${c.customer_name}`,
-        });
-      } else {
-        // Desktop fallback
-        const objectUrl = URL.createObjectURL(blob);
-        downloadOne({ row: attendeeRow, code: c.code, blob, objectUrl });
-        openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c));
-      }
-    } catch { /* user cancelled */ }
-    finally { setSharingId(null); }
+      await sendViaWhatsAppBrowser(c.customer_mobile, blob, dbCouponWhatsappText(c));
+    } finally {
+      setSharingId(null);
+    }
   };
 
   const validCount = rows.filter(r => r.valid).length;
