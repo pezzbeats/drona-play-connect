@@ -350,9 +350,21 @@ export default function AdminCoupons() {
   const subtitleText = getConfig('coupon_event_subtitle', 'T20 World Cup Final  ·  India vs New Zealand');
   const eventNightLabel = getConfig('coupon_event_night_label', 'T20 World Cup Final Night');
   const winHeadline = getConfig('coupon_win_headline', 'INDIA WON!');
+  const DEFAULT_WA_TEMPLATE =
+    `🏆 Congratulations, {{name}}!\n\n` +
+    `{{event}} 🎉\n\n` +
+    `As a valued guest of Hotel Drona Palace who attended the {{eventLabel}}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
+    `🎟️ Your Coupon Code: {{code}}\n` +
+    `💰 Discount: {{discount}}\n` +
+    `{{expiryLine}}` +
+    `\nValid for redemption at Hotel Drona Palace.\n` +
+    `Present this coupon at the hotel reception.\n\n` +
+    `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`;
+
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('500');
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
+  const [whatsappTemplate, setWhatsappTemplate] = useState(DEFAULT_WA_TEMPLATE);
   const [rows, setRows] = useState<AttendeeRow[]>([]);
   const [coupons, setCoupons] = useState<GeneratedCoupon[]>([]);
   const [generating, setGenerating] = useState(false);
