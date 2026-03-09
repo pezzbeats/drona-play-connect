@@ -361,6 +361,55 @@ export default function AdminCoupons() {
   const fileRef = useRef<HTMLInputElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // ── Coupon management table state ──────────────────────────────────────────
+  interface DbCoupon {
+    id: string;
+    code: string;
+    customer_name: string;
+    customer_mobile: string;
+    discount_text: string;
+    expiry_date: string | null;
+    status: string;
+    redeemed_at: string | null;
+    created_at: string;
+  }
+  const [dbCoupons, setDbCoupons] = useState<DbCoupon[]>([]);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'redeemed' | 'expired'>('all');
+
+  const fetchDbCoupons = useCallback(async () => {
+    setDbLoading(true);
+    const { data, error } = await supabase
+      .from('coupons' as any)
+      .select('id,code,customer_name,customer_mobile,discount_text,expiry_date,status,redeemed_at,created_at')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (!error && data) setDbCoupons(data as DbCoupon[]);
+    setDbLoading(false);
+  }, []);
+
+  useEffect(() => { fetchDbCoupons(); }, [fetchDbCoupons]);
+
+  const filteredCoupons = useMemo(() => {
+    const q = searchQ.toLowerCase();
+    return dbCoupons.filter(c => {
+      const matchesSearch = !q ||
+        c.customer_name.toLowerCase().includes(q) ||
+        c.customer_mobile.includes(q) ||
+        c.code.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [dbCoupons, searchQ, statusFilter]);
+
+  const statusCounts = useMemo(() => ({
+    all: dbCoupons.length,
+    active: dbCoupons.filter(c => c.status === 'active').length,
+    redeemed: dbCoupons.filter(c => c.status === 'redeemed').length,
+    expired: dbCoupons.filter(c => c.status === 'expired').length,
+  }), [dbCoupons]);
+
   const discountText = discountType === 'flat' ? `₹${discountValue} Off` : `${discountValue}% Off`;
   const expiryStr = expiryDate ? format(expiryDate, 'dd/MM/yyyy') : '';
 
