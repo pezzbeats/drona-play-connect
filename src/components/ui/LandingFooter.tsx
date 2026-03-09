@@ -29,9 +29,20 @@ export const LandingFooter: React.FC = () => {
               <span className="text-2xl">🏏</span>
               <span className="font-display font-bold text-lg gradient-text">{heroTitle}</span>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
               {aboutText}
             </p>
+            <a
+              href="https://dronapalace.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-bold transition-all hover:opacity-80"
+              style={{ color: 'hsl(var(--secondary))' }}
+            >
+              <span>🌐</span>
+              dronapalace.com
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+            </a>
           </div>
 
           {/* Col 2 — Legal Information */}
