@@ -999,8 +999,8 @@ export default function AdminCoupons() {
                           {sharingId === c.id ? 'Building…' : 'Share Image'}
                         </button>
                         <button
-                          onClick={() => openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))}
-                          title={`Open +91${c.customer_mobile} directly in WhatsApp`}
+                          onClick={() => window.open(`https://web.whatsapp.com/send?phone=91${c.customer_mobile}&text=${dbCouponWhatsappText(c)}`, '_blank')}
+                          title={`Open +91${c.customer_mobile} directly in WhatsApp Web`}
                           className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium border border-green-700/50 text-green-400 hover:bg-green-900/20 transition-colors"
                         >
                           <MessageCircle className="h-3.5 w-3.5" />
