@@ -377,6 +377,7 @@ export default function AdminCoupons() {
   const [dbLoading, setDbLoading] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'redeemed' | 'expired'>('all');
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   const fetchDbCoupons = useCallback(async () => {
     setDbLoading(true);
