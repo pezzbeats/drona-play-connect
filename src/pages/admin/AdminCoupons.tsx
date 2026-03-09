@@ -914,6 +914,7 @@ export default function AdminCoupons() {
                   <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Expiry</th>
                   <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Status</th>
                   <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Redeemed At</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Send</th>
                 </tr>
               </thead>
               <tbody>
