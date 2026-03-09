@@ -553,18 +553,25 @@ export default function AdminCoupons() {
     coupons.forEach((c, i) => setTimeout(() => downloadOne(c), i * 300));
   };
 
+  // Helper: interpolate template variables into the WA message
+  const applyTemplate = useCallback((
+    name: string, code: string, discount: string, expiry: string, event: string, eventLabel: string
+  ) => {
+    const expiryLine = expiry ? `📅 Valid until: ${expiry}\n` : '';
+    return whatsappTemplate
+      .replace(/\{\{name\}\}/g, name)
+      .replace(/\{\{code\}\}/g, code)
+      .replace(/\{\{discount\}\}/g, discount)
+      .replace(/\{\{expiry\}\}/g, expiry)
+      .replace(/\{\{expiryLine\}\}/g, expiryLine)
+      .replace(/\{\{event\}\}/g, event)
+      .replace(/\{\{eventLabel\}\}/g, eventLabel);
+  }, [whatsappTemplate]);
+
   const whatsappText = (coupon: GeneratedCoupon) =>
-    encodeURIComponent(
-      `🏆 Congratulations, ${coupon.row.name}!\n\n` +
-      `${subtitleText} 🎉\n\n` +
-      `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
-      `🎟️ Your Coupon Code: ${coupon.code}\n` +
-      `💰 Discount: ${discountText}\n` +
-      (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
-      `\nValid for redemption at Hotel Drona Palace.\n` +
-      `Present this coupon at the hotel reception.\n\n` +
-      `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
-    );
+    encodeURIComponent(applyTemplate(
+      coupon.row.name, coupon.code, discountText, expiryStr, subtitleText, eventNightLabel
+    ));
 
   // Auto-download PNG + open WhatsApp Web with contact pre-selected and text pre-filled
   const sendViaWhatsAppBrowser = useCallback(async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
