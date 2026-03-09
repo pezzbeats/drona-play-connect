@@ -458,18 +458,20 @@ export default function AdminCouponScan() {
           )}
 
           {lookupState === 'found_expired' && coupon && (
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center">
-                <XCircle className="h-5 w-5 text-destructive" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-destructive">Coupon Expired</p>
-                  <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/5 text-xs">EXPIRED</Badge>
+            <div className="space-y-3">
+              {/* Bold expired banner */}
+              <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-destructive/60 bg-destructive/10 py-5 px-4 text-center">
+                <div className="w-14 h-14 rounded-full bg-destructive/20 flex items-center justify-center">
+                  <AlertTriangle className="h-7 w-7 text-destructive" />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Expired on {coupon.expiry_date ? format(new Date(coupon.expiry_date), 'dd MMM yyyy') : '—'}
+                <p className="text-2xl font-extrabold tracking-widest text-destructive uppercase">Expired</p>
+                <p className="text-sm text-destructive/80 font-medium">
+                  This coupon expired on{' '}
+                  <span className="font-bold text-destructive">
+                    {coupon.expiry_date ? format(new Date(coupon.expiry_date), 'dd MMM yyyy') : '—'}
+                  </span>
                 </p>
+                <p className="text-xs text-muted-foreground mt-1">Redemption is blocked. This coupon cannot be used.</p>
               </div>
             </div>
           )}
