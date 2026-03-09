@@ -95,6 +95,15 @@ const SECTIONS: Section[] = [
       { key: 'footer_copyright', label: 'Copyright Line' },
     ],
   },
+  {
+    id: 'coupons',
+    title: 'Victory Coupons',
+    icon: Star,
+    fields: [
+      { key: 'coupon_event_subtitle', label: 'Coupon Subtitle Line', placeholder: 'T20 World Cup Final  ·  India vs New Zealand' },
+      { key: 'coupon_event_night_label', label: 'Footer \u201cattended the ___\u201d label', placeholder: 'T20 World Cup Final Night' },
+    ],
+  },
 ];
 
 export default function AdminSiteConfig() {

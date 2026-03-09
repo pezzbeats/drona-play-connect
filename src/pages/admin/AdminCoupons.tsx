@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import logoSrc from '@/assets/drona-logo-coupon.png';
 import { supabase } from '@/integrations/supabase/client';
 import QRCode from 'qrcode';
+import { useSiteConfig } from '@/hooks/useSiteConfig';
 
 interface AttendeeRow {
   name: string;
@@ -61,6 +62,8 @@ async function drawToCanvas(
   code: string,
   logoImg: HTMLImageElement,
   expiryStr: string,
+  subtitleText: string,
+  eventNightLabel: string,
 ): Promise<void> {
   canvas.width = W;
   canvas.height = H;
@@ -125,7 +128,7 @@ async function drawToCanvas(
   // Subtitle
   ctx.font = '500 20px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(245,185,66,0.7)';
-  ctx.fillText('T20 World Cup Final  ·  India vs New Zealand', W / 2, 218);
+  ctx.fillText(subtitleText, W / 2, 218);
 
   // ── Gold divider ─────────────────────────────────────────────────────────────
   const divGrad = ctx.createLinearGradient(60, 0, W - 60, 0);
@@ -283,7 +286,7 @@ async function drawToCanvas(
   // ── Footer strip ─────────────────────────────────────────────────────────────
   ctx.font = '400 13px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('As a valued guest who attended the T20 World Cup Final Night', W / 2, 990);
+  ctx.fillText(`As a valued guest who attended the ${eventNightLabel}`, W / 2, 990);
 
   ctx.font = '400 12px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(245,185,66,0.4)';
@@ -311,9 +314,11 @@ async function buildCouponCanvas(
   code: string,
   logoImg: HTMLImageElement,
   expiryStr: string,
+  subtitleText: string,
+  eventNightLabel: string,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas');
-  await drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr);
+  await drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr, subtitleText, eventNightLabel);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
   });
@@ -339,6 +344,9 @@ type DiscountType = 'flat' | 'percent';
 
 export default function AdminCoupons() {
   const { toast } = useToast();
+  const { get: getConfig } = useSiteConfig();
+  const subtitleText = getConfig('coupon_event_subtitle', 'T20 World Cup Final  ·  India vs New Zealand');
+  const eventNightLabel = getConfig('coupon_event_night_label', 'T20 World Cup Final Night');
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('500');
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
@@ -358,8 +366,8 @@ export default function AdminCoupons() {
     const canvas = previewCanvasRef.current;
     if (!canvas || !logoRef.current || !fontReady) return;
     const previewRow: AttendeeRow = { name: 'Guest Name', mobile: '9876543210', valid: true };
-    await drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr);
-  }, [discountText, expiryStr, fontReady]);
+    await drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr, subtitleText, eventNightLabel);
+  }, [discountText, expiryStr, fontReady, subtitleText, eventNightLabel]);
 
   useEffect(() => { renderPreview(); }, [renderPreview]);
 
@@ -443,7 +451,7 @@ export default function AdminCoupons() {
     for (const row of valid) {
       try {
         const code = generateCode(row.mobile);
-        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr);
+        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr, subtitleText, eventNightLabel);
         results.push({ row, code, blob, objectUrl: URL.createObjectURL(blob) });
 
         // Persist coupon record to DB for redemption tracking
@@ -480,8 +488,8 @@ export default function AdminCoupons() {
   const whatsappText = (coupon: GeneratedCoupon) =>
     encodeURIComponent(
       `🏆 Congratulations, ${coupon.row.name}!\n\n` +
-      `India won the T20 World Cup Final vs New Zealand 🎉\n\n` +
-      `As a valued guest of Hotel Drona Palace who attended the Final Night, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
+      `${subtitleText} 🎉\n\n` +
+      `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
       `🎟️ Your Coupon Code: ${coupon.code}\n` +
       `💰 Discount: ${discountText}\n` +
       (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
@@ -518,7 +526,7 @@ export default function AdminCoupons() {
         </div>
         <div>
           <h1 className="font-display text-xl font-bold text-foreground">Victory Coupon Generator</h1>
-          <p className="text-sm text-muted-foreground">T20 World Cup Final — India 🏆 vs New Zealand</p>
+          <p className="text-sm text-muted-foreground">{subtitleText}</p>
         </div>
       </div>
 

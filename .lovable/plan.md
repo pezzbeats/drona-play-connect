@@ -1,56 +1,53 @@
 
-## Plan: Make Coupon Subtitle Editable via Site Config
+## Root Cause — Found
 
-### What we're adding
-A new `site_config` key `coupon_event_subtitle` (e.g. `"T20 World Cup Final · India vs New Zealand"`) that drives all the hardcoded event name text on the coupon PNG, the WhatsApp message, and the page header — so it can be updated for future events without code changes.
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
----
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-### All hardcoded strings to replace
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-| Location | Current hardcoded text | Replaced by |
-|---|---|---|
-| `drawToCanvas` line 128 | `'T20 World Cup Final  ·  India vs New Zealand'` | `subtitleText` param |
-| `drawToCanvas` line 286 | `'As a valued guest who attended the T20 World Cup Final Night'` | `'As a valued guest who attended the ' + eventNightLabel` |
-| `whatsappText` lines 483-484 | `'India won the T20 World Cup Final vs New Zealand 🎉'` | built from subtitle |
-| Page header line 521 | `'T20 World Cup Final — India 🏆 vs New Zealand'` | `subtitleText` from config |
-
----
-
-### Changes
-
-**1. `AdminSiteConfig.tsx`** — Add a new `coupon` section (or add fields to the existing `registration` section):
-
-Add a dedicated **"Victory Coupons"** section with:
-- `coupon_event_subtitle` — "Coupon Subtitle Line" (e.g. `T20 World Cup Final · India vs New Zealand`)
-- `coupon_event_night_label` — "Footer 'attended the ___' label" (e.g. `T20 World Cup Final Night`) — this is the footer strip sentence
-
-This keeps coupons self-contained and makes both editable strings discoverable together.
-
-**2. `AdminCoupons.tsx`**:
-- Import `useSiteConfig` hook
-- Read `coupon_event_subtitle` with fallback `'T20 World Cup Final  ·  India vs New Zealand'`
-- Read `coupon_event_night_label` with fallback `'T20 World Cup Final Night'`
-- Pass `subtitleText` as a new param to `drawToCanvas` and `buildCouponCanvas`
-- Replace canvas line 128, footer line 286, WhatsApp message, and page header subtitle with the config values
-
-**`drawToCanvas` signature update:**
-```ts
-async function drawToCanvas(
-  canvas, row, discountText, code, logoImg, expiryStr,
-  subtitleText, eventNightLabel  // ← new params
-)
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-**Fallback chain**: `useSiteConfig.get('coupon_event_subtitle', 'T20 World Cup Final  ·  India vs New Zealand')` — so if not set in DB the coupon still renders correctly.
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
----
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-### Files to edit
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
+```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
 | File | Change |
 |---|---|
-| `src/pages/admin/AdminSiteConfig.tsx` | Add new "Victory Coupons" section with 2 fields |
-| `src/pages/admin/AdminCoupons.tsx` | Wire `useSiteConfig`, pass subtitle/night-label through canvas draw, replace all 4 hardcoded strings |
-
-No DB migration needed — `site_config` is a key/value store, new keys are inserted on first save.
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
