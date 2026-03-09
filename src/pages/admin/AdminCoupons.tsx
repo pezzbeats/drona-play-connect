@@ -451,7 +451,7 @@ export default function AdminCoupons() {
     for (const row of valid) {
       try {
         const code = generateCode(row.mobile);
-        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr);
+        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr, subtitleText, eventNightLabel);
         results.push({ row, code, blob, objectUrl: URL.createObjectURL(blob) });
 
         // Persist coupon record to DB for redemption tracking
