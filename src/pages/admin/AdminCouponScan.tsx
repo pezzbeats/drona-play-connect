@@ -181,7 +181,7 @@ export default function AdminCouponScan() {
         return;
       }
 
-      const c = data as CouponRecord;
+      const c = data as unknown as CouponRecord;
       // Auto-check expiry
       if (c.status === 'active' && c.expiry_date) {
         const expiry = new Date(c.expiry_date);
