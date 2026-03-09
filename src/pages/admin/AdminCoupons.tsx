@@ -54,14 +54,14 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-async function buildCouponCanvas(
+function drawToCanvas(
+  canvas: HTMLCanvasElement,
   row: AttendeeRow,
   discountText: string,
   code: string,
   logoImg: HTMLImageElement,
   expiryStr: string,
-): Promise<Blob> {
-  const canvas = document.createElement('canvas');
+): void {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
