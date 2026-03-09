@@ -551,6 +551,11 @@ export default function AdminCoupons() {
       `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
     );
 
+  // Always opens the specific contact directly in WhatsApp — no OS share sheet
+  const openWhatsApp = (mobile: string, encodedText: string) => {
+    window.open(`https://wa.me/91${mobile}?text=${encodedText}`, '_blank');
+  };
+
   const shareOne = async (coupon: GeneratedCoupon) => {
     if (navigator.share && navigator.canShare) {
       const file = new File([coupon.blob], `${coupon.code}.png`, { type: 'image/png' });
@@ -558,15 +563,20 @@ export default function AdminCoupons() {
         try {
           await navigator.share({ files: [file], title: `Victory Coupon for ${coupon.row.name}` });
           return;
-        } catch { /* fall through to WA */ }
+        } catch { /* fall through */ }
       }
     }
-    // Fallback: download + open WhatsApp
     downloadOne(coupon);
-    setTimeout(() => {
-      window.open(`https://wa.me/91${coupon.row.mobile}?text=${whatsappText(coupon)}`, '_blank');
-    }, 500);
   };
+
+  const dbCouponWhatsappText = (c: DbCoupon) =>
+    encodeURIComponent(
+      `🏆 Congratulations, ${c.customer_name}!\n\n` +
+      `Your exclusive Victory Coupon from Hotel Drona Palace:\n\n` +
+      `🎟️ Code: ${c.code}\n💰 ${c.discount_text}\n` +
+      (c.expiry_date ? `📅 Valid until: ${new Date(c.expiry_date).toLocaleDateString('en-IN')}\n` : '') +
+      `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
+    );
 
   const validCount = rows.filter(r => r.valid).length;
 
@@ -816,14 +826,14 @@ export default function AdminCoupons() {
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => shareOne(c)}
+                    onClick={() => openWhatsApp(c.row.mobile, whatsappText(c))}
                     className="flex items-center gap-1.5 flex-1 sm:flex-none bg-green-600 hover:bg-green-500 text-white border-0"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
                     WhatsApp
                   </Button>
                   {navigator.share && (
-                    <Button size="sm" variant="ghost" onClick={() => shareOne(c)} className="flex items-center gap-1.5 flex-1 sm:flex-none">
+                    <Button size="sm" variant="ghost" onClick={() => shareOne(c)} className="flex items-center gap-1.5 flex-1 sm:flex-none" title="Share image">
                       <Share2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
@@ -904,6 +914,7 @@ export default function AdminCoupons() {
                   <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Expiry</th>
                   <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Status</th>
                   <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Redeemed At</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Send</th>
                 </tr>
               </thead>
               <tbody>
@@ -941,6 +952,16 @@ export default function AdminCoupons() {
                         ? new Date(c.redeemed_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
                         : <span className="text-muted-foreground/40">—</span>
                       }
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))}
+                        title={`Send to +91 ${c.customer_mobile} on WhatsApp`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        Send
+                      </button>
                     </td>
                   </tr>
                 ))}
