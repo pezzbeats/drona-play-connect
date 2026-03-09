@@ -441,10 +441,11 @@ export default function AdminCoupons() {
     try {
       const saved = localStorage.getItem('drona_coupon_discount');
       if (saved) {
-        const { type, value, expiry } = JSON.parse(saved);
+        const { type, value, expiry, template } = JSON.parse(saved);
         if (type === 'flat' || type === 'percent') setDiscountType(type);
         if (value) setDiscountValue(String(value));
         if (expiry) setExpiryDate(new Date(expiry));
+        if (template) setWhatsappTemplate(template);
       }
     } catch { /* ignore */ }
   }, []);
@@ -454,6 +455,7 @@ export default function AdminCoupons() {
       type: discountType,
       value: discountValue,
       expiry: expiryDate ? expiryDate.toISOString() : null,
+      template: whatsappTemplate,
     }));
     toast({
       title: '✅ Settings saved',
