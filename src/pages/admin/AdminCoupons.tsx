@@ -812,6 +812,36 @@ export default function AdminCoupons() {
           </Button>
         </div>
 
+        {/* WhatsApp Message Template editor */}
+        <div className="space-y-2 border-t border-border/40 pt-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <MessageCircle className="h-3.5 w-3.5 text-green-400" />
+              WhatsApp Message Template
+            </Label>
+            <button
+              type="button"
+              onClick={() => setWhatsappTemplate(DEFAULT_WA_TEMPLATE)}
+              className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+            >
+              Reset to default
+            </button>
+          </div>
+          <textarea
+            value={whatsappTemplate}
+            onChange={e => setWhatsappTemplate(e.target.value)}
+            rows={7}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y font-mono leading-relaxed"
+            placeholder="Enter your WhatsApp message template…"
+          />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Available variables:&nbsp;
+            {['{{name}}', '{{code}}', '{{discount}}', '{{expiry}}', '{{expiryLine}}', '{{event}}', '{{eventLabel}}'].map(v => (
+              <code key={v} className="mx-0.5 px-1 py-0.5 rounded bg-muted text-foreground/80 text-[11px]">{v}</code>
+            ))}
+          </p>
+        </div>
+
         <div className="pt-1">
           <Button variant="outline" size="sm" onClick={downloadTemplate} className="flex items-center gap-2 whitespace-nowrap">
             <FileText className="h-4 w-4" /> Download CSV Template
