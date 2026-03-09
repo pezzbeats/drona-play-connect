@@ -100,6 +100,7 @@ const SECTIONS: Section[] = [
     title: 'Victory Coupons',
     icon: Star,
     fields: [
+      { key: 'coupon_win_headline', label: 'Win Headline', placeholder: 'INDIA WON!' },
       { key: 'coupon_event_subtitle', label: 'Coupon Subtitle Line', placeholder: 'T20 World Cup Final  ·  India vs New Zealand' },
       { key: 'coupon_event_night_label', label: 'Footer \u201cattended the ___\u201d label', placeholder: 'T20 World Cup Final Night' },
     ],

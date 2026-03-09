@@ -64,6 +64,7 @@ async function drawToCanvas(
   expiryStr: string,
   subtitleText: string,
   eventNightLabel: string,
+  winHeadline: string,
 ): Promise<void> {
   canvas.width = W;
   canvas.height = H;
@@ -123,7 +124,7 @@ async function drawToCanvas(
   ctx.fillStyle = titleGrad;
   ctx.font = 'bold 58px "Cinzel", "Georgia", serif';
   ctx.letterSpacing = '4px';
-  ctx.fillText('INDIA WON!', W / 2, 182);
+  ctx.fillText(winHeadline, W / 2, 182);
 
   // Subtitle
   ctx.font = '500 20px "Cinzel", "Georgia", serif';
@@ -316,9 +317,10 @@ async function buildCouponCanvas(
   expiryStr: string,
   subtitleText: string,
   eventNightLabel: string,
+  winHeadline: string,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas');
-  await drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr, subtitleText, eventNightLabel);
+  await drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr, subtitleText, eventNightLabel, winHeadline);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
   });
@@ -347,6 +349,7 @@ export default function AdminCoupons() {
   const { get: getConfig } = useSiteConfig();
   const subtitleText = getConfig('coupon_event_subtitle', 'T20 World Cup Final  ·  India vs New Zealand');
   const eventNightLabel = getConfig('coupon_event_night_label', 'T20 World Cup Final Night');
+  const winHeadline = getConfig('coupon_win_headline', 'INDIA WON!');
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('500');
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
@@ -366,8 +369,8 @@ export default function AdminCoupons() {
     const canvas = previewCanvasRef.current;
     if (!canvas || !logoRef.current || !fontReady) return;
     const previewRow: AttendeeRow = { name: 'Guest Name', mobile: '9876543210', valid: true };
-    await drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr, subtitleText, eventNightLabel);
-  }, [discountText, expiryStr, fontReady, subtitleText, eventNightLabel]);
+    await drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr, subtitleText, eventNightLabel, winHeadline);
+  }, [discountText, expiryStr, fontReady, subtitleText, eventNightLabel, winHeadline]);
 
   useEffect(() => { renderPreview(); }, [renderPreview]);
 
@@ -451,7 +454,7 @@ export default function AdminCoupons() {
     for (const row of valid) {
       try {
         const code = generateCode(row.mobile);
-        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr, subtitleText, eventNightLabel);
+        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr, subtitleText, eventNightLabel, winHeadline);
         results.push({ row, code, blob, objectUrl: URL.createObjectURL(blob) });
 
         // Persist coupon record to DB for redemption tracking
