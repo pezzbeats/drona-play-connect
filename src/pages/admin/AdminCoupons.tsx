@@ -838,6 +838,82 @@ export default function AdminCoupons() {
         </p>
       </GlassCard>
 
+      {/* Quick Add — Single Coupon */}
+      <GlassCard className="p-5 space-y-4 border border-success/20">
+        <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
+          <UserPlus className="h-4 w-4 text-success" /> Quick Add — Single Coupon
+          <span className="ml-auto text-xs text-muted-foreground font-normal normal-case tracking-normal">
+            India vs NZ · generates + sends instantly
+          </span>
+        </h2>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Customer Name</Label>
+            <Input
+              ref={singleNameRef}
+              value={singleName}
+              onChange={e => setSingleName(e.target.value)}
+              placeholder="e.g. Rahul Sharma"
+              onKeyDown={e => e.key === 'Enter' && generateAndSendSingle()}
+            />
+          </div>
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Mobile (10-digit)</Label>
+            <Input
+              value={singleMobile}
+              onChange={e => setSingleMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="9876543210"
+              inputMode="numeric"
+              maxLength={10}
+              onKeyDown={e => e.key === 'Enter' && generateAndSendSingle()}
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={generateAndSendSingle}
+          disabled={singleGenerating || !fontReady}
+          className="w-full h-12 bg-success text-success-foreground hover:bg-success/90 font-semibold text-base flex items-center gap-2"
+        >
+          {singleGenerating ? (
+            <>
+              <RefreshCw className="h-5 w-5 animate-spin" /> Generating &amp; Sending…
+            </>
+          ) : (
+            <>
+              <Send className="h-5 w-5" /> 🚀 Generate &amp; Send via WhatsApp
+            </>
+          )}
+        </Button>
+
+        {lastSingle && (
+          <div className="flex items-center gap-4 p-3 rounded-xl border border-success/30 bg-success/5">
+            <img
+              src={lastSingle.objectUrl}
+              alt="last coupon"
+              className="h-20 w-14 object-cover rounded-lg border border-border/40 shadow"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{lastSingle.row.name}</p>
+              <p className="text-xs text-muted-foreground">{lastSingle.row.mobile}</p>
+              <p className="text-xs font-mono text-amber-400 mt-1">{lastSingle.code}</p>
+              <p className="text-xs text-success mt-1 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" /> Sent · WhatsApp opened
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 text-xs"
+              onClick={() => { setLastSingle(null); setTimeout(() => singleNameRef.current?.focus(), 50); }}
+            >
+              + Send Another
+            </Button>
+          </div>
+        )}
+      </GlassCard>
+
       {/* Upload card */}
       <GlassCard className="p-5 space-y-4">
         <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
