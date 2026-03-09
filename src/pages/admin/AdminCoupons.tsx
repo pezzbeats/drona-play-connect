@@ -552,29 +552,30 @@ export default function AdminCoupons() {
       `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
     );
 
-  // Copy PNG blob to clipboard + open WhatsApp Web with contact pre-selected
-  const sendViaWhatsAppBrowser = async (mobile: string, blob: Blob, encodedText: string) => {
-    try {
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob }),
-      ]);
-      toast({
-        title: '📋 Image copied!',
-        description: 'WhatsApp is opening — paste the image in the chat (Ctrl+V or long-press)',
-      });
-    } catch {
-      toast({
-        title: 'Clipboard blocked',
-        description: 'WhatsApp is opening — send the image manually',
-        variant: 'destructive',
-      });
-    }
-    // Open WhatsApp Web directly in the contact's chat with pre-filled text
+  // Auto-download PNG + open WhatsApp Web with contact pre-selected and text pre-filled
+  const sendViaWhatsAppBrowser = async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
+    // 1. Auto-download the PNG
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+    // 2. Open WhatsApp Web with specific contact + pre-filled text
     window.open(`https://web.whatsapp.com/send?phone=91${mobile}&text=${encodedText}`, '_blank');
+
+    // 3. Clear instruction
+    toast({
+      title: '📥 Coupon PNG downloaded!',
+      description: 'Click the 📎 paperclip in WhatsApp to attach and send the image.',
+      duration: 8000,
+    });
   };
 
   const shareOne = async (coupon: GeneratedCoupon) => {
-    await sendViaWhatsAppBrowser(coupon.row.mobile, coupon.blob, whatsappText(coupon));
+    const filename = `WC25-${coupon.row.name.replace(/\s+/g, '-')}-${coupon.code}.png`;
+    await sendViaWhatsAppBrowser(coupon.row.mobile, coupon.blob, filename, whatsappText(coupon));
   };
 
   const dbCouponWhatsappText = (c: DbCoupon) =>
@@ -597,7 +598,8 @@ export default function AdminCoupons() {
       const attendeeRow: AttendeeRow = { name: c.customer_name, mobile: c.customer_mobile, valid: true };
       const expiryForCanvas = c.expiry_date ? format(new Date(c.expiry_date), 'dd/MM/yyyy') : '';
       const blob = await buildCouponCanvas(attendeeRow, c.discount_text, c.code, logoRef.current, expiryForCanvas, subtitleText, eventNightLabel, winHeadline);
-      await sendViaWhatsAppBrowser(c.customer_mobile, blob, dbCouponWhatsappText(c));
+      const filename = `WC25-${c.customer_name.replace(/\s+/g, '-')}-${c.code}.png`;
+      await sendViaWhatsAppBrowser(c.customer_mobile, blob, filename, dbCouponWhatsappText(c));
     } finally {
       setSharingId(null);
     }
