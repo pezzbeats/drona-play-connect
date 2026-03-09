@@ -787,11 +787,19 @@ export default function IndexPage() {
           `}</style>
           <div className="backdrop-blur-md bg-background/80 border-t border-border/50 px-4 pt-2.5 pb-3">
             <div className="flex gap-2 max-w-2xl mx-auto items-center">
-              <Link to="/register" className="flex-1">
-                <button className="w-full h-12 btn-gradient rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 animate-glow-pulse">
-                  Reserve <ChevronRight className="h-4 w-4" />
-                </button>
-              </Link>
+              {match?.status === 'ended' ? (
+                <Link to="/live" className="flex-1">
+                  <button className="w-full h-12 bg-secondary/20 border border-secondary/40 text-secondary rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 hover:bg-secondary/30 active:scale-[0.98] transition-all duration-200">
+                    🏆 Results
+                  </button>
+                </Link>
+              ) : (
+                <Link to="/register" className="flex-1">
+                  <button className="w-full h-12 btn-gradient rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 animate-glow-pulse">
+                    Reserve <ChevronRight className="h-4 w-4" />
+                  </button>
+                </Link>
+              )}
               <Link to="/ticket" className="flex-1">
                 <button className="w-full h-12 bg-success text-success-foreground rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 shadow-[0_0_16px_hsl(142_70%_45%/0.4)] hover:opacity-90 active:scale-[0.98] transition-all duration-200">
                   My Passes <ChevronRight className="h-4 w-4" />
