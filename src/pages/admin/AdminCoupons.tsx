@@ -553,7 +553,7 @@ export default function AdminCoupons() {
     );
 
   // Auto-download PNG + open WhatsApp Web with contact pre-selected and text pre-filled
-  const sendViaWhatsAppBrowser = async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
+  const sendViaWhatsAppBrowser = useCallback(async (mobile: string, blob: Blob, filename: string, encodedText: string) => {
     // 1. Auto-download the PNG
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -571,7 +571,7 @@ export default function AdminCoupons() {
       description: '1️⃣ Image downloaded  →  2️⃣ WhatsApp chat opened  →  3️⃣ Click 📎 in WhatsApp, find the file and send.',
       duration: 10000,
     });
-  };
+  }, [toast]);
 
   const shareOne = async (coupon: GeneratedCoupon) => {
     const filename = `WC25-${coupon.row.name.replace(/\s+/g, '-')}-${coupon.code}.png`;
