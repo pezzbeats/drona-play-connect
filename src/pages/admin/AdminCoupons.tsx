@@ -551,6 +551,11 @@ export default function AdminCoupons() {
       `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
     );
 
+  // Always opens the specific contact directly in WhatsApp — no OS share sheet
+  const openWhatsApp = (mobile: string, encodedText: string) => {
+    window.open(`https://wa.me/91${mobile}?text=${encodedText}`, '_blank');
+  };
+
   const shareOne = async (coupon: GeneratedCoupon) => {
     if (navigator.share && navigator.canShare) {
       const file = new File([coupon.blob], `${coupon.code}.png`, { type: 'image/png' });
@@ -558,15 +563,20 @@ export default function AdminCoupons() {
         try {
           await navigator.share({ files: [file], title: `Victory Coupon for ${coupon.row.name}` });
           return;
-        } catch { /* fall through to WA */ }
+        } catch { /* fall through */ }
       }
     }
-    // Fallback: download + open WhatsApp
     downloadOne(coupon);
-    setTimeout(() => {
-      window.open(`https://wa.me/91${coupon.row.mobile}?text=${whatsappText(coupon)}`, '_blank');
-    }, 500);
   };
+
+  const dbCouponWhatsappText = (c: DbCoupon) =>
+    encodeURIComponent(
+      `🏆 Congratulations, ${c.customer_name}!\n\n` +
+      `Your exclusive Victory Coupon from Hotel Drona Palace:\n\n` +
+      `🎟️ Code: ${c.code}\n💰 ${c.discount_text}\n` +
+      (c.expiry_date ? `📅 Valid until: ${new Date(c.expiry_date).toLocaleDateString('en-IN')}\n` : '') +
+      `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
+    );
 
   const validCount = rows.filter(r => r.valid).length;
 
