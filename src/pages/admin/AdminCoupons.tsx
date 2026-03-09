@@ -557,17 +557,22 @@ export default function AdminCoupons() {
     window.open(`https://wa.me/91${mobile}?text=${encodedText}`, '_blank');
   };
 
+  // Share PNG + text via OS share sheet (works on Android Chrome & iOS Safari)
   const shareOne = async (coupon: GeneratedCoupon) => {
-    if (navigator.share && navigator.canShare) {
-      const file = new File([coupon.blob], `${coupon.code}.png`, { type: 'image/png' });
-      if (navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: `Victory Coupon for ${coupon.row.name}` });
-          return;
-        } catch { /* fall through */ }
-      }
+    const file = new File([coupon.blob], `${coupon.code}.png`, { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          text: decodeURIComponent(whatsappText(coupon)),
+          title: `Victory Coupon for ${coupon.row.name}`,
+        });
+        return;
+      } catch { /* user cancelled — fall through */ }
     }
+    // Desktop fallback: download the image + open WhatsApp text link
     downloadOne(coupon);
+    openWhatsApp(coupon.row.mobile, whatsappText(coupon));
   };
 
   const dbCouponWhatsappText = (c: DbCoupon) =>
@@ -578,6 +583,34 @@ export default function AdminCoupons() {
       (c.expiry_date ? `📅 Valid until: ${new Date(c.expiry_date).toLocaleDateString('en-IN')}\n` : '') +
       `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
     );
+
+  // Regenerate PNG on-demand for DB coupons, then share via OS share sheet
+  const regenerateAndShare = async (c: DbCoupon) => {
+    if (!logoRef.current) {
+      toast({ title: 'Logo not loaded', variant: 'destructive' });
+      return;
+    }
+    setSharingId(c.id);
+    try {
+      const attendeeRow: AttendeeRow = { name: c.customer_name, mobile: c.customer_mobile, valid: true };
+      const expiryForCanvas = c.expiry_date ? format(new Date(c.expiry_date), 'dd/MM/yyyy') : '';
+      const blob = await buildCouponCanvas(attendeeRow, c.discount_text, c.code, logoRef.current, expiryForCanvas, subtitleText, eventNightLabel, winHeadline);
+      const file = new File([blob], `${c.code}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          text: decodeURIComponent(dbCouponWhatsappText(c)),
+          title: `Victory Coupon – ${c.customer_name}`,
+        });
+      } else {
+        // Desktop fallback
+        const objectUrl = URL.createObjectURL(blob);
+        downloadOne({ row: attendeeRow, code: c.code, blob, objectUrl });
+        openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c));
+      }
+    } catch { /* user cancelled */ }
+    finally { setSharingId(null); }
+  };
 
   const validCount = rows.filter(r => r.valid).length;
 
