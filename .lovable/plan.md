@@ -1,44 +1,53 @@
 
-## Plan: Session Redemption History Panel
+## Root Cause — Found
 
-### What to build
-Add a `sessionHistory` state array (max 10 items, in-memory only — clears on page refresh) that captures each successful redemption. Render it as a card at the bottom of the page, below the loading states.
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-### Type to add
-```typescript
-interface RedemptionHistoryEntry {
-  id: string;           // coupon id (for key)
-  code: string;
-  customer_name: string;
-  customer_mobile: string;
-  discount_text: string;
-  redeemed_at: string;  // ISO timestamp captured at moment of success
-}
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-### Changes — single file: `src/pages/admin/AdminCouponScan.tsx`
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-1. **Add import**: `History` icon from `lucide-react`
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-2. **Add state** (line ~58, after `coupon` state):
-   ```typescript
-   const [sessionHistory, setSessionHistory] = useState<RedemptionHistoryEntry[]>([]);
-   ```
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
-3. **Populate on success** (inside `redeemCoupon`, after `setLookupState('redeemed_success')`):
-   ```typescript
-   setSessionHistory(prev => [{
-     id: coupon.id, code: coupon.code,
-     customer_name: coupon.customer_name,
-     customer_mobile: coupon.customer_mobile,
-     discount_text: coupon.discount_text,
-     redeemed_at: new Date().toISOString(),
-   }, ...prev].slice(0, 10));
-   ```
+## Changes
 
-4. **Render panel** (after the `redeeming` loading card, before the closing `</div>`):
-   - Only shows when `sessionHistory.length > 0`
-   - Header: "Session History" with `History` icon + green badge showing count
-   - Each row: index number (newest = #1), customer name + mobile, coupon code in mono font, discount text as amber badge, timestamp formatted as `h:mm a`
-   - Subtle `border-green-500/20` left border on each row for visual scan
-   - "Clears on page refresh" note at the bottom in muted xs text
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
+```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |

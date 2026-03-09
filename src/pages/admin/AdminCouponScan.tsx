@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import {
   ScanLine, Camera, X, QrCode, CheckCircle2, XCircle, Clock, User,
-  Smartphone, Gift, Loader2, Zap, ZapOff, RotateCcw, AlertTriangle,
+  Smartphone, Gift, Loader2, Zap, ZapOff, RotateCcw, AlertTriangle, History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +46,15 @@ interface CouponRecord {
   created_at: string;
 }
 
+interface RedemptionHistoryEntry {
+  id: string;
+  code: string;
+  customer_name: string;
+  customer_mobile: string;
+  discount_text: string;
+  redeemed_at: string;
+}
+
 type LookupState = 'idle' | 'loading' | 'found_active' | 'found_redeemed' | 'found_expired' | 'not_found' | 'redeeming' | 'redeemed_success';
 
 // ── component ─────────────────────────────────────────────────────────────────
@@ -56,6 +65,7 @@ export default function AdminCouponScan() {
   const [codeInput, setCodeInput] = useState('');
   const [lookupState, setLookupState] = useState<LookupState>('idle');
   const [coupon, setCoupon] = useState<CouponRecord | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<RedemptionHistoryEntry[]>([]);
 
   // Camera state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -271,7 +281,16 @@ export default function AdminCouponScan() {
 
       if (error) throw error;
 
-      setCoupon(prev => prev ? { ...prev, status: 'redeemed', redeemed_at: new Date().toISOString() } : prev);
+      const now = new Date().toISOString();
+      setCoupon(prev => prev ? { ...prev, status: 'redeemed', redeemed_at: now } : prev);
+      setSessionHistory(prev => [{
+        id: coupon.id,
+        code: coupon.code,
+        customer_name: coupon.customer_name,
+        customer_mobile: coupon.customer_mobile,
+        discount_text: coupon.discount_text,
+        redeemed_at: now,
+      }, ...prev].slice(0, 10));
       setLookupState('redeemed_success');
       playBeep('success');
       vibrate([80, 40, 80, 40, 160]);
@@ -548,6 +567,56 @@ export default function AdminCouponScan() {
         <GlassCard className="p-8 flex items-center justify-center gap-3">
           <Loader2 className="h-5 w-5 text-green-400 animate-spin" />
           <span className="text-sm text-muted-foreground">Marking as redeemed…</span>
+        </GlassCard>
+      )}
+
+      {/* Session History Panel */}
+      {sessionHistory.length > 0 && (
+        <GlassCard className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm text-foreground">Session History</span>
+            </div>
+            <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-green-500/20 text-green-400 text-xs font-bold border border-green-500/30">
+              {sessionHistory.length}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {sessionHistory.map((entry, idx) => (
+              <div
+                key={entry.id + entry.redeemed_at}
+                className="flex items-center gap-3 rounded-lg bg-muted/20 border border-border/40 border-l-2 border-l-green-500/40 px-3 py-2.5"
+              >
+                <span className="text-xs font-bold text-muted-foreground w-5 shrink-0 text-center">
+                  #{idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{entry.customer_name}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Smartphone className="h-3 w-3 shrink-0" />
+                    +91 {entry.customer_mobile}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="font-mono text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">
+                    {entry.code}
+                  </span>
+                  <span className="text-xs font-semibold text-amber-400">
+                    {entry.discount_text}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                  {format(new Date(entry.redeemed_at), 'h:mm a')}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground/60">
+            Clears on page refresh · showing last {sessionHistory.length} of max 10
+          </p>
         </GlassCard>
       )}
     </div>
