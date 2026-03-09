@@ -1,5 +1,5 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2, CalendarIcon } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2, CalendarIcon, Search, RefreshCw, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -361,6 +361,55 @@ export default function AdminCoupons() {
   const fileRef = useRef<HTMLInputElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // ── Coupon management table state ──────────────────────────────────────────
+  interface DbCoupon {
+    id: string;
+    code: string;
+    customer_name: string;
+    customer_mobile: string;
+    discount_text: string;
+    expiry_date: string | null;
+    status: string;
+    redeemed_at: string | null;
+    created_at: string;
+  }
+  const [dbCoupons, setDbCoupons] = useState<DbCoupon[]>([]);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'redeemed' | 'expired'>('all');
+
+  const fetchDbCoupons = useCallback(async () => {
+    setDbLoading(true);
+    const { data, error } = await supabase
+      .from('coupons' as any)
+      .select('id,code,customer_name,customer_mobile,discount_text,expiry_date,status,redeemed_at,created_at')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (!error && data) setDbCoupons(data as unknown as DbCoupon[]);
+    setDbLoading(false);
+  }, []);
+
+  useEffect(() => { fetchDbCoupons(); }, [fetchDbCoupons]);
+
+  const filteredCoupons = useMemo(() => {
+    const q = searchQ.toLowerCase();
+    return dbCoupons.filter(c => {
+      const matchesSearch = !q ||
+        c.customer_name.toLowerCase().includes(q) ||
+        c.customer_mobile.includes(q) ||
+        c.code.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [dbCoupons, searchQ, statusFilter]);
+
+  const statusCounts = useMemo(() => ({
+    all: dbCoupons.length,
+    active: dbCoupons.filter(c => c.status === 'active').length,
+    redeemed: dbCoupons.filter(c => c.status === 'redeemed').length,
+    expired: dbCoupons.filter(c => c.status === 'expired').length,
+  }), [dbCoupons]);
+
   const discountText = discountType === 'flat' ? `₹${discountValue} Off` : `${discountValue}% Off`;
   const expiryStr = expiryDate ? format(expiryDate, 'dd/MM/yyyy') : '';
 
@@ -475,7 +524,8 @@ export default function AdminCoupons() {
     setCoupons(results);
     setGenerating(false);
     toast({ title: `✅ ${results.length} coupons generated!`, description: 'Codes saved — ready to scan & redeem' });
-  }, [rows, discountText, expiryStr, expiryDate, toast]);
+    fetchDbCoupons(); // refresh the management table
+  }, [rows, discountText, expiryStr, expiryDate, toast, subtitleText, eventNightLabel, winHeadline, fetchDbCoupons]);
 
   const downloadOne = (coupon: GeneratedCoupon) => {
     const a = document.createElement('a');
@@ -783,6 +833,122 @@ export default function AdminCoupons() {
           </div>
         </GlassCard>
       )}
+
+      {/* ── Coupon Management Table ────────────────────────────────────────── */}
+      <GlassCard className="p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
+            <Filter className="h-4 w-4 text-primary" /> All Coupons
+            <span className="font-normal normal-case tracking-normal text-muted-foreground text-xs ml-1">
+              ({filteredCoupons.length} shown)
+            </span>
+          </h2>
+          <button
+            onClick={fetchDbCoupons}
+            disabled={dbLoading}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${dbLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+
+        {/* Filters row */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search name, mobile or code…"
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              className="w-full pl-9 pr-3 h-9 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
+            {(['all', 'active', 'redeemed', 'expired'] as const).map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-2 capitalize transition-colors border-l first:border-l-0 border-border ${
+                  statusFilter === s
+                    ? 'bg-primary text-primary-foreground font-semibold'
+                    : 'bg-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {s} ({statusCounts[s]})
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
+        {dbLoading ? (
+          <div className="py-10 flex items-center justify-center text-sm text-muted-foreground animate-pulse">
+            Loading coupons…
+          </div>
+        ) : filteredCoupons.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            {dbCoupons.length === 0 ? 'No coupons generated yet.' : 'No coupons match your filter.'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card border-b border-border">
+                <tr>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Name</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Mobile</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Code</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Discount</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Expiry</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Status</th>
+                  <th className="text-left px-3 py-2.5 text-muted-foreground font-medium text-xs">Redeemed At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCoupons.map((c, i) => (
+                  <tr key={c.id} className={`border-t border-border/50 ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
+                    <td className="px-3 py-2 text-foreground font-medium">{c.customer_name}</td>
+                    <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{c.customer_mobile}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-amber-400">{c.code}</td>
+                    <td className="px-3 py-2 text-foreground text-xs">{c.discount_text}</td>
+                    <td className="px-3 py-2 text-muted-foreground text-xs">
+                      {c.expiry_date
+                        ? new Date(c.expiry_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : <span className="text-muted-foreground/50 italic">No expiry</span>
+                      }
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.status === 'active' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />Active
+                        </span>
+                      )}
+                      {c.status === 'redeemed' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                          <CheckCircle className="h-3 w-3" />Redeemed
+                        </span>
+                      )}
+                      {c.status === 'expired' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-muted/30 text-muted-foreground border border-border">
+                          <XCircle className="h-3 w-3" />Expired
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground text-xs">
+                      {c.redeemed_at
+                        ? new Date(c.redeemed_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        : <span className="text-muted-foreground/40">—</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </GlassCard>
     </div>
   );
 }
