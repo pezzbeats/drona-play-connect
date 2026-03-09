@@ -1,53 +1,43 @@
 
-## Root Cause — Found
+## Fix: WhatsApp Deep Link Opens Specific Contact Directly
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+### Problem
+Two issues in `src/pages/admin/AdminCoupons.tsx`:
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+1. **Generated coupons section** (fresh batch): The WhatsApp button calls `shareOne()` which **first tries `navigator.share`** — on mobile this opens the generic OS share sheet, not WhatsApp directly. Only if `navigator.share` fails does it fall through to `wa.me`. The `navigator.share` path never opens the specific contact number.
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+2. **"All Coupons" management table**: Has **no WhatsApp button at all** — zero action column. Admin can't send to existing coupon holders from this table.
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
-```
+### Fix
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+**1. Split the WhatsApp button from the generic share button** in the generated coupons card (lines 814–829):
+- Keep the `Share2` icon button for `navigator.share` (generic share)  
+- Make the green **WhatsApp button always go directly to `wa.me/91{mobile}?text={message}`** — no `navigator.share` interception
+- This guarantees it opens the contact chat in WhatsApp immediately
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+**2. Add a WhatsApp action column to the management table** (after line 906 for the `<th>` and after line 944 for the `<td>`):
+- Add an "Actions" column header
+- In each row, add a green WhatsApp button that opens `https://wa.me/91{c.customer_mobile}?text={encodedMessage}` using the coupon's stored data (name, code, discount_text)
+- The pre-filled message uses the coupon code, discount, and a standard greeting
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
-
-## Changes
-
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
+### New `whatsappDirect` helper (replaces `shareOne` for WA):
 ```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
+const openWhatsApp = (mobile: string, encodedText: string) => {
+  window.open(`https://wa.me/91${mobile}?text=${encodedText}`, '_blank');
+};
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+### Management table WhatsApp message helper:
+```ts
+const dbCouponWhatsappText = (c: DbCoupon) =>
+  encodeURIComponent(
+    `🏆 Congratulations, ${c.customer_name}!\n\n` +
+    `Your exclusive Victory Coupon from Hotel Drona Palace:\n\n` +
+    `🎟️ Code: ${c.code}\n💰 ${c.discount_text}\n` +
+    (c.expiry_date ? `📅 Valid until: ${new Date(c.expiry_date).toLocaleDateString('en-IN')}\n` : '') +
+    `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
+  );
+```
 
-## Why this is the correct fix
-
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
-
-## Files Changed
-| File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+### Files changed
+- `src/pages/admin/AdminCoupons.tsx` only
