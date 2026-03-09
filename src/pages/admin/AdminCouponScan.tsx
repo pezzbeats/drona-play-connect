@@ -46,6 +46,15 @@ interface CouponRecord {
   created_at: string;
 }
 
+interface RedemptionHistoryEntry {
+  id: string;
+  code: string;
+  customer_name: string;
+  customer_mobile: string;
+  discount_text: string;
+  redeemed_at: string;
+}
+
 type LookupState = 'idle' | 'loading' | 'found_active' | 'found_redeemed' | 'found_expired' | 'not_found' | 'redeeming' | 'redeemed_success';
 
 // ── component ─────────────────────────────────────────────────────────────────
