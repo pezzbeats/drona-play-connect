@@ -488,8 +488,8 @@ export default function AdminCoupons() {
   const whatsappText = (coupon: GeneratedCoupon) =>
     encodeURIComponent(
       `🏆 Congratulations, ${coupon.row.name}!\n\n` +
-      `India won the T20 World Cup Final vs New Zealand 🎉\n\n` +
-      `As a valued guest of Hotel Drona Palace who attended the Final Night, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
+      `${subtitleText} 🎉\n\n` +
+      `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
       `🎟️ Your Coupon Code: ${coupon.code}\n` +
       `💰 Discount: ${discountText}\n` +
       (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
