@@ -347,6 +347,7 @@ export default function AdminCoupons() {
   const { get: getConfig } = useSiteConfig();
   const subtitleText = getConfig('coupon_event_subtitle', 'T20 World Cup Final  ·  India vs New Zealand');
   const eventNightLabel = getConfig('coupon_event_night_label', 'T20 World Cup Final Night');
+  const winHeadline = getConfig('coupon_win_headline', 'INDIA WON!');
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('500');
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
