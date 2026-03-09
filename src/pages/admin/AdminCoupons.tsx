@@ -441,16 +441,68 @@ export default function AdminCoupons() {
         <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-400" /> Coupon Settings
         </h2>
+
+        {/* Discount type toggle */}
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Discount Type</Label>
+          <div className="flex rounded-lg border border-border overflow-hidden w-fit">
+            <button
+              type="button"
+              onClick={() => setDiscountType('flat')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${discountType === 'flat' ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              Flat ₹
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiscountType('percent')}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-l border-border ${discountType === 'percent' ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              Percentage %
+            </button>
+          </div>
+        </div>
+
+        {/* Amount input */}
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1 space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Discount Text (shown on coupon)</Label>
-            <Input
-              value={discountText}
-              onChange={e => setDiscountText(e.target.value)}
-              placeholder="e.g. ₹500 Off, 20% Off, Complimentary Breakfast"
-              className="font-medium"
-            />
+            <Label className="text-xs text-muted-foreground">
+              {discountType === 'flat' ? 'Amount (₹)' : 'Percentage (%)'}
+            </Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">
+                {discountType === 'flat' ? '₹' : '%'}
+              </span>
+              <Input
+                type="number"
+                min={1}
+                max={discountType === 'percent' ? 100 : undefined}
+                value={discountValue}
+                onChange={e => setDiscountValue(e.target.value)}
+                className="pl-8 font-medium"
+                placeholder={discountType === 'flat' ? '500' : '20'}
+              />
+            </div>
           </div>
+
+          {/* Live preview */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Preview on coupon</Label>
+            <div className="h-10 flex items-center px-4 rounded-lg border border-amber-500/30 bg-amber-500/10">
+              <span className="text-amber-400 font-bold text-sm font-mono">{discountText}</span>
+            </div>
+          </div>
+
+          <Button
+            onClick={saveSettings}
+            size="sm"
+            className="flex items-center gap-2 whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <CheckCircle className="h-4 w-4" /> Save Settings
+          </Button>
+        </div>
+
+        <div className="pt-1">
           <Button variant="outline" size="sm" onClick={downloadTemplate} className="flex items-center gap-2 whitespace-nowrap">
             <FileText className="h-4 w-4" /> Download CSV Template
           </Button>
