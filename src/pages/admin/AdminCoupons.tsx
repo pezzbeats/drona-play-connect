@@ -385,7 +385,7 @@ export default function AdminCoupons() {
       .select('id,code,customer_name,customer_mobile,discount_text,expiry_date,status,redeemed_at,created_at')
       .order('created_at', { ascending: false })
       .limit(500);
-    if (!error && data) setDbCoupons(data as DbCoupon[]);
+    if (!error && data) setDbCoupons(data as unknown as DbCoupon[]);
     setDbLoading(false);
   }, []);
 
