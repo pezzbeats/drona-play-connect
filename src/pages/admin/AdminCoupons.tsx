@@ -684,6 +684,42 @@ export default function AdminCoupons() {
 
   const validCount = rows.filter(r => r.valid).length;
 
+  // ── Bulk WhatsApp send state ───────────────────────────────────────────────
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkIndex, setBulkIndex] = useState(0);
+  const bulkAbortRef = useRef(false);
+
+  const sendAllViaWhatsApp = useCallback(async () => {
+    if (!coupons.length) return;
+    setBulkSending(true);
+    bulkAbortRef.current = false;
+    setBulkIndex(0);
+
+    for (let i = 0; i < coupons.length; i++) {
+      if (bulkAbortRef.current) break;
+      setBulkIndex(i + 1);
+      const c = coupons[i];
+      const filename = `WC25-${c.row.name.replace(/\s+/g, '-')}-${c.code}.png`;
+      await sendViaWhatsAppBrowser(c.row.mobile, c.blob, filename, whatsappText(c));
+      if (i < coupons.length - 1) {
+        await new Promise(res => setTimeout(res, 3000));
+      }
+    }
+
+    setBulkSending(false);
+    setBulkIndex(0);
+    if (!bulkAbortRef.current) {
+      toast({ title: `✅ Bulk send complete`, description: `${coupons.length} coupons sent via WhatsApp` });
+    }
+  }, [coupons, sendViaWhatsAppBrowser, whatsappText, toast]);
+
+  const stopBulkSend = useCallback(() => {
+    bulkAbortRef.current = true;
+    setBulkSending(false);
+    setBulkIndex(0);
+    toast({ title: '⏹ Bulk send stopped', description: 'Remaining coupons were not sent.' });
+  }, [toast]);
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
