@@ -71,6 +71,45 @@ export type Database = {
         }
         Relationships: []
       }
+      coupons: {
+        Row: {
+          code: string
+          created_at: string
+          customer_mobile: string
+          customer_name: string
+          discount_text: string
+          expiry_date: string | null
+          id: string
+          redeemed_at: string | null
+          redeemed_by_admin_id: string | null
+          status: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          customer_mobile: string
+          customer_name: string
+          discount_text: string
+          expiry_date?: string | null
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by_admin_id?: string | null
+          status?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          customer_mobile?: string
+          customer_name?: string
+          discount_text?: string
+          expiry_date?: string | null
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by_admin_id?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       deliveries: {
         Row: {
           ball_no: number
