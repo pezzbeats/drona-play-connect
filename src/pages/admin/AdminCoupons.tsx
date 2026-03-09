@@ -994,14 +994,27 @@ export default function AdminCoupons() {
                       }
                     </td>
                     <td className="px-3 py-2">
-                      <button
-                        onClick={() => openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))}
-                        title={`Send to +91 ${c.customer_mobile} on WhatsApp`}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        Send
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => regenerateAndShare(c)}
+                          disabled={sharingId === c.id}
+                          title="Regenerate coupon PNG and share via WhatsApp (image + text)"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-60 disabled:cursor-wait"
+                        >
+                          {sharingId === c.id
+                            ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            : <Share2 className="h-3.5 w-3.5" />
+                          }
+                          {sharingId === c.id ? 'Building…' : 'Share Image'}
+                        </button>
+                        <button
+                          onClick={() => openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))}
+                          title={`Open +91${c.customer_mobile} directly in WhatsApp`}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium border border-green-700/50 text-green-400 hover:bg-green-900/20 transition-colors"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
