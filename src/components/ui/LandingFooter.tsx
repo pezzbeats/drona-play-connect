@@ -77,24 +77,25 @@ export const LandingFooter: React.FC = () => {
 
           {/* Col 4 — Legal Pages */}
           <div>
-            <h4 className="font-display font-bold text-sm text-foreground mb-3 uppercase tracking-wider">
-              Policies
+            <h4 className="font-display font-bold text-sm text-foreground mb-3 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-primary/70" />
+              Legal &amp; Policies
             </h4>
             <nav className="space-y-2 text-xs">
               {[
                 { to: '/privacy', label: 'Privacy Policy' },
                 { to: '/terms', label: 'Terms & Conditions' },
                 { to: '/refund-policy', label: 'Refund & Cancellation' },
-                { to: '/shipping', label: 'Shipping / Delivery Policy' },
+                { to: '/shipping', label: 'Shipping / Delivery' },
                 { to: '/pricing', label: 'Pricing Policy' },
                 { to: '/contact', label: 'Contact Us' },
-                { to: '/event-terms', label: 'Event Participation Terms' },
-                { to: '/disclaimer', label: 'Disclaimer & Fair Use' },
+                { to: '/event-terms', label: 'Event Terms' },
+                { to: '/disclaimer', label: 'Disclaimer' },
               ].map(({ to, label }) => (
                 <Link
                   key={to}
                   to={to}
-                  className="block text-muted-foreground hover:text-primary transition-colors py-0.5"
+                  className="block text-muted-foreground hover:text-primary transition-colors py-0.5 hover:underline"
                 >
                   {label}
                 </Link>

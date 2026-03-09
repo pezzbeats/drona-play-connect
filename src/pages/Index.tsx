@@ -691,6 +691,31 @@ export default function IndexPage() {
         </p>
       </div>
 
+      {/* ─── LEGAL PAGES STRIP ─── */}
+      <div className="relative z-10 border-t border-border/30 bg-background/40 backdrop-blur-sm py-4 px-4">
+        <p className="text-center text-[10px] text-muted-foreground/50 uppercase tracking-widest mb-3 font-display">Legal &amp; Compliance</p>
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 max-w-2xl mx-auto">
+          {[
+            { to: '/privacy', label: 'Privacy Policy' },
+            { to: '/terms', label: 'Terms & Conditions' },
+            { to: '/refund-policy', label: 'Refund & Cancellation' },
+            { to: '/shipping', label: 'Shipping Policy' },
+            { to: '/pricing', label: 'Pricing Policy' },
+            { to: '/contact', label: 'Contact Us' },
+            { to: '/event-terms', label: 'Event Terms' },
+            { to: '/disclaimer', label: 'Disclaimer' },
+          ].map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className="text-[11px] text-muted-foreground hover:text-primary transition-colors underline-offset-2 hover:underline"
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
       {/* ─── PREMIUM FOOTER ─── */}
       <LandingFooter />
 
