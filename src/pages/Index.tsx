@@ -418,10 +418,22 @@ export default function IndexPage() {
             >
               {/* Status + type badges */}
               <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-success/15 border border-success/30 rounded-full px-3 py-1">
-                  <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                  <span className="text-xs font-bold text-success uppercase tracking-wider">Registrations Open</span>
-                </div>
+                {match.status === 'ended' ? (
+                  <div className="flex items-center gap-1.5 bg-secondary/15 border border-secondary/30 rounded-full px-3 py-1">
+                    <Trophy className="h-3 w-3 text-secondary" />
+                    <span className="text-xs font-bold text-secondary uppercase tracking-wider">Match Ended</span>
+                  </div>
+                ) : match.status === 'live' ? (
+                  <div className="flex items-center gap-1.5 bg-success/15 border border-success/30 rounded-full px-3 py-1">
+                    <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                    <span className="text-xs font-bold text-success uppercase tracking-wider">Live Now</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 bg-success/15 border border-success/30 rounded-full px-3 py-1">
+                    <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                    <span className="text-xs font-bold text-success uppercase tracking-wider">Registrations Open</span>
+                  </div>
+                )}
                 <div className="bg-secondary/15 border border-secondary/30 rounded-full px-3 py-1">
                   <span className="text-xs font-bold text-secondary uppercase tracking-wider">
                     {MATCH_TYPE_LABELS[match.match_type] ?? match.match_type.replace('_', ' ')}
