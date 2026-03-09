@@ -1,50 +1,53 @@
 
-## Add "IPL Fan Night — 28 March 2026" teaser header
+## Root Cause — Found
 
-**Goal**: Show a prominent announcement banner below the hero section telling users to get ready for IPL Fan Night starting 28 March 2026, with registrations opening soon.
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-**Two changes in `src/pages/Index.tsx`:**
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-### 1. Insert teaser banner between hero and match section (line 398)
-Add a glowing announcement card right after the hero closes (after line 397), always visible regardless of match state:
-
-```tsx
-{/* ─── IPL FAN NIGHT TEASER ─── */}
-<div className="mb-6 animate-slide-up" style={{ animationDelay: '0.04s' }}>
-  <div className="relative overflow-hidden rounded-2xl border border-secondary/40 p-5 text-center"
-    style={{
-      background: 'linear-gradient(135deg, hsl(355 25% 7%), hsl(140 30% 7%), hsl(355 20% 8%))',
-      boxShadow: '0 0 40px hsl(38 75% 52% / 0.2), 0 0 0 1px hsl(38 60% 52% / 0.15)',
-    }}>
-    {/* shimmer bar top */}
-    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary via-secondary to-primary" />
-    <div className="text-3xl mb-2">🏆</div>
-    <p className="section-title mb-1">Coming Soon</p>
-    <h2 className="font-display font-bold gradient-text-accent mb-1"
-      style={{ fontSize: 'clamp(1.4rem, 6vw, 2rem)' }}>
-      IPL Fan Night 2026
-    </h2>
-    <p className="text-foreground/80 text-sm font-medium mb-3">
-      Get ready! Starting from <span className="text-secondary font-bold">28 March 2026</span>
-    </p>
-    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-secondary/30 bg-secondary/10">
-      <div className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-      <span className="text-secondary text-xs font-bold uppercase tracking-widest">Registrations Opening Soon</span>
-    </div>
-  </div>
-</div>
-```
-
-### 2. Update "Coming Soon" card copy (lines 630-632)
-Update the generic copy to specifically mention IPL Fan Night and March 28:
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
 ```tsx
-<h2 className="font-display text-2xl font-bold gradient-text mb-2">IPL Fan Night 2026 — Coming Soon</h2>
-<p className="text-muted-foreground text-sm mb-6">
-  Get ready for the biggest cricket celebration! IPL Fan Night starts from{' '}
-  <span className="text-secondary font-semibold">28 March 2026</span>.
-  Registrations will open soon — stay tuned!
-</p>
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
 ```
 
-**Result**: Every visitor sees the IPL teaser prominently below the hero, and the "no match" card also reflects the specific event details.
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
+```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
