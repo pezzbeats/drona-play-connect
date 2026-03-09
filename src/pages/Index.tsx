@@ -800,18 +800,20 @@ export default function IndexPage() {
                   </button>
                 </Link>
               )}
-              {match && (
-                <Link to="/ticket" className="flex-1">
-                  <button className="w-full h-12 bg-success text-success-foreground rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 shadow-[0_0_16px_hsl(142_70%_45%/0.4)] hover:opacity-90 active:scale-[0.98] transition-all duration-200">
-                    My Passes <ChevronRight className="h-4 w-4" />
-                  </button>
-                </Link>
+              {match && match.status !== 'ended' && (
+                <>
+                  <Link to="/ticket" className="flex-1">
+                    <button className="w-full h-12 bg-success text-success-foreground rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 shadow-[0_0_16px_hsl(142_70%_45%/0.4)] hover:opacity-90 active:scale-[0.98] transition-all duration-200">
+                      My Passes <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </Link>
+                  <Link to="/play" className="flex-1">
+                    <button className="w-full h-12 bg-primary/20 border border-primary/40 text-primary rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 hover:bg-primary/30 active:scale-[0.98] transition-all duration-200">
+                      🎮 Play
+                    </button>
+                  </Link>
+                </>
               )}
-              <Link to="/play" className="flex-1">
-                <button className="w-full h-12 bg-primary/20 border border-primary/40 text-primary rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 hover:bg-primary/30 active:scale-[0.98] transition-all duration-200">
-                  🎮 Play
-                </button>
-              </Link>
               <button
                 onClick={() => { setBarDismissed(true); sessionStorage.setItem('barDismissed', '1'); }}
                 aria-label="Dismiss"
