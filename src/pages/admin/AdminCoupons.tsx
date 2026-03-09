@@ -321,9 +321,20 @@ export default function AdminCoupons() {
   const [fontReady, setFontReady] = useState(false);
   const logoRef = useRef<HTMLImageElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const discountText = discountType === 'flat' ? `₹${discountValue} Off` : `${discountValue}% Off`;
   const expiryStr = expiryDate ? format(expiryDate, 'dd/MM/yyyy') : '';
+
+  // Live preview — re-render whenever settings change
+  const renderPreview = useCallback(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas || !logoRef.current || !fontReady) return;
+    const previewRow: AttendeeRow = { name: 'Guest Name', mobile: '9876543210', valid: true };
+    drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr);
+  }, [discountText, expiryStr, fontReady]);
+
+  useEffect(() => { renderPreview(); }, [renderPreview]);
 
   // Load saved discount settings from localStorage
   useEffect(() => {
