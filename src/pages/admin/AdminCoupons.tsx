@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2, CalendarIcon, Search, RefreshCw, Filter } from 'lucide-react';
+import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2, CalendarIcon, Search, RefreshCw, Filter, UserPlus, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
