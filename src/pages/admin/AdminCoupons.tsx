@@ -54,14 +54,14 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-async function buildCouponCanvas(
+function drawToCanvas(
+  canvas: HTMLCanvasElement,
   row: AttendeeRow,
   discountText: string,
   code: string,
   logoImg: HTMLImageElement,
   expiryStr: string,
-): Promise<Blob> {
-  const canvas = document.createElement('canvas');
+): void {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -276,7 +276,17 @@ async function buildCouponCanvas(
   ctx.font = '300 12px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.fillText('One-time use only  ·  Non-transferable  ·  Subject to availability', W / 2, 1010);
+}
 
+async function buildCouponCanvas(
+  row: AttendeeRow,
+  discountText: string,
+  code: string,
+  logoImg: HTMLImageElement,
+  expiryStr: string,
+): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
   });
@@ -311,9 +321,20 @@ export default function AdminCoupons() {
   const [fontReady, setFontReady] = useState(false);
   const logoRef = useRef<HTMLImageElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const discountText = discountType === 'flat' ? `₹${discountValue} Off` : `${discountValue}% Off`;
   const expiryStr = expiryDate ? format(expiryDate, 'dd/MM/yyyy') : '';
+
+  // Live preview — re-render whenever settings change
+  const renderPreview = useCallback(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas || !logoRef.current || !fontReady) return;
+    const previewRow: AttendeeRow = { name: 'Guest Name', mobile: '9876543210', valid: true };
+    drawToCanvas(canvas, previewRow, discountText, 'WC25-3210-PREV', logoRef.current, expiryStr);
+  }, [discountText, expiryStr, fontReady]);
+
+  useEffect(() => { renderPreview(); }, [renderPreview]);
 
   // Load saved discount settings from localStorage
   useEffect(() => {
@@ -581,6 +602,34 @@ export default function AdminCoupons() {
             <FileText className="h-4 w-4" /> Download CSV Template
           </Button>
         </div>
+      </GlassCard>
+
+      {/* Live Coupon Preview */}
+      <GlassCard className="p-5 space-y-4">
+        <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-amber-400" /> Coupon Preview
+          <span className="ml-auto text-xs text-muted-foreground font-normal normal-case tracking-normal">
+            live · updates as you change settings
+          </span>
+        </h2>
+        <div className="flex justify-center">
+          <div className="relative overflow-hidden rounded-xl border border-border/40 shadow-2xl">
+            <canvas
+              ref={previewCanvasRef}
+              width={W}
+              height={H}
+              style={{ width: '375px', height: '525px', display: 'block' }}
+            />
+            {!fontReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-card/80 backdrop-blur-sm rounded-xl">
+                <p className="text-sm text-muted-foreground animate-pulse">Loading fonts…</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          Showing sample data — actual coupons will have each customer's name & mobile
+        </p>
       </GlassCard>
 
       {/* Upload card */}
