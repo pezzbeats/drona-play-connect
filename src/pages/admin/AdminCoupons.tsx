@@ -524,7 +524,8 @@ export default function AdminCoupons() {
     setCoupons(results);
     setGenerating(false);
     toast({ title: `✅ ${results.length} coupons generated!`, description: 'Codes saved — ready to scan & redeem' });
-  }, [rows, discountText, expiryStr, expiryDate, toast]);
+    fetchDbCoupons(); // refresh the management table
+  }, [rows, discountText, expiryStr, expiryDate, toast, subtitleText, eventNightLabel, winHeadline, fetchDbCoupons]);
 
   const downloadOne = (coupon: GeneratedCoupon) => {
     const a = document.createElement('a');
