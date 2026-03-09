@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Trophy, Users, ScanLine, ShoppingBag,
   BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio, Star,
   BarChart2, Activity, HeartPulse, ShieldCheck, FileText, CreditCard, ListChecks,
-  FlaskConical,
+  FlaskConical, Gift,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
   { icon: FileText,        label: 'Site Content',   to: '/admin/site-config',   minRole: 'operator' },
   { icon: CreditCard,      label: 'Payments',       to: '/admin/payments',      minRole: 'operator' },
   { icon: FlaskConical,    label: 'Trial Game',     to: '/admin/trial-game',    minRole: 'operator' },
+  { icon: Gift,            label: 'Victory Coupons',to: '/admin/coupons',       minRole: 'operator' },
 ];
 
 interface AdminSidebarProps {
