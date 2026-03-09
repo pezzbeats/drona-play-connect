@@ -684,6 +684,42 @@ export default function AdminCoupons() {
 
   const validCount = rows.filter(r => r.valid).length;
 
+  // ── Bulk WhatsApp send state ───────────────────────────────────────────────
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkIndex, setBulkIndex] = useState(0);
+  const bulkAbortRef = useRef(false);
+
+  const sendAllViaWhatsApp = useCallback(async () => {
+    if (!coupons.length) return;
+    setBulkSending(true);
+    bulkAbortRef.current = false;
+    setBulkIndex(0);
+
+    for (let i = 0; i < coupons.length; i++) {
+      if (bulkAbortRef.current) break;
+      setBulkIndex(i + 1);
+      const c = coupons[i];
+      const filename = `WC25-${c.row.name.replace(/\s+/g, '-')}-${c.code}.png`;
+      await sendViaWhatsAppBrowser(c.row.mobile, c.blob, filename, whatsappText(c));
+      if (i < coupons.length - 1) {
+        await new Promise(res => setTimeout(res, 3000));
+      }
+    }
+
+    setBulkSending(false);
+    setBulkIndex(0);
+    if (!bulkAbortRef.current) {
+      toast({ title: `✅ Bulk send complete`, description: `${coupons.length} coupons sent via WhatsApp` });
+    }
+  }, [coupons, sendViaWhatsAppBrowser, whatsappText, toast]);
+
+  const stopBulkSend = useCallback(() => {
+    bulkAbortRef.current = true;
+    setBulkSending(false);
+    setBulkIndex(0);
+    toast({ title: '⏹ Bulk send stopped', description: 'Remaining coupons were not sent.' });
+  }, [toast]);
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -1012,14 +1048,50 @@ export default function AdminCoupons() {
       {/* Generated coupons */}
       {coupons.length > 0 && (
         <GlassCard className="p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
-              <Gift className="h-4 w-4 text-amber-400" /> {coupons.length} Coupons Ready
-            </h2>
-            <Button variant="outline" size="sm" onClick={downloadAll} className="flex items-center gap-2">
-              <Download className="h-4 w-4" /> Download All
-            </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
+                <Gift className="h-4 w-4 text-amber-400" /> {coupons.length} Coupons Ready
+              </h2>
+              {bulkSending && (
+                <span className="text-xs text-green-400 font-medium animate-pulse shrink-0">
+                  {bulkIndex}/{coupons.length} sent…
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {bulkSending ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={stopBulkSend}
+                  className="flex items-center gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10"
+                >
+                  <XCircle className="h-4 w-4" /> Stop
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={sendAllViaWhatsApp}
+                  className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 text-white border-0"
+                  title="Send every coupon one-by-one with a 3s gap between each"
+                >
+                  <MessageCircle className="h-4 w-4" /> Send All via WhatsApp
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={downloadAll} className="flex items-center gap-2">
+                <Download className="h-4 w-4" /> Download All
+              </Button>
+            </div>
           </div>
+          {bulkSending && (
+            <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-green-500 rounded-full transition-all duration-300"
+                style={{ width: `${(bulkIndex / coupons.length) * 100}%` }}
+              />
+            </div>
+          )}
           <div className="space-y-3">
             {coupons.map((c, i) => (
               <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl bg-muted/20 border border-border/50">
