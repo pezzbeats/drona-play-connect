@@ -1,11 +1,15 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2 } from 'lucide-react';
+import { Upload, Download, Gift, MessageCircle, FileText, Sparkles, CheckCircle, XCircle, Share2, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import logoSrc from '@/assets/drona-logo-coupon.png';
 
 interface AttendeeRow {
@@ -50,7 +54,13 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-async function buildCouponCanvas(row: AttendeeRow, discountText: string, code: string, logoImg: HTMLImageElement): Promise<Blob> {
+async function buildCouponCanvas(
+  row: AttendeeRow,
+  discountText: string,
+  code: string,
+  logoImg: HTMLImageElement,
+  expiryStr: string,
+): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -135,10 +145,10 @@ async function buildCouponCanvas(row: AttendeeRow, discountText: string, code: s
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.fillText('Congratulations,', W / 2, 290);
 
+  // Customer name
   ctx.font = 'bold 38px "Cinzel", "Georgia", serif';
   ctx.fillStyle = '#FFFFFF';
   const displayName = row.name.toUpperCase();
-  // truncate if too long
   const maxW = W - 100;
   let fontSize = 38;
   ctx.font = `bold ${fontSize}px "Cinzel", "Georgia", serif`;
@@ -148,60 +158,65 @@ async function buildCouponCanvas(row: AttendeeRow, discountText: string, code: s
   }
   ctx.fillText(displayName, W / 2, 338);
 
+  // Customer mobile — below name
+  ctx.font = '400 16px "Cinzel", "Georgia", serif';
+  ctx.fillStyle = 'rgba(245,185,66,0.6)';
+  ctx.fillText(`+91 ${row.mobile}`, W / 2, 364);
+
   // ── Coupon body card ──────────────────────────────────────────────────────────
-  const cardGrad = ctx.createLinearGradient(0, 370, 0, 640);
+  // Shifted down to y=388 to give breathing room after mobile line
+  const cardGrad = ctx.createLinearGradient(0, 388, 0, 660);
   cardGrad.addColorStop(0, 'rgba(245,185,66,0.08)');
   cardGrad.addColorStop(1, 'rgba(200,132,26,0.04)');
   ctx.fillStyle = cardGrad;
-  roundRect(ctx, 40, 370, W - 80, 270, 16);
+  roundRect(ctx, 40, 388, W - 80, 272, 16);
   ctx.fill();
   ctx.strokeStyle = 'rgba(245,185,66,0.25)';
   ctx.lineWidth = 1;
-  roundRect(ctx, 40, 370, W - 80, 270, 16);
+  roundRect(ctx, 40, 388, W - 80, 272, 16);
   ctx.stroke();
 
   // Discount label
   ctx.font = '400 16px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(245,185,66,0.6)';
-  ctx.fillText('YOUR EXCLUSIVE DISCOUNT', W / 2, 405);
+  ctx.fillText('YOUR EXCLUSIVE DISCOUNT', W / 2, 425);
 
   // Discount amount — large gradient text
-  const discGrad = ctx.createLinearGradient(0, 415, 0, 500);
+  const discGrad = ctx.createLinearGradient(0, 435, 0, 510);
   discGrad.addColorStop(0, GOLD3);
   discGrad.addColorStop(0.5, GOLD1);
   discGrad.addColorStop(1, GOLD2);
   ctx.fillStyle = discGrad;
   ctx.font = `bold 62px "Cinzel", "Georgia", serif`;
-  const dw = ctx.measureText(discountText).width;
-  // scale down if too wide
   let dFontSize = 62;
-  while (dw > maxW && dFontSize > 28) {
+  while (ctx.measureText(discountText).width > maxW && dFontSize > 28) {
     dFontSize -= 2;
     ctx.font = `bold ${dFontSize}px "Cinzel", "Georgia", serif`;
   }
-  ctx.fillText(discountText, W / 2, 490);
+  ctx.fillText(discountText, W / 2, 502);
 
   // Coupon code pill
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  roundRect(ctx, 175, 510, 400, 50, 12);
+  roundRect(ctx, 175, 522, 400, 50, 12);
   ctx.fill();
   ctx.strokeStyle = 'rgba(245,185,66,0.4)';
   ctx.lineWidth = 1;
-  roundRect(ctx, 175, 510, 400, 50, 12);
+  roundRect(ctx, 175, 522, 400, 50, 12);
   ctx.stroke();
 
   ctx.font = 'bold 22px "Courier New", monospace';
   ctx.fillStyle = GOLD1;
-  ctx.fillText(code, W / 2, 542);
+  ctx.fillText(code, W / 2, 554);
 
   // Redemption note
   ctx.font = '400 16px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.fillText('Valid on your next visit to Hotel Drona Palace', W / 2, 590);
+  ctx.fillText('Valid on your next visit to Hotel Drona Palace', W / 2, 595);
 
-  ctx.font = '400 13px "Cinzel", "Georgia", serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('Present this coupon at the hotel reception to redeem', W / 2, 615);
+  // Valid until line
+  ctx.font = 'italic 13px "Cinzel", "Georgia", serif';
+  ctx.fillStyle = 'rgba(245,185,66,0.55)';
+  ctx.fillText(expiryStr ? `Valid until ${expiryStr}` : 'No expiry set', W / 2, 620);
 
   // ── Wavy cut perforations ─────────────────────────────────────────────────────
   ctx.strokeStyle = 'rgba(245,185,66,0.2)';
@@ -289,6 +304,7 @@ export default function AdminCoupons() {
   const { toast } = useToast();
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('500');
+  const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
   const [rows, setRows] = useState<AttendeeRow[]>([]);
   const [coupons, setCoupons] = useState<GeneratedCoupon[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -297,22 +313,31 @@ export default function AdminCoupons() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const discountText = discountType === 'flat' ? `₹${discountValue} Off` : `${discountValue}% Off`;
+  const expiryStr = expiryDate ? format(expiryDate, 'dd/MM/yyyy') : '';
 
   // Load saved discount settings from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('drona_coupon_discount');
       if (saved) {
-        const { type, value } = JSON.parse(saved);
+        const { type, value, expiry } = JSON.parse(saved);
         if (type === 'flat' || type === 'percent') setDiscountType(type);
         if (value) setDiscountValue(String(value));
+        if (expiry) setExpiryDate(new Date(expiry));
       }
     } catch { /* ignore */ }
   }, []);
 
   const saveSettings = () => {
-    localStorage.setItem('drona_coupon_discount', JSON.stringify({ type: discountType, value: discountValue }));
-    toast({ title: '✅ Settings saved', description: `Discount set to ${discountText}` });
+    localStorage.setItem('drona_coupon_discount', JSON.stringify({
+      type: discountType,
+      value: discountValue,
+      expiry: expiryDate ? expiryDate.toISOString() : null,
+    }));
+    toast({
+      title: '✅ Settings saved',
+      description: `Discount: ${discountText}${expiryStr ? ` · Valid until ${expiryStr}` : ''}`,
+    });
   };
 
   // Preload font + logo on mount
@@ -323,7 +348,6 @@ export default function AdminCoupons() {
 
     async function loadFont() {
       try {
-        // Load Cinzel from Google Fonts gstatic
         const regular = new FontFace('Cinzel', "url(https://fonts.gstatic.com/s/cinzel/v23/8vIJ7ww63mVu7gtR-kwKxNvkNOjw-tbnTYrvDE5ZdqU.woff2)");
         const bold = new FontFace('Cinzel', "url(https://fonts.gstatic.com/s/cinzel/v23/8vIJ7ww63mVu7gtR-kwKxNvkNOjw-uDnTYrvDE5ZdqU.woff2)", { weight: 'bold' });
         await Promise.all([regular.load(), bold.load()]).then(faces => faces.forEach(f => document.fonts.add(f)));
@@ -370,7 +394,7 @@ export default function AdminCoupons() {
     for (const row of valid) {
       try {
         const code = generateCode(row.mobile);
-        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!);
+        const blob = await buildCouponCanvas(row, discountText, code, logoRef.current!, expiryStr);
         results.push({ row, code, blob, objectUrl: URL.createObjectURL(blob) });
       } catch (err) {
         console.error('Coupon gen error', err);
@@ -379,7 +403,7 @@ export default function AdminCoupons() {
     setCoupons(results);
     setGenerating(false);
     toast({ title: `✅ ${results.length} coupons generated!` });
-  }, [rows, discountText, toast]);
+  }, [rows, discountText, expiryStr, toast]);
 
   const downloadOne = (coupon: GeneratedCoupon) => {
     const a = document.createElement('a');
@@ -398,8 +422,9 @@ export default function AdminCoupons() {
       `India won the T20 World Cup Final vs New Zealand 🎉\n\n` +
       `As a valued guest of Hotel Drona Palace who attended the Final Night, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
       `🎟️ Your Coupon Code: ${coupon.code}\n` +
-      `💰 Discount: ${discountText}\n\n` +
-      `Valid for redemption at Hotel Drona Palace.\n` +
+      `💰 Discount: ${discountText}\n` +
+      (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
+      `\nValid for redemption at Hotel Drona Palace.\n` +
       `Present this coupon at the hotel reception.\n\n` +
       `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
     );
@@ -463,7 +488,7 @@ export default function AdminCoupons() {
           </div>
         </div>
 
-        {/* Amount input */}
+        {/* Amount + Expiry row */}
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1 space-y-1.5">
             <Label className="text-xs text-muted-foreground">
@@ -485,11 +510,60 @@ export default function AdminCoupons() {
             </div>
           </div>
 
-          {/* Live preview */}
-          <div className="space-y-1.5">
+          {/* Expiry date picker */}
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Coupon Expiry Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-full justify-start text-left font-normal',
+                    !expiryDate && 'text-muted-foreground',
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {expiryDate ? format(expiryDate, 'dd/MM/yyyy') : 'Pick expiry date'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={expiryDate}
+                  onSelect={setExpiryDate}
+                  initialFocus
+                  disabled={(date) => date < new Date()}
+                  className={cn('p-3 pointer-events-auto')}
+                />
+                {expiryDate && (
+                  <div className="px-3 pb-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-muted-foreground text-xs"
+                      onClick={() => setExpiryDate(undefined)}
+                    >
+                      Clear date
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Live preview + Save */}
+        <div className="flex flex-col sm:flex-row gap-3 items-end">
+          <div className="space-y-1.5 flex-1">
             <Label className="text-xs text-muted-foreground">Preview on coupon</Label>
-            <div className="h-10 flex items-center px-4 rounded-lg border border-amber-500/30 bg-amber-500/10">
+            <div className="h-10 flex items-center gap-3 px-4 rounded-lg border border-amber-500/30 bg-amber-500/10">
               <span className="text-amber-400 font-bold text-sm font-mono">{discountText}</span>
+              {expiryStr && (
+                <>
+                  <span className="text-amber-500/40 text-xs">·</span>
+                  <span className="text-amber-400/70 text-xs italic">Valid until {expiryStr}</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -584,7 +658,7 @@ export default function AdminCoupons() {
                   <p className="font-semibold text-foreground truncate">{c.row.name}</p>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">{c.row.mobile}</p>
                   <p className="text-xs text-amber-400 font-mono mt-1">{c.code}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{discountText}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{discountText}{expiryStr ? ` · Until ${expiryStr}` : ''}</p>
                 </div>
                 <div className="flex sm:flex-col gap-2">
                   <Button size="sm" variant="outline" onClick={() => downloadOne(c)} className="flex items-center gap-1.5 flex-1 sm:flex-none">

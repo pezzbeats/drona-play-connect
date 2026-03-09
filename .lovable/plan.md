@@ -1,74 +1,53 @@
 
-## Plan: Add Name/Mobile + Expiry Date to Coupon PNG
+## Root Cause — Found
 
-### What changes
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-**`src/pages/admin/AdminCoupons.tsx` only** — no other files.
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
----
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-### 1. New state: `expiryDate`
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
+```
+
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+
+## Changes
+
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
+
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
 
 ```ts
-const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
 ```
 
-- Load from `localStorage` alongside existing discount settings (stored as ISO string, re-hydrated to `Date`)
-- Save to `localStorage` when admin clicks "Save Settings"
-- Pass formatted string (`dd/MM/yyyy`) into `buildCouponCanvas`
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
 
----
+## Why this is the correct fix
 
-### 2. UI — date picker in Coupon Settings card
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
 
-Add a new row below the discount type toggle:
-
-```
-Coupon Expiry Date  [ 📅 31/12/2025 ]   ← Shadcn Popover + Calendar
-```
-
-Imports needed: `Calendar`, `Popover/PopoverContent/PopoverTrigger` from shadcn, `format` from `date-fns`, `CalendarIcon` from lucide.
-
----
-
-### 3. Canvas changes (`buildCouponCanvas`)
-
-New signature: `buildCouponCanvas(row, discountText, code, logoImg, expiryStr)`
-
-**Two additions to the canvas layout:**
-
-**A. Customer mobile line** — right below the name (currently at y=338):
-```
-y=360  "+91 XXXXXXXXXX"   font: 400 16px Cinzel, color: rgba(245,185,66,0.6)
-```
-Coupon body card shifts from y=370 → y=388 (18px gap to breathe).
-
-**B. Inside coupon body card** — shift all elements down +18px to fit expiry line:
-- Card rect: y=388, height=272 (ends at y=660 — same dashed line position preserved)
-- "YOUR EXCLUSIVE DISCOUNT": y=425 (was 405, +20)
-- Discount amount: y=502 (was 490, +12)
-- Code pill: y=522–572 (was 510–560, +12)
-- "Valid on your next visit": y=595 (was 590, +5)
-- **NEW** `"Valid until DD/MM/YYYY"` (or `"No expiry set"` if blank): y=620, font 13px italic, color rgba(245,185,66,0.55)
-- Remove "Present this coupon at hotel reception" from card — it already appears in the footer strip at y=875
-
-Dashed perforation stays at y=660. Everything below (logo, hotel name, footer) unchanged.
-
----
-
-### 4. WhatsApp pre-filled message
-
-Add expiry line to the WA text:
-```
-📅 Valid until: DD/MM/YYYY
-```
-
----
-
-### Files to edit
-
+## Files Changed
 | File | Change |
 |---|---|
-| `src/pages/admin/AdminCoupons.tsx` | Add expiry state + date picker UI + canvas mobile/expiry lines |
-
-No DB, no edge functions, no other files.
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
