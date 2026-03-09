@@ -101,7 +101,7 @@ const SECTIONS: Section[] = [
     icon: Star,
     fields: [
       { key: 'coupon_event_subtitle', label: 'Coupon Subtitle Line', placeholder: 'T20 World Cup Final  ·  India vs New Zealand' },
-      { key: 'coupon_event_night_label', label: "Footer "attended the ___" label", placeholder: 'T20 World Cup Final Night' },
+      { key: 'coupon_event_night_label', label: 'Footer \u201cattended the ___\u201d label', placeholder: 'T20 World Cup Final Night' },
     ],
   },
 ];
