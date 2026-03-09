@@ -16,11 +16,11 @@ export const LandingFooter: React.FC = () => {
   const heroTitle = get('hero_title', 'T20 Fan Night');
 
   return (
-    <footer className="relative z-10 border-t border-border/40 mt-2">
-      {/* Top gradient accent line */}
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <footer className="relative z-10 mt-2" style={{ background: 'hsl(var(--card) / 0.6)', borderTop: '1px solid hsl(var(--border) / 0.5)' }}>
+      {/* Top shimmer accent */}
+      <div className="h-px bg-gradient-to-r from-transparent via-primary to-transparent opacity-60" />
 
-      <div className="max-w-5xl mx-auto px-4 py-10">
+      <div className="max-w-5xl mx-auto px-4 pt-10 pb-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
 
           {/* Col 1 — About Organiser */}
@@ -29,23 +29,26 @@ export const LandingFooter: React.FC = () => {
               <span className="text-2xl">🏏</span>
               <span className="font-display font-bold text-lg gradient-text">{heroTitle}</span>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {aboutText}
             </p>
           </div>
 
           {/* Col 2 — Legal Information */}
           <div>
-            <h4 className="font-display font-bold text-sm text-foreground mb-3 uppercase tracking-wider flex items-center gap-1.5">
-              <Building2 className="h-3.5 w-3.5 text-secondary" />
+            <h4 className="font-display font-bold text-sm uppercase tracking-wider flex items-center gap-1.5 mb-4"
+              style={{ color: 'hsl(var(--secondary))' }}>
+              <Building2 className="h-4 w-4" style={{ color: 'hsl(var(--secondary))' }} />
               Legal Info
             </h4>
-            <div className="space-y-1.5 text-xs text-muted-foreground">
-              <p className="text-foreground/80 font-semibold">{companyName}</p>
-              <p>GSTIN: <span className="font-mono text-secondary/80">{gstin}</span></p>
-              <div className="pt-1 flex items-start gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />
-                <address className="not-italic leading-relaxed">
+            <div className="space-y-2 text-sm">
+              <p className="font-bold text-foreground">{companyName}</p>
+              <p className="text-muted-foreground">
+                GSTIN: <span className="font-mono font-semibold" style={{ color: 'hsl(var(--secondary))' }}>{gstin}</span>
+              </p>
+              <div className="pt-1 flex items-start gap-2">
+                <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: 'hsl(var(--primary))' }} />
+                <address className="not-italic text-muted-foreground leading-relaxed text-sm">
                   {address}
                 </address>
               </div>
@@ -54,22 +57,25 @@ export const LandingFooter: React.FC = () => {
 
           {/* Col 3 — Contact */}
           <div>
-            <h4 className="font-display font-bold text-sm text-foreground mb-3 uppercase tracking-wider">
+            <h4 className="font-display font-bold text-sm uppercase tracking-wider mb-4"
+              style={{ color: 'hsl(var(--secondary))' }}>
               Contact
             </h4>
-            <div className="space-y-2.5 text-xs text-muted-foreground">
+            <div className="space-y-3 text-sm">
               <a
                 href={`tel:${phone}`}
-                className="flex items-center gap-2 hover:text-primary transition-colors"
+                className="flex items-center gap-2 transition-colors hover:text-foreground"
+                style={{ color: 'hsl(var(--muted-foreground))' }}
               >
-                <Phone className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                <Phone className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(var(--primary))' }} />
                 <span>+91 {phone.slice(0, 5)} {phone.slice(5)}</span>
               </a>
               <a
                 href={`mailto:${email}`}
-                className="flex items-center gap-2 hover:text-primary transition-colors"
+                className="flex items-center gap-2 transition-colors hover:text-foreground"
+                style={{ color: 'hsl(var(--muted-foreground))' }}
               >
-                <Mail className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                <Mail className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(var(--primary))' }} />
                 <span>{email}</span>
               </a>
             </div>
@@ -77,11 +83,12 @@ export const LandingFooter: React.FC = () => {
 
           {/* Col 4 — Legal Pages */}
           <div>
-            <h4 className="font-display font-bold text-sm text-foreground mb-3 uppercase tracking-wider flex items-center gap-1.5">
-              <span className="inline-block w-2 h-2 rounded-full bg-primary/70" />
+            <h4 className="font-display font-bold text-sm uppercase tracking-wider flex items-center gap-1.5 mb-4"
+              style={{ color: 'hsl(var(--secondary))' }}>
+              <span className="inline-block w-2 h-2 rounded-full" style={{ background: 'hsl(var(--primary))' }} />
               Legal &amp; Policies
             </h4>
-            <nav className="space-y-2 text-xs">
+            <nav className="space-y-2 text-sm">
               {[
                 { to: '/about', label: 'About Us' },
                 { to: '/privacy', label: 'Privacy Policy' },
@@ -96,7 +103,10 @@ export const LandingFooter: React.FC = () => {
                 <Link
                   key={to}
                   to={to}
-                  className="block text-muted-foreground hover:text-primary transition-colors py-0.5 hover:underline"
+                  className="block py-0.5 transition-colors hover:underline"
+                  style={{ color: 'hsl(var(--muted-foreground))' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'hsl(var(--primary))')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'hsl(var(--muted-foreground))')}
                 >
                   {label}
                 </Link>
@@ -106,11 +116,12 @@ export const LandingFooter: React.FC = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="pt-6 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground/60">
+        <div className="pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm"
+          style={{ borderTop: '1px solid hsl(var(--border) / 0.4)', color: 'hsl(var(--muted-foreground))' }}>
           <p>{copyright}</p>
           <p className="text-center">
             Hospitality event by{' '}
-            <span className="text-muted-foreground font-medium">{get('register_header_venue', 'Hotel Drona Palace')}, Kashipur</span>
+            <span className="font-semibold text-foreground">{get('register_header_venue', 'Hotel Drona Palace')}, Kashipur</span>
           </p>
         </div>
       </div>
