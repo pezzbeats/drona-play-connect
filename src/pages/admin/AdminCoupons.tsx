@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import logoSrc from '@/assets/drona-logo-coupon.png';
 import { supabase } from '@/integrations/supabase/client';
 import QRCode from 'qrcode';
+import { useSiteConfig } from '@/hooks/useSiteConfig';
 
 interface AttendeeRow {
   name: string;
