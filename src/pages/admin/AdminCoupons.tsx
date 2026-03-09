@@ -605,6 +605,74 @@ export default function AdminCoupons() {
     }
   };
 
+  // ── Quick Add single coupon state ─────────────────────────────────────────
+  const [singleName, setSingleName] = useState('');
+  const [singleMobile, setSingleMobile] = useState('');
+  const [singleGenerating, setSingleGenerating] = useState(false);
+  const [lastSingle, setLastSingle] = useState<GeneratedCoupon | null>(null);
+  const singleNameRef = useRef<HTMLInputElement>(null);
+
+  const generateAndSendSingle = useCallback(async () => {
+    const trimName = singleName.trim();
+    if (!trimName) {
+      toast({ title: 'Name required', description: 'Please enter the customer name.', variant: 'destructive' });
+      return;
+    }
+    if (!/^\d{10}$/.test(singleMobile.trim())) {
+      toast({ title: 'Invalid mobile', description: 'Enter a 10-digit Indian mobile number.', variant: 'destructive' });
+      return;
+    }
+    if (!logoRef.current) {
+      toast({ title: 'Logo not loaded yet', description: 'Please wait a moment and try again.', variant: 'destructive' });
+      return;
+    }
+    setSingleGenerating(true);
+    try {
+      const row: AttendeeRow = { name: trimName, mobile: singleMobile.trim(), valid: true };
+      const code = generateCode(row.mobile);
+      const blob = await buildCouponCanvas(row, discountText, code, logoRef.current, expiryStr, subtitleText, eventNightLabel, winHeadline);
+      const objectUrl = URL.createObjectURL(blob);
+
+      // Save to DB
+      const { error: dbError } = await supabase.from('coupons' as any).insert({
+        code,
+        customer_name: row.name,
+        customer_mobile: row.mobile,
+        discount_text: discountText,
+        expiry_date: expiryDate ? format(expiryDate, 'yyyy-MM-dd') : null,
+        status: 'active',
+      });
+      if (dbError) console.warn('DB save failed:', dbError.message);
+
+      // Download + open WhatsApp
+      const filename = `WC25-${row.name.replace(/\s+/g, '-')}-${code}.png`;
+      const encodedText = encodeURIComponent(
+        `🏆 Congratulations, ${row.name}!\n\n` +
+        `${subtitleText} 🎉\n\n` +
+        `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
+        `🎟️ Your Coupon Code: ${code}\n` +
+        `💰 Discount: ${discountText}\n` +
+        (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
+        `\nValid for redemption at Hotel Drona Palace.\n` +
+        `Present this coupon at the hotel reception.\n\n` +
+        `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
+      );
+      await sendViaWhatsAppBrowser(row.mobile, blob, filename, encodedText);
+
+      setLastSingle({ row, code, blob, objectUrl });
+      setSingleName('');
+      setSingleMobile('');
+      fetchDbCoupons();
+      // Focus name field for next entry
+      setTimeout(() => singleNameRef.current?.focus(), 100);
+    } catch (err) {
+      console.error('Single coupon error', err);
+      toast({ title: 'Generation failed', description: 'Something went wrong. Please try again.', variant: 'destructive' });
+    } finally {
+      setSingleGenerating(false);
+    }
+  }, [singleName, singleMobile, discountText, expiryStr, expiryDate, subtitleText, eventNightLabel, winHeadline, toast, fetchDbCoupons, sendViaWhatsAppBrowser]);
+
   const validCount = rows.filter(r => r.valid).length;
 
   return (
