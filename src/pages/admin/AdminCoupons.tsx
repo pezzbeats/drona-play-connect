@@ -665,17 +665,7 @@ export default function AdminCoupons() {
 
       // Download + open WhatsApp
       const filename = `WC25-${row.name.replace(/\s+/g, '-')}-${code}.png`;
-      const encodedText = encodeURIComponent(
-        `🏆 Congratulations, ${row.name}!\n\n` +
-        `${subtitleText} 🎉\n\n` +
-        `As a valued guest of Hotel Drona Palace who attended the ${eventNightLabel}, we're delighted to offer you an exclusive discount on your next visit.\n\n` +
-        `🎟️ Your Coupon Code: ${code}\n` +
-        `💰 Discount: ${discountText}\n` +
-        (expiryStr ? `📅 Valid until: ${expiryStr}\n` : '') +
-        `\nValid for redemption at Hotel Drona Palace.\n` +
-        `Present this coupon at the hotel reception.\n\n` +
-        `— Hotel Drona Palace\n(A Unit of SR Leisure Inn)\ncricket.dronapalace.com`
-      );
+      const encodedText = encodeURIComponent(applyTemplate(row.name, code, discountText, expiryStr, subtitleText, eventNightLabel));
       await sendViaWhatsAppBrowser(row.mobile, blob, filename, encodedText);
 
       setLastSingle({ row, code, blob, objectUrl });
