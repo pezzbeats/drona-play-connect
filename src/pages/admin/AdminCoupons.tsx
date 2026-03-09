@@ -826,14 +826,14 @@ export default function AdminCoupons() {
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => shareOne(c)}
+                    onClick={() => openWhatsApp(c.row.mobile, whatsappText(c))}
                     className="flex items-center gap-1.5 flex-1 sm:flex-none bg-green-600 hover:bg-green-500 text-white border-0"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
                     WhatsApp
                   </Button>
                   {navigator.share && (
-                    <Button size="sm" variant="ghost" onClick={() => shareOne(c)} className="flex items-center gap-1.5 flex-1 sm:flex-none">
+                    <Button size="sm" variant="ghost" onClick={() => shareOne(c)} className="flex items-center gap-1.5 flex-1 sm:flex-none" title="Share image">
                       <Share2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
