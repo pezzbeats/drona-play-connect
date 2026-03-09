@@ -1,53 +1,46 @@
 
-## Root Cause — Found
+## Fix: Hide "View Your Match Passes" and "Already Checked In?" when match is ended
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+**Root cause**: The old T20 World Cup match record has `is_active_for_registration = true` AND `status = ended`. The code still fetches it, so:
+- The "View Your Match Passes" CTA renders because `match.status === 'ended'` is truthy
+- The `GameLoginCard` component renders unconditionally — no match/status check at all
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+**Fix in `src/pages/Index.tsx` — two changes:**
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+### 1. Hide "View Your Match Passes" CTA for ended matches (lines 528–557)
+The entire primary CTA block is inside `match && (...)`. For ended matches, instead of showing the "View Your Match Passes" button, just show nothing (or only the Results button without the passes button — the user's image confirms both should be gone). Since the IPL teaser is now the focus, **remove** the ended-match CTA block entirely, so that section is only shown for non-ended active matches.
 
 ```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
-```
-
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
-
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
-
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
-
-## Changes
-
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
-
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
-
-```ts
 // Before:
-const [loading, setLoading] = useState(!cache);
+{match.status === 'ended' ? (
+  <>  <-- shows View Passes + See Results
+  </>
+) : (
+  <>  <-- shows Reserve + Already Booked
+  </>
+)}
 
 // After:
-const [loading, setLoading] = useState(false);
+{match.status !== 'ended' && (
+  <>  <-- only shows Reserve + Already Booked when match is upcoming/live
+  </>
+)}
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+### 2. Hide `GameLoginCard` when match is ended (line 560)
+Wrap the `<GameLoginCard />` call so it only renders when match exists AND status is not ended:
 
-## Why this is the correct fix
+```tsx
+// Before:
+<GameLoginCard />
 
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+// After:
+{match && match.status !== 'ended' && <GameLoginCard />}
+```
 
-## Files Changed
-| File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+**Result**:
+- Ended match → both "View Your Match Passes" CTA and "Already Checked In?" card are hidden
+- Active match (upcoming/live) → both show as normal
+- No match → both hidden (no match object)
+
+**File changed**: `src/pages/Index.tsx` only
