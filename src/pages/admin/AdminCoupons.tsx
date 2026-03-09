@@ -860,17 +860,23 @@ export default function AdminCoupons() {
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => openWhatsApp(c.row.mobile, whatsappText(c))}
+                    onClick={() => shareOne(c)}
                     className="flex items-center gap-1.5 flex-1 sm:flex-none bg-green-600 hover:bg-green-500 text-white border-0"
+                    title="Share coupon image + message via WhatsApp"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    Share Image
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openWhatsApp(c.row.mobile, whatsappText(c))}
+                    className="flex items-center gap-1.5 flex-1 sm:flex-none text-green-400 border-green-700/50 hover:bg-green-900/20"
+                    title="Open this contact directly in WhatsApp (text only)"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
-                    WhatsApp
+                    Open Chat
                   </Button>
-                  {navigator.share && (
-                    <Button size="sm" variant="ghost" onClick={() => shareOne(c)} className="flex items-center gap-1.5 flex-1 sm:flex-none" title="Share image">
-                      <Share2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}
