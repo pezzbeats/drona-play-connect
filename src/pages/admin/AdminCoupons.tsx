@@ -526,7 +526,7 @@ export default function AdminCoupons() {
         </div>
         <div>
           <h1 className="font-display text-xl font-bold text-foreground">Victory Coupon Generator</h1>
-          <p className="text-sm text-muted-foreground">T20 World Cup Final — India 🏆 vs New Zealand</p>
+          <p className="text-sm text-muted-foreground">{subtitleText}</p>
         </div>
       </div>
 
