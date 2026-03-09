@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import {
   ScanLine, Camera, X, QrCode, CheckCircle2, XCircle, Clock, User,
-  Smartphone, Gift, Loader2, Zap, ZapOff, RotateCcw,
+  Smartphone, Gift, Loader2, Zap, ZapOff, RotateCcw, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
