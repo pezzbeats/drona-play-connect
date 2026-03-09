@@ -569,6 +569,56 @@ export default function AdminCouponScan() {
           <span className="text-sm text-muted-foreground">Marking as redeemed…</span>
         </GlassCard>
       )}
+
+      {/* Session History Panel */}
+      {sessionHistory.length > 0 && (
+        <GlassCard className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm text-foreground">Session History</span>
+            </div>
+            <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-green-500/20 text-green-400 text-xs font-bold border border-green-500/30">
+              {sessionHistory.length}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {sessionHistory.map((entry, idx) => (
+              <div
+                key={entry.id + entry.redeemed_at}
+                className="flex items-center gap-3 rounded-lg bg-muted/20 border border-border/40 border-l-2 border-l-green-500/40 px-3 py-2.5"
+              >
+                <span className="text-xs font-bold text-muted-foreground w-5 shrink-0 text-center">
+                  #{idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{entry.customer_name}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Smartphone className="h-3 w-3 shrink-0" />
+                    +91 {entry.customer_mobile}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="font-mono text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">
+                    {entry.code}
+                  </span>
+                  <span className="text-xs font-semibold text-amber-400">
+                    {entry.discount_text}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                  {format(new Date(entry.redeemed_at), 'h:mm a')}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground/60">
+            Clears on page refresh · showing last {sessionHistory.length} of max 10
+          </p>
+        </GlassCard>
+      )}
     </div>
   );
 }
