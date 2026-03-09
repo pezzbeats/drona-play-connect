@@ -567,9 +567,9 @@ export default function AdminCoupons() {
 
     // 3. Clear instruction
     toast({
-      title: '📥 Coupon PNG downloaded!',
-      description: 'Click the 📎 paperclip in WhatsApp to attach and send the image.',
-      duration: 8000,
+      title: `📥 "${filename}" saved to Downloads`,
+      description: '1️⃣ Image downloaded  →  2️⃣ WhatsApp chat opened  →  3️⃣ Click 📎 in WhatsApp, find the file and send.',
+      duration: 10000,
     });
   };
 
