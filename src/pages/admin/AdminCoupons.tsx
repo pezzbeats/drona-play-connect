@@ -861,9 +861,9 @@ export default function AdminCoupons() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => openWhatsApp(c.row.mobile, whatsappText(c))}
+                    onClick={() => window.open(`https://web.whatsapp.com/send?phone=91${c.row.mobile}&text=${whatsappText(c)}`, '_blank')}
                     className="flex items-center gap-1.5 flex-1 sm:flex-none text-green-400 border-green-700/50 hover:bg-green-900/20"
-                    title="Open this contact directly in WhatsApp (text only)"
+                    title="Open this contact directly in WhatsApp Web"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
                     Open Chat
