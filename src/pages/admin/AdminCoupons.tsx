@@ -298,6 +298,23 @@ export default function AdminCoupons() {
 
   const discountText = discountType === 'flat' ? `₹${discountValue} Off` : `${discountValue}% Off`;
 
+  // Load saved discount settings from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('drona_coupon_discount');
+      if (saved) {
+        const { type, value } = JSON.parse(saved);
+        if (type === 'flat' || type === 'percent') setDiscountType(type);
+        if (value) setDiscountValue(String(value));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveSettings = () => {
+    localStorage.setItem('drona_coupon_discount', JSON.stringify({ type: discountType, value: discountValue }));
+    toast({ title: '✅ Settings saved', description: `Discount set to ${discountText}` });
+  };
+
   // Preload font + logo on mount
   useEffect(() => {
     const img = new Image();
