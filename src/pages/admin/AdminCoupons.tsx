@@ -276,7 +276,17 @@ function drawToCanvas(
   ctx.font = '300 12px "Cinzel", "Georgia", serif';
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.fillText('One-time use only  ·  Non-transferable  ·  Subject to availability', W / 2, 1010);
+}
 
+async function buildCouponCanvas(
+  row: AttendeeRow,
+  discountText: string,
+  code: string,
+  logoImg: HTMLImageElement,
+  expiryStr: string,
+): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
   });
