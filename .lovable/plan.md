@@ -1,53 +1,109 @@
 
-## Root Cause — Found
+## Plan: Live Canvas Preview of Coupon Design
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+### What we're building
+A live preview panel that renders the coupon PNG directly in the page using a visible `<canvas>` element — updated in real-time whenever discount type, value, or expiry date changes. No CSV upload required to see the coupon design.
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+---
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+### How it works
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
+The existing `buildCouponCanvas()` function returns a `Blob` for export. We need a **second render path** that draws onto a real visible `<canvas>` element instead of an off-screen one.
+
+The simplest approach: add a `previewCanvasRef` ref pointing to a `<canvas>` in the JSX, then create a `renderPreview()` function that draws to it using the same drawing logic as `buildCouponCanvas`, substituting a sample name/mobile for placeholder text.
+
+To avoid duplicating all the drawing code, we can refactor `buildCouponCanvas` to accept an **optional canvas element** — if provided, it draws to that canvas and skips the `toBlob` return. If not, it creates one and returns the blob as before.
+
+**OR** (simpler, less risky) — keep `buildCouponCanvas` unchanged and add a thin `renderToCanvas(canvasEl)` wrapper that:
+1. Uses the same drawing calls from `buildCouponCanvas` but targets the passed canvas element
+2. Uses a static "preview" row: `{ name: 'GUEST NAME', mobile: '9876543210', valid: true }` and a static code `WC25-3210-PREV`
+
+This keeps the existing export path 100% untouched and adds preview as a separate concern.
+
+---
+
+### Changes to `AdminCoupons.tsx`
+
+**1. New ref:**
+```ts
+const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 ```
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+**2. New `drawToCanvas(canvasEl, row, discountText, code, logoImg, expiryStr)` function:**
+Identical drawing logic to `buildCouponCanvas` but:
+- Takes an existing `HTMLCanvasElement` as first argument instead of creating one
+- No `toBlob` at the end — just draws and returns void
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+We extract the drawing logic into `drawToCanvas`, then:
+- `buildCouponCanvas` calls `drawToCanvas` then calls `canvas.toBlob(...)` 
+- `renderPreview()` calls `drawToCanvas` with `previewCanvasRef.current` and the placeholder row
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+**3. `renderPreview` function:**
+```ts
+const renderPreview = useCallback(() => {
+  const canvas = previewCanvasRef.current;
+  if (!canvas || !logoRef.current || !fontReady) return;
+  const previewRow = { name: 'GUEST NAME', mobile: '9876543210', valid: true };
+  const previewCode = 'WC25-3210-PREV';
+  drawToCanvas(canvas, previewRow, discountText, previewCode, logoRef.current, expiryStr);
+}, [discountText, expiryStr, fontReady]);
+```
 
-## Changes
+**4. Auto-trigger preview on settings change:**
+```ts
+useEffect(() => { renderPreview(); }, [renderPreview]);
+```
+This fires whenever `discountText`, `expiryStr`, or `fontReady` changes — so the preview is always live.
 
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
+**5. New preview card in JSX** — inserted between the "Coupon Settings" card and the "Upload CSV" card:
 
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
+```
+┌─────────────────────────────────────────────────────┐
+│  🖼  Coupon Preview  (live · updates as you type)    │
+│                                                       │
+│  [canvas element — scaled to fit, ~375px wide]       │
+│                                                       │
+│  Showing preview with sample name & code             │
+└─────────────────────────────────────────────────────┘
+```
+
+The canvas is displayed at 50% scale (`style={{ width: '375px', height: '525px' }}`) since the actual canvas is 750×1050 — sharp on retina, fits on all screens.
+
+On mobile, we use `w-full max-w-[375px] mx-auto` to center it.
+
+---
+
+### Refactor plan (minimal, safe)
+
+The key refactor is extracting drawing logic into `drawToCanvas`:
 
 ```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
+// NEW - draws onto any canvas element
+function drawToCanvas(canvas: HTMLCanvasElement, row, discountText, code, logoImg, expiryStr) {
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  // ... all existing drawing code from buildCouponCanvas ...
+}
 
-// After:
-const [loading, setLoading] = useState(false);
+// UPDATED - thin wrapper around drawToCanvas
+async function buildCouponCanvas(row, discountText, code, logoImg, expiryStr): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  drawToCanvas(canvas, row, discountText, code, logoImg, expiryStr);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
+  });
+}
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+This is a pure refactor — no behaviour change for existing generation. The preview reuses the same pixel-perfect drawing code.
 
-## Why this is the correct fix
+---
 
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+### Files to edit
 
-## Files Changed
 | File | Change |
 |---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+| `src/pages/admin/AdminCoupons.tsx` | Extract `drawToCanvas`, add `previewCanvasRef`, `renderPreview`, auto-trigger `useEffect`, and preview card JSX |
+
+No other files. No DB. No edge functions.
