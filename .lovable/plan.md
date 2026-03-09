@@ -1,38 +1,53 @@
 
-## Plan: Update Landing Page for Ended Match
+## Root Cause — Found
 
-The match is over — India won by 79 runs. The landing page still shows "Registrations Open" badge, "Reserve Your Seats Now" CTA, a broken countdown timer, and a sticky bar with a "Reserve" button. All of these need to change to reflect the match ended state.
+The network log confirms:
+- `matches` fetch → 200, returns data correctly
+- `match_assets` fetch → 200, returns `[]`  
+- `site_config` fetch → **does not appear at all**
 
-### Changes to `src/pages/Index.tsx`
+This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
 
-**1. Match card — status badge (line 418-428)**
-Currently shows "Registrations Open" green pulse badge for all matches. Change to a conditional:
-- `status === 'ended'` → Trophy icon + amber "Match Ended" badge + result score summary (IND 255/5 vs NZ 176/10)
-- `status === 'live'` → green pulse "Live Now"
-- other → green pulse "Registrations Open"
+**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
 
-**2. Match card — result score row**
-When `status === 'ended'`, replace the `CountdownTimer` with a victory announcement block:
-- "🏆 India Won!" headline in gold gradient
-- "by 79 runs" subtext  
-- Two-column mini scorecard: IND 255/5 (20 ov) | NZ 176/10 (20 ov)
+```tsx
+{(loading || configLoading) ? (
+  <MatchSectionSkeleton />
+```
 
-**3. Primary CTA section (lines 467–479)**
-When `status === 'ended'`, replace "Reserve Your Seats Now" + "Already Booked? View Your Passes" with:
-- "View Your Match Passes" (green button → `/ticket`) — still useful for people who attended
-- "See Match Results" (outlined button → `/live`) — shows the scoreboard
+`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
 
-**4. Sticky bottom bar (lines 722–760)**
-When `status === 'ended'`, replace the "Reserve" button with a "🏆 Results" button (→ `/live`). Keep "My Passes" and "🎮 Play" buttons as-is.
+**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
 
-**5. The `GameLoginCard` component — badge (line 82–91)**
-Currently shows "⏳ Soon" for non-live matches. For `ended` status, show "🏆 Ended" with an amber style instead of "⏳ Soon".
+Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
 
-### How to detect ended state
-The `match` object already has `status: 'ended'` from the fetch — just add `match.status === 'ended'` conditionals.
+## Changes
 
-### No new data fetching required
-All data is already in the `match` state object.
+### `src/pages/Index.tsx`
+- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
+- That's the only change needed here
 
-### Files changed
-- `src/pages/Index.tsx` only
+### `src/hooks/useSiteConfig.ts`
+- Change `loading` initial state from `!cache` to always `false`
+- The hook will fetch in background and update config text, but never block rendering
+- All `get()` calls have fallbacks so content is immediately visible
+
+```ts
+// Before:
+const [loading, setLoading] = useState(!cache);
+
+// After:
+const [loading, setLoading] = useState(false);
+```
+
+This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+
+## Why this is the correct fix
+
+The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+
+## Files Changed
+| File | Change |
+|---|---|
+| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
+| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |

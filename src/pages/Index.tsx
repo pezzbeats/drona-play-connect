@@ -82,11 +82,13 @@ function GameLoginCard() {
           <span className={`text-xs font-bold border rounded-full px-2.5 py-1 uppercase tracking-wider ${
             matchStatus === 'live'
               ? 'bg-success/15 border-success/30 text-success'
+              : matchStatus === 'ended'
+              ? 'bg-secondary/15 border-secondary/30 text-secondary'
               : matchStatus
               ? 'bg-primary/10 border-primary/30 text-primary'
               : 'bg-muted/30 border-border text-muted-foreground'
           }`}>
-            {matchStatus === 'live' ? '🎮 Live' : matchStatus ? '⏳ Soon' : '🎮 Play'}
+            {matchStatus === 'live' ? '🎮 Live' : matchStatus === 'ended' ? '🏆 Ended' : matchStatus ? '⏳ Soon' : '🎮 Play'}
           </span>
         </div>
       </div>
@@ -416,10 +418,22 @@ export default function IndexPage() {
             >
               {/* Status + type badges */}
               <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-success/15 border border-success/30 rounded-full px-3 py-1">
-                  <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                  <span className="text-xs font-bold text-success uppercase tracking-wider">Registrations Open</span>
-                </div>
+                {match.status === 'ended' ? (
+                  <div className="flex items-center gap-1.5 bg-secondary/15 border border-secondary/30 rounded-full px-3 py-1">
+                    <Trophy className="h-3 w-3 text-secondary" />
+                    <span className="text-xs font-bold text-secondary uppercase tracking-wider">Match Ended</span>
+                  </div>
+                ) : match.status === 'live' ? (
+                  <div className="flex items-center gap-1.5 bg-success/15 border border-success/30 rounded-full px-3 py-1">
+                    <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                    <span className="text-xs font-bold text-success uppercase tracking-wider">Live Now</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 bg-success/15 border border-success/30 rounded-full px-3 py-1">
+                    <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                    <span className="text-xs font-bold text-success uppercase tracking-wider">Registrations Open</span>
+                  </div>
+                )}
                 <div className="bg-secondary/15 border border-secondary/30 rounded-full px-3 py-1">
                   <span className="text-xs font-bold text-secondary uppercase tracking-wider">
                     {MATCH_TYPE_LABELS[match.match_type] ?? match.match_type.replace('_', ' ')}
@@ -456,26 +470,66 @@ export default function IndexPage() {
                 )}
               </div>
 
-              {/* ─── COUNTDOWN TIMER ─── */}
-              {match.start_time && (
+              {/* ─── COUNTDOWN TIMER / RESULT ─── */}
+              {match.status === 'ended' ? (
+                <div className="mt-5 pt-4 border-t border-border/40">
+                  {/* Victory headline */}
+                  <div className="text-center mb-4">
+                    <p className="font-display font-bold gradient-text-accent leading-none mb-1" style={{ fontSize: 'clamp(1.6rem, 7vw, 2.2rem)' }}>
+                      🏆 India Won!
+                    </p>
+                    <p className="text-sm text-muted-foreground font-medium">by 79 runs · ICC T20 World Cup 2026 Final</p>
+                  </div>
+                  {/* Mini scorecard */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="glass-card-sunken rounded-xl p-3 text-center border border-success/25">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">IND</p>
+                      <p className="font-display font-bold text-success text-xl leading-none">255/5</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">20 overs</p>
+                    </div>
+                    <div className="glass-card-sunken rounded-xl p-3 text-center border border-border/30">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">NZ</p>
+                      <p className="font-display font-bold text-foreground/70 text-xl leading-none">176/10</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">20 overs</p>
+                    </div>
+                  </div>
+                </div>
+              ) : match.start_time ? (
                 <div className="mt-5 pt-4 border-t border-border/40">
                   <CountdownTimer targetTime={match.start_time} variant="full" />
                 </div>
-              )}
+              ) : null}
             </GlassCard>
 
             {/* ─── PRIMARY CTA ─── */}
             <div className="mb-6 animate-slide-up" style={{ animationDelay: '0.27s' } as React.CSSProperties}>
-              <Link to="/register" className="block mb-3">
-                <button className="w-full h-16 btn-gradient rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 animate-glow-pulse transition-transform hover:scale-[1.02] active:scale-[0.98]">
-                  Reserve Your Seats Now <ChevronRight className="h-6 w-6" />
-                </button>
-              </Link>
-              <Link to="/ticket" className="block">
-                <button className="w-full h-16 bg-success text-success-foreground rounded-xl text-base font-display font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_0_20px_hsl(142_70%_45%/0.45)] hover:shadow-[0_0_30px_hsl(142_70%_45%/0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
-                  Already Booked? View Your Passes <ChevronRight className="h-5 w-5" />
-                </button>
-              </Link>
+              {match.status === 'ended' ? (
+                <>
+                  <Link to="/ticket" className="block mb-3">
+                    <button className="w-full h-16 bg-success text-success-foreground rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_0_20px_hsl(142_70%_45%/0.45)] hover:shadow-[0_0_30px_hsl(142_70%_45%/0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+                      View Your Match Passes <ChevronRight className="h-6 w-6" />
+                    </button>
+                  </Link>
+                  <Link to="/live" className="block">
+                    <button className="w-full h-16 bg-secondary/15 border border-secondary/40 text-secondary rounded-xl text-base font-display font-bold tracking-wide flex items-center justify-center gap-2 hover:bg-secondary/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+                      🏆 See Match Results <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/register" className="block mb-3">
+                    <button className="w-full h-16 btn-gradient rounded-xl text-xl font-display font-bold tracking-wide flex items-center justify-center gap-2 animate-glow-pulse transition-transform hover:scale-[1.02] active:scale-[0.98]">
+                      Reserve Your Seats Now <ChevronRight className="h-6 w-6" />
+                    </button>
+                  </Link>
+                  <Link to="/ticket" className="block">
+                    <button className="w-full h-16 bg-success text-success-foreground rounded-xl text-base font-display font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_0_20px_hsl(142_70%_45%/0.45)] hover:shadow-[0_0_30px_hsl(142_70%_45%/0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+                      Already Booked? View Your Passes <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* ─── FAN GAME LOGIN ─── */}
@@ -733,11 +787,19 @@ export default function IndexPage() {
           `}</style>
           <div className="backdrop-blur-md bg-background/80 border-t border-border/50 px-4 pt-2.5 pb-3">
             <div className="flex gap-2 max-w-2xl mx-auto items-center">
-              <Link to="/register" className="flex-1">
-                <button className="w-full h-12 btn-gradient rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 animate-glow-pulse">
-                  Reserve <ChevronRight className="h-4 w-4" />
-                </button>
-              </Link>
+              {match?.status === 'ended' ? (
+                <Link to="/live" className="flex-1">
+                  <button className="w-full h-12 bg-secondary/20 border border-secondary/40 text-secondary rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 hover:bg-secondary/30 active:scale-[0.98] transition-all duration-200">
+                    🏆 Results
+                  </button>
+                </Link>
+              ) : (
+                <Link to="/register" className="flex-1">
+                  <button className="w-full h-12 btn-gradient rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 animate-glow-pulse">
+                    Reserve <ChevronRight className="h-4 w-4" />
+                  </button>
+                </Link>
+              )}
               <Link to="/ticket" className="flex-1">
                 <button className="w-full h-12 bg-success text-success-foreground rounded-xl font-display font-bold text-sm tracking-wide flex items-center justify-center gap-1.5 shadow-[0_0_16px_hsl(142_70%_45%/0.4)] hover:opacity-90 active:scale-[0.98] transition-all duration-200">
                   My Passes <ChevronRight className="h-4 w-4" />
