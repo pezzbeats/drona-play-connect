@@ -604,6 +604,34 @@ export default function AdminCoupons() {
         </div>
       </GlassCard>
 
+      {/* Live Coupon Preview */}
+      <GlassCard className="p-5 space-y-4">
+        <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-amber-400" /> Coupon Preview
+          <span className="ml-auto text-xs text-muted-foreground font-normal normal-case tracking-normal">
+            live · updates as you change settings
+          </span>
+        </h2>
+        <div className="flex justify-center">
+          <div className="relative overflow-hidden rounded-xl border border-border/40 shadow-2xl">
+            <canvas
+              ref={previewCanvasRef}
+              width={W}
+              height={H}
+              style={{ width: '375px', height: '525px', display: 'block' }}
+            />
+            {!fontReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-card/80 backdrop-blur-sm rounded-xl">
+                <p className="text-sm text-muted-foreground animate-pulse">Loading fonts…</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          Showing sample data — actual coupons will have each customer's name & mobile
+        </p>
+      </GlassCard>
+
       {/* Upload card */}
       <GlassCard className="p-5 space-y-4">
         <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
