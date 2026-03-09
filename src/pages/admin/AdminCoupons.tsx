@@ -599,14 +599,12 @@ export default function AdminCoupons() {
     await sendViaWhatsAppBrowser(coupon.row.mobile, coupon.blob, filename, whatsappText(coupon));
   };
 
-  const dbCouponWhatsappText = (c: DbCoupon) =>
-    encodeURIComponent(
-      `🏆 Congratulations, ${c.customer_name}!\n\n` +
-      `Your exclusive Victory Coupon from Hotel Drona Palace:\n\n` +
-      `🎟️ Code: ${c.code}\n💰 ${c.discount_text}\n` +
-      (c.expiry_date ? `📅 Valid until: ${new Date(c.expiry_date).toLocaleDateString('en-IN')}\n` : '') +
-      `\nPresent at hotel reception to redeem.\n— Hotel Drona Palace\ncricket.dronapalace.com`
-    );
+  const dbCouponWhatsappText = (c: DbCoupon) => {
+    const expiryFmt = c.expiry_date ? new Date(c.expiry_date).toLocaleDateString('en-IN') : '';
+    return encodeURIComponent(applyTemplate(
+      c.customer_name, c.code, c.discount_text, expiryFmt, subtitleText, eventNightLabel
+    ));
+  };
 
   // Regenerate PNG on-demand for DB coupons, copy to clipboard, open WhatsApp Web
   const regenerateAndShare = async (c: DbCoupon) => {
