@@ -953,6 +953,16 @@ export default function AdminCoupons() {
                         : <span className="text-muted-foreground/40">—</span>
                       }
                     </td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => openWhatsApp(c.customer_mobile, dbCouponWhatsappText(c))}
+                        title={`Send to +91 ${c.customer_mobile} on WhatsApp`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        Send
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
