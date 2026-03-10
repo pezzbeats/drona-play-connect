@@ -729,7 +729,7 @@ export default function TicketPage() {
     const order = ticket.order as any;
     const match = order?.match;
     const ticketUrl = `https://cricket.dronapalace.com/ticket?mobile=${order?.purchaser_mobile}`;
-    const text = `🎫 My T20 Fan Night Pass${match?.name ? ` — ${match.name}` : ''} — Seat ${ticket.seat_index + 1}\nView tickets: ${ticketUrl}`;
+    const text = `🎫 My Cricket Fan Night Pass${match?.name ? ` — ${match.name}` : ''} — Seat ${ticket.seat_index + 1}\nView tickets: ${ticketUrl}`;
 
     if (navigator.canShare) {
       try {
