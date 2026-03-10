@@ -64,7 +64,7 @@ function buildReminderLink(ticket: TicketData): string {
   const ticketUrl = `https://cricket.dronapalace.com/ticket?mobile=${order?.purchaser_mobile}`;
 
   const lines = [
-    `Hi ${order?.purchaser_full_name}! 🙏 Your T20 Fan Night Pass (Seat ${ticket.seat_index + 1} of ${order?.seats_count}) is confirmed with Hotel Drona Palace.`,
+    `Hi ${order?.purchaser_full_name}! 🙏 Your Cricket Fan Night Pass (Seat ${ticket.seat_index + 1} of ${order?.seats_count}) is confirmed with Hotel Drona Palace.`,
     ``,
     `💰 Balance Due: ₹${balanceDue}`,
     isPartiallyPaid ? `✅ Advance Paid: ₹${order?.advance_paid}` : null,
