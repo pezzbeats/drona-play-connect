@@ -99,7 +99,7 @@ export default function TermsPage() {
           <div className="text-center">
             <div className="text-4xl mb-2">📋</div>
             <h1 className="font-display text-3xl font-bold gradient-text">Terms & Conditions</h1>
-            <p className="text-muted-foreground text-sm mt-2">T20 Fan Night · SR LEISURE INN · Hotel Drona Palace</p>
+            <p className="text-muted-foreground text-sm mt-2">Cricket Fan Night · SR LEISURE INN · Hotel Drona Palace</p>
             <p className="text-xs text-muted-foreground mt-1">Last updated: {new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}</p>
           </div>
         </div>
