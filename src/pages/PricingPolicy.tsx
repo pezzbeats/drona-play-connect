@@ -26,7 +26,7 @@ export default function PricingPolicyPage() {
             <Tag className="h-7 w-7 text-secondary" />
           </div>
           <h1 className="font-display text-3xl font-bold gradient-text-accent mb-2">Pricing Policy</h1>
-          <p className="text-sm text-muted-foreground">SR LEISURE INN · T20 Fan Night Events</p>
+          <p className="text-sm text-muted-foreground">SR LEISURE INN · Cricket Fan Night Events</p>
         </GlassCard>
 
         {/* What you pay for */}
