@@ -31,7 +31,7 @@ export default function DisclaimerPolicyPage() {
 
         <Section title="1. Fun Guess Game — Not Gambling">
           <p>
-            The Fun Guess Game offered at T20 Fan Night events organised by SR LEISURE INN is a{' '}
+            The Fun Guess Game offered at Cricket Fan Night events organised by SR LEISURE INN is a{' '}
             <strong className="text-foreground/80">recreational entertainment activity</strong> designed to enhance
             the enjoyment of the live cricket screening experience.
           </p>

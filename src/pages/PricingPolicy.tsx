@@ -26,7 +26,7 @@ export default function PricingPolicyPage() {
             <Tag className="h-7 w-7 text-secondary" />
           </div>
           <h1 className="font-display text-3xl font-bold gradient-text-accent mb-2">Pricing Policy</h1>
-          <p className="text-sm text-muted-foreground">SR LEISURE INN · T20 Fan Night Events</p>
+          <p className="text-sm text-muted-foreground">SR LEISURE INN · Cricket Fan Night Events</p>
         </GlassCard>
 
         {/* What you pay for */}
@@ -46,7 +46,7 @@ export default function PricingPolicyPage() {
 
         <Section title="1. Standard Seat Pricing">
           <p>
-            Seat prices for T20 Fan Night events are set per event by SR LEISURE INN and displayed clearly on the
+            Seat prices for Cricket Fan Night events are set per event by SR LEISURE INN and displayed clearly on the
             registration page before you proceed to payment. Prices may vary between events based on match significance,
             venue capacity, and hospitality package inclusions.
           </p>
@@ -80,7 +80,7 @@ export default function PricingPolicyPage() {
             <Star className="h-5 w-5 text-secondary flex-shrink-0 mt-0.5" />
             <div>
               <p>
-                Customers who have attended a previous T20 Fan Night event and had a{' '}
+                Customers who have attended a previous Cricket Fan Night event and had a{' '}
                 <strong className="text-foreground/80">verified payment</strong> may be eligible for a returning customer
                 (loyalty) discount on future events.
               </p>

@@ -50,7 +50,7 @@ export default function AdminLoginPage() {
           <p className="font-display text-base font-bold text-secondary leading-tight">Hotel Drona Palace</p>
           <p className="text-xs text-muted-foreground mb-3">A Unit of SR Leisure Inn</p>
           <h1 className="font-display text-3xl font-bold gradient-text-accent">Admin Portal</h1>
-          <p className="text-muted-foreground text-sm mt-1">T20 Fan Night Ops Suite</p>
+          <p className="text-muted-foreground text-sm mt-1">Cricket Fan Night Ops Suite</p>
         </div>
 
         <GlassCard className="p-6" glow>

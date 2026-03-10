@@ -211,7 +211,7 @@ export default function AdminAnalytics() {
       : matches.find(m => m.id === selectedId)?.name || 'Unknown';
 
     const rows: string[] = [
-      `T20 Fan Night Analytics — ${matchName}`,
+      `Cricket Fan Night Analytics — ${matchName}`,
       'DISCLAIMER: For entertainment purposes only. No gambling or wagering.',
       '',
       'TICKET SALES',

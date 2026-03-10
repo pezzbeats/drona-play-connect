@@ -99,7 +99,7 @@ export default function TermsPage() {
           <div className="text-center">
             <div className="text-4xl mb-2">📋</div>
             <h1 className="font-display text-3xl font-bold gradient-text">Terms & Conditions</h1>
-            <p className="text-muted-foreground text-sm mt-2">T20 Fan Night · SR LEISURE INN · Hotel Drona Palace</p>
+            <p className="text-muted-foreground text-sm mt-2">Cricket Fan Night · SR LEISURE INN · Hotel Drona Palace</p>
             <p className="text-xs text-muted-foreground mt-1">Last updated: {new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}</p>
           </div>
         </div>
@@ -107,7 +107,7 @@ export default function TermsPage() {
         {/* Intro */}
         <GlassCard className="p-4 mb-6 border border-primary/20">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            By registering for T20 Fan Night and purchasing a hospitality package, you agree to the following terms. Please read them carefully before proceeding.
+            By registering for Cricket Fan Night and purchasing a hospitality package, you agree to the following terms. Please read them carefully before proceeding.
             These terms govern your participation in the event, payment obligations, and the Fun Guess Game.
           </p>
         </GlassCard>

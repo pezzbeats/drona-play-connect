@@ -126,7 +126,7 @@ export default function AdminManualBooking() {
 
       const finalBalance = data.balance_due ?? 0;
       const discApplied = data.discount_amount ?? 0;
-      const matchName = activeMatch?.name ?? 'T20 Fan Night';
+      const matchName = activeMatch?.name ?? 'Cricket Fan Night';
       const ticketUrl = `${window.location.origin}/ticket?mobile=${searchMobile}`;
       const waMsg = [
         `🎟️ Booking Confirmed — Hotel Drona Palace`,

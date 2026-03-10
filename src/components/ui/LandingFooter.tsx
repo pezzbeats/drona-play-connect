@@ -14,7 +14,7 @@ export const LandingFooter: React.FC = () => {
   const email = get('footer_email', 'dronapalace@gmail.com');
   const copyright = get('footer_copyright', '© 2026 SR LEISURE INN. All Rights Reserved.');
   const aboutText = get('footer_about_text', 'Hotel Drona Palace is a premium hospitality destination offering curated event experiences and luxury services in Kashipur, Uttarakhand.');
-  const heroTitle = get('hero_title', 'T20 Fan Night');
+  const heroTitle = get('hero_title', 'Cricket Fan Night');
 
   return (
     <footer className="relative z-10 mt-2" style={{ background: 'hsl(var(--card) / 0.6)', borderTop: '1px solid hsl(var(--border) / 0.5)' }}>

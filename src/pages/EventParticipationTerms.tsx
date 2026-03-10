@@ -31,7 +31,7 @@ export default function EventParticipationTermsPage() {
 
         <Section title="1. Agreement to Terms">
           <p>
-            By purchasing a hospitality package and attending any T20 Fan Night event organised by SR LEISURE INN,
+            By purchasing a hospitality package and attending any Cricket Fan Night event organised by SR LEISURE INN,
             you agree to be bound by these Event Participation Terms. Please read them carefully before attending.
           </p>
         </Section>
