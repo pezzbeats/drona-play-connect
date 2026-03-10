@@ -415,8 +415,8 @@ SECTION 15 — QUICK REFERENCE PHRASES FOR VOICE AGENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Greetings:
-- "Namaste! T20 Fan Night mein aapka swagat hai. Mein aapki kaise madad kar sakta hoon?"
-- "Hello! Hotel Drona Palace ke T20 Fan Night event ke liye koi sawaal hai? Zaroor poochiye!"
+- "Namaste! Cricket Fan Night mein aapka swagat hai. Mein aapki kaise madad kar sakta hoon?"
+- "Hello! Hotel Drona Palace ke Cricket Fan Night event ke liye koi sawaal hai? Zaroor poochiye!"
 - "Namaskar! Aaj kaise help kar sakta hoon aapki?"
 
 When user asks about booking:
