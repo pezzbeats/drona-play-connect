@@ -76,7 +76,7 @@ const SECTIONS: Section[] = [
     title: 'Registration Page',
     icon: BookOpen,
     fields: [
-      { key: 'register_header_title', label: 'Header Title', placeholder: 'T20 Fan Night' },
+      { key: 'register_header_title', label: 'Header Title', placeholder: 'Cricket Fan Night' },
       { key: 'register_header_venue', label: 'Header Venue Line', placeholder: 'Hotel Drona Palace' },
       { key: 'payment_payee_name', label: 'UPI Payee Name', placeholder: 'Hotel Name' },
     ],

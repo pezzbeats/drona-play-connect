@@ -377,7 +377,7 @@ export default function IndexPage() {
 
           <h1 className="font-display gradient-text mb-2 leading-none tracking-widest uppercase"
             style={{ fontSize: 'clamp(3.5rem, 14vw, 6rem)', letterSpacing: '0.08em', textShadow: '0 0 40px hsl(355 80% 55% / 0.4), 0 0 80px hsl(38 75% 52% / 0.2)' }}>
-            {get('hero_title', 'T20 Fan Night')}
+            {get('hero_title', 'Cricket Fan Night')}
           </h1>
 
           <p className="text-foreground/75 font-body text-sm md:text-base font-medium tracking-[0.2em] uppercase mb-5">

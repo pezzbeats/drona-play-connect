@@ -107,7 +107,7 @@ export default function TermsPage() {
         {/* Intro */}
         <GlassCard className="p-4 mb-6 border border-primary/20">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            By registering for T20 Fan Night and purchasing a hospitality package, you agree to the following terms. Please read them carefully before proceeding.
+            By registering for Cricket Fan Night and purchasing a hospitality package, you agree to the following terms. Please read them carefully before proceeding.
             These terms govern your participation in the event, payment obligations, and the Fun Guess Game.
           </p>
         </GlassCard>

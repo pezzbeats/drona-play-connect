@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
         <Section title="1. Introduction">
           <p>
             SR LEISURE INN ("we", "our", "us"), operating Hotel Drona Palace, Kashipur, respects your privacy and is
-            committed to protecting the personal information you share with us when registering for T20 Fan Night events.
+            committed to protecting the personal information you share with us when registering for Cricket Fan Night events.
           </p>
           <p>
             This Privacy Policy explains what data we collect, how we use it, and the steps we take to protect it.

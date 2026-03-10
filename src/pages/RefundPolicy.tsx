@@ -31,7 +31,7 @@ export default function RefundPolicyPage() {
 
         <Section title="1. Important Note — Nature of Payment">
           <p>
-            All payments made for T20 Fan Night events are exclusively for <strong className="text-foreground/80">hospitality services</strong>,
+            All payments made for Cricket Fan Night events are exclusively for <strong className="text-foreground/80">hospitality services</strong>,
             which include venue access, food and beverage service, and event arrangements. These are{' '}
             <strong className="text-foreground/80">not payments for tickets to a sports match</strong> and are not
             gambling or wagering fees.

@@ -80,7 +80,7 @@ export default function PricingPolicyPage() {
             <Star className="h-5 w-5 text-secondary flex-shrink-0 mt-0.5" />
             <div>
               <p>
-                Customers who have attended a previous T20 Fan Night event and had a{' '}
+                Customers who have attended a previous Cricket Fan Night event and had a{' '}
                 <strong className="text-foreground/80">verified payment</strong> may be eligible for a returning customer
                 (loyalty) discount on future events.
               </p>

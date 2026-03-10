@@ -114,7 +114,7 @@ export default function AdminMatches() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold gradient-text-accent">Matches</h1>
-          <p className="text-muted-foreground text-sm">Manage T20 Fan Night matches</p>
+          <p className="text-muted-foreground text-sm">Manage Cricket Fan Night matches</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>

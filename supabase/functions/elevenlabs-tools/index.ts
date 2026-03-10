@@ -133,7 +133,7 @@ serve(async (req) => {
           status: statusMap[activeMatch.status] || activeMatch.status,
           match_type: activeMatch.match_type,
           registrations_open: activeMatch.is_active_for_registration,
-          event_name: event?.name || "T20 Fan Night",
+          event_name: event?.name || "Cricket Fan Night",
           message: `${activeMatch.name} match ${activeMatch.venue || "Hotel Drona Palace"} mein hoga. ${startTime}. Status: ${statusMap[activeMatch.status] || activeMatch.status}.`
         };
         break;

@@ -737,7 +737,7 @@ export default function TicketPage() {
         const blob = await new Promise<Blob | null>(res => passCanvas.toBlob(res));
         const files = blob ? [new File([blob], `pass-seat-${ticket.seat_index + 1}.png`, { type: 'image/png' })] : [];
         if (files.length > 0 && navigator.canShare({ files })) {
-          await navigator.share({ files, title: 'My T20 Fan Night Pass', text });
+          await navigator.share({ files, title: 'My Cricket Fan Night Pass', text });
           return;
         }
       } catch { /* fall through */ }
