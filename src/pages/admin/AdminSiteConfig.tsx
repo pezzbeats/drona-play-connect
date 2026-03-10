@@ -30,7 +30,7 @@ const SECTIONS: Section[] = [
     title: 'Landing Page — Hero',
     icon: Globe,
     fields: [
-      { key: 'hero_title', label: 'Hero Title', placeholder: 'T20 Fan Night' },
+      { key: 'hero_title', label: 'Hero Title', placeholder: 'Cricket Fan Night' },
       { key: 'hero_subtitle', label: 'Hero Subtitle', placeholder: 'An Exclusive Cricket Celebration Experience' },
       { key: 'hero_venue_badge', label: 'Venue Badge Text', placeholder: 'Hosted at Hotel Drona Palace, Kashipur' },
     ],
