@@ -46,7 +46,7 @@ export default function PricingPolicyPage() {
 
         <Section title="1. Standard Seat Pricing">
           <p>
-            Seat prices for T20 Fan Night events are set per event by SR LEISURE INN and displayed clearly on the
+            Seat prices for Cricket Fan Night events are set per event by SR LEISURE INN and displayed clearly on the
             registration page before you proceed to payment. Prices may vary between events based on match significance,
             venue capacity, and hospitality package inclusions.
           </p>
