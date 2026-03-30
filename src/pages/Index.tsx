@@ -667,11 +667,27 @@ export default function IndexPage() {
               />
             )}
             <div className="text-center mb-5 animate-slide-up">
-              <p className="section-title mb-1">Today's IPL Matches</p>
-              <h3 className="font-display text-xl font-bold text-foreground">
-                {matches.length === 1 ? "Today's Match" : `${matches.length} Matches Today`}
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">Register for free and play the prediction game!</p>
+              {(() => {
+                const now = new Date();
+                const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+                const istNow = new Date(now.getTime() + IST_OFFSET_MS);
+                const istToday = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
+                const matchStart = matches[0]?.start_time ? new Date(matches[0].start_time) : null;
+                const istMatch = matchStart ? new Date(matchStart.getTime() + IST_OFFSET_MS) : null;
+                const matchDay = istMatch ? new Date(Date.UTC(istMatch.getUTCFullYear(), istMatch.getUTCMonth(), istMatch.getUTCDate())) : null;
+                const isToday = matchDay && matchDay.getTime() === istToday.getTime();
+                const isTomorrow = matchDay && matchDay.getTime() === istToday.getTime() + 86400000;
+                const dayLabel = isToday ? "Today's" : isTomorrow ? "Tomorrow's" : "Upcoming";
+                return (
+                  <>
+                    <p className="section-title mb-1">{dayLabel} IPL Matches</p>
+                    <h3 className="font-display text-xl font-bold text-foreground">
+                      {matches.length === 1 ? `${dayLabel} Match` : `${matches.length} Matches ${isToday ? 'Today' : isTomorrow ? 'Tomorrow' : 'Upcoming'}`}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">Register for free and play the prediction game!</p>
+                  </>
+                );
+              })()}
             </div>
 
             {matches.map((m, i) => (
