@@ -14,6 +14,21 @@ import {
 } from 'lucide-react';
 import { CountdownTimer } from '@/components/ui/CountdownTimer';
 import hotelLogo from '@/assets/hotel-logo.png';
+import cskLogo from '@/assets/ipl-teams/csk.png';
+import miLogo from '@/assets/ipl-teams/mi.png';
+import rcbLogo from '@/assets/ipl-teams/rcb.png';
+import kkrLogo from '@/assets/ipl-teams/kkr.png';
+import srhLogo from '@/assets/ipl-teams/srh.png';
+import dcLogo from '@/assets/ipl-teams/dc.png';
+import pbksLogo from '@/assets/ipl-teams/pbks.png';
+import rrLogo from '@/assets/ipl-teams/rr.png';
+import gtLogo from '@/assets/ipl-teams/gt.png';
+import lsgLogo from '@/assets/ipl-teams/lsg.png';
+
+const IPL_TEAM_LOGOS: Record<string, string> = {
+  CSK: cskLogo, MI: miLogo, RCB: rcbLogo, KKR: kkrLogo, SRH: srhLogo,
+  DC: dcLogo, PBKS: pbksLogo, PBK: pbksLogo, RR: rrLogo, GT: gtLogo, LSG: lsgLogo,
+};
 
 // ─── Inline Fan Game Login Card ───────────────────────────────────────────────
 function GameLoginCard() {
@@ -249,6 +264,8 @@ function TodayMatchCard({
                   >
                     {logoUrl ? (
                       <img src={logoUrl} alt={homeTeam.name} className="w-10 h-10 object-contain" />
+                    ) : IPL_TEAM_LOGOS[homeTeam.short_code.toUpperCase()] ? (
+                      <img src={IPL_TEAM_LOGOS[homeTeam.short_code.toUpperCase()]} alt={homeTeam.name} className="w-10 h-10 object-contain" loading="lazy" />
                     ) : (
                       <span className="text-xl font-display font-bold" style={{ color: colors.bg }}>
                         {homeTeam.short_code}
@@ -288,6 +305,8 @@ function TodayMatchCard({
                   >
                     {logoUrl ? (
                       <img src={logoUrl} alt={awayTeam.name} className="w-10 h-10 object-contain" />
+                    ) : IPL_TEAM_LOGOS[awayTeam.short_code.toUpperCase()] ? (
+                      <img src={IPL_TEAM_LOGOS[awayTeam.short_code.toUpperCase()]} alt={awayTeam.name} className="w-10 h-10 object-contain" loading="lazy" />
                     ) : (
                       <span className="text-xl font-display font-bold" style={{ color: colors.bg }}>
                         {awayTeam.short_code}
