@@ -92,11 +92,27 @@ export function useRealtimeChannel(
 
   useEffect(() => {
     mountedRef.current = true;
+    hasFetchedRef.current = false;
+
+    // Immediately fetch data on mount — don't wait for WebSocket
+    onReconnectRef.current();
+    hasFetchedRef.current = true;
+
+    // Start realtime subscription in parallel
     subscribe();
+
+    // Safety net: if channel hasn't connected in 3s, re-fetch to cover any
+    // events that arrived between mount-fetch and subscription
+    initialFetchTimerRef.current = setTimeout(() => {
+      if (mountedRef.current && !connected) {
+        onReconnectRef.current();
+      }
+    }, INITIAL_FETCH_TIMEOUT);
 
     return () => {
       mountedRef.current = false;
       clearTimeout(retryTimerRef.current);
+      clearTimeout(initialFetchTimerRef.current);
       removeChannel();
     };
   }, [subscribe, removeChannel]);
