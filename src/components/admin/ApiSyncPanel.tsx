@@ -118,7 +118,7 @@ export default function ApiSyncPanel() {
           <h2 className="font-display text-lg font-bold text-foreground">
             Live API Sync
           </h2>
-          <span className="text-xs text-muted-foreground">CricketData.org</span>
+          <span className="text-xs text-muted-foreground">Roanuz CricketAPI v5</span>
         </div>
         <div className="flex items-center gap-2">
           <GlassButton
