@@ -118,7 +118,18 @@ function json(data: any, status = 200) {
 
 function isApiStatusLive(statusStr: string): boolean {
   const s = (statusStr || "").toLowerCase();
-  return s.includes("live") || s.includes("in progress") || s.includes("in_progress");
+  return (
+    s.includes("live") ||
+    s.includes("in progress") ||
+    s.includes("in_progress") ||
+    s.includes("started") ||
+    s.includes("play") ||
+    s.includes("innings") ||
+    s.includes("stumps") ||
+    s.includes("break") ||
+    s.includes("strategic") ||
+    s.includes("timeout")
+  );
 }
 
 // ── DISCOVER ─────────────────────────────────────────────────────────
