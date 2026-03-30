@@ -1,40 +1,51 @@
 
 
-## Match Summary on Ended State
+## Problem
 
-When users view an ended match, the Scoreboard's "ended" section currently only shows basic innings scores. We'll enhance it with a rich match summary card showing the winner, top run-scorer, and top wicket-taker.
+The match summary (winner, top scorer, top wicket-taker) doesn't show because the underlying data is missing:
 
-### Data Source
+1. **No players** exist for RR or CSK in the `players` table (0 records)
+2. **`is_batting_first` is `false` for both roster entries** — the API sync never set it
+3. **No deliveries** recorded for this match (the sync was broken earlier)
+4. The guard `Object.keys(players).length === 0` prevents the summary function from running at all
 
-All data comes from existing tables — no schema changes needed:
-- **Winner**: Compare `innings1_score` vs `innings2_score` from `match_live_state`, map to team names via `match_roster` (side `home`/`away` + `is_batting_first`)
-- **Top Scorer**: Aggregate `deliveries` table — `SUM(runs_off_bat)` grouped by `striker_id`, pick highest
-- **Top Wicket-Taker**: Count deliveries where `is_wicket = true` grouped by `bowler_id`, pick highest
+Since the API sync didn't record ball-by-ball data, we can't compute top scorer/wicket-taker from `deliveries`. However, we CAN still show the winner by comparing the innings scores already stored in `match_live_state`.
 
-### Changes
+## Solution
 
 **File: `src/components/live/Scoreboard.tsx`**
 
-1. Add state for `matchSummary` (winner team name, top scorer name + runs, top wicket-taker name + wickets)
-2. On mount (or when phase becomes `ended`), run two aggregation queries against `deliveries` table for this match:
-   - Top scorer: group by `striker_id`, sum `runs_off_bat`, order desc, limit 1
-   - Top wicket-taker: group by `bowler_id` where `is_wicket = true`, count, order desc, limit 1
-3. Determine winner from `match_live_state` scores + `match_roster` batting order
-4. Replace the sparse "ended" block (lines 442-458) with a richer card:
-   - Trophy icon + "Match Ended"
-   - Winner banner (team name + "won by X runs" or "won by X wickets")
-   - Both innings scores side by side
-   - Top Scorer chip (player name + runs)
-   - Top Wicket-Taker chip (player name + wickets)
-   - Super over note if applicable (existing logic preserved)
+1. **Remove the `players` guard** from the summary useEffect — don't require players to be loaded since they may not exist
+2. **Determine winner without `is_batting_first`**: Fall back to using team names from roster + side (`home`/`away`). If `is_batting_first` isn't set for either team, use a heuristic: the home team usually bats based on toss, but more reliably, just show "Team A" and "Team B" with scores and let the score differential speak
+3. **Better approach**: Query `match_roster` with `side` — assume `innings1` corresponds to the team marked `is_batting_first=true`, but if neither is marked, determine winner by comparing scores and show the team name from the roster side with the higher score
+4. **Gracefully handle missing deliveries** — skip top scorer/wicket-taker chips when no deliveries exist (already handled, just don't block the whole summary)
 
-### Technical Detail
+### Specific changes:
 
-Since the `deliveries` table doesn't support aggregation via the Supabase JS client natively, we'll fetch deliveries for the match and compute aggregates client-side. For an ended match this is a one-time fetch, so performance is fine.
+- **Line 205**: Change guard from requiring both `teams` AND `players` to only requiring `teams`:
+  ```ts
+  if (state?.phase !== 'ended' || Object.keys(teams).length === 0) return;
+  ```
 
-Winner logic:
-- Get roster entries; the team with `is_batting_first = true` batted first (innings 1)
-- If `innings2_score > innings1_score` → batting-second team won by `(10 - innings2_wickets)` wickets
-- If `innings1_score > innings2_score` → batting-first team won by `(innings1_score - innings2_score)` runs
-- If equal → tie / decided via super over
+- **Lines 218-234**: Improve winner logic to handle case where neither team has `is_batting_first = true`. Fetch roster with `side` field and use a fallback: if no `is_batting_first` is set, determine by comparing scores — the team that scored more in 2nd innings won (chasing), or if inn1 > inn2, the other team won by runs. Use the roster `side` to map: query the `match_live_state` for `batting_team_id`/`bowling_team_id` as another fallback.
+
+- **Simplified fallback winner logic**:
+  ```ts
+  // If is_batting_first not set, just show winner based on score comparison
+  if (!battingFirst && !battingSecond) {
+    if (inn1 > inn2) {
+      winMargin = `won by ${inn1 - inn2} runs`;
+      // Can't definitively name team, show both scores
+    } else if (inn2 > inn1) {
+      winMargin = `won by ${10 - state.innings2_wickets} wickets`;
+    }
+    // Try to identify winner from batting_team_id in live state
+  }
+  ```
+
+- Also fetch `batting_team_id` from `match_live_state` to identify which team was batting last (2nd innings) — if `inn2 >= inn1`, that team won.
+
+| File | Change |
+|---|---|
+| `src/components/live/Scoreboard.tsx` | Remove players guard; add fallback winner logic when `is_batting_first` not set; handle missing deliveries gracefully |
 
