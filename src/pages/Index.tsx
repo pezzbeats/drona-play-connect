@@ -507,7 +507,7 @@ export default function IndexPage() {
           .select('id, name, opponent, venue, start_time, status, match_type')
           .gte('start_time', todayStartUTC.toISOString())
           .lte('start_time', todayEndUTC.toISOString())
-          .neq('status', 'draft')
+          .in('status', ['registrations_open', 'live'])
           .order('start_time', { ascending: true }),
         // Query 2: any admin-activated match (fallback so it always shows)
         supabase
