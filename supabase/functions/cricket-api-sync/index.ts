@@ -638,7 +638,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       // Determine phase
       let phase = "innings1";
-      const mStatus = (matchData.status_str || "").toLowerCase();
+      const mStatus = (apiStatusStr || "").toLowerCase();
       if (currentInnings === 2) phase = "innings2";
       if (mStatus.includes("completed") || mStatus.includes("result")) phase = "ended";
       if (mStatus.includes("break") || mStatus.includes("innings break")) phase = "break";
