@@ -1,53 +1,108 @@
 
-## Root Cause — Found
 
-The network log confirms:
-- `matches` fetch → 200, returns data correctly
-- `match_assets` fetch → 200, returns `[]`  
-- `site_config` fetch → **does not appear at all**
+## Plan: CricketData.org API Integration for Auto IPL Match Sync
 
-This means `useSiteConfig` either: (a) never fires its fetch (stale `cache !== null`), or (b) its fetch is in-flight with `loading = true` permanently stuck.
+### What this builds
+An automated pipeline that polls the CricketData.org API every 30 seconds during IPL match hours, auto-creates matches with team lineups, syncs live scores, derives ball-by-ball events from score deltas, and triggers prediction window open/close cycles automatically — replacing the manual AdminControl workflow for IPL matches.
 
-**The actual bug:** Line 251 in `Index.tsx` gates the entire match section on **both** `loading` AND `configLoading`:
+### Architecture
 
-```tsx
-{(loading || configLoading) ? (
-  <MatchSectionSkeleton />
+```text
+┌─────────────────────────────────────────────────────┐
+│  pg_cron (every 30s, 2pm–midnight IST)              │
+│  → calls cricket-api-sync edge function             │
+└──────────────┬──────────────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────┐
+│  cricket-api-sync Edge Function                     │
+│                                                     │
+│  Phase 1: DISCOVER (runs once/day)                  │
+│  GET /v1/currentMatches → filter matchType=t20,     │
+│  series containing "IPL" → upsert into matches,     │
+│  teams, match_roster, match_live_state              │
+│                                                     │
+│  Phase 2: SYNC SCORES (runs every 30s when live)    │
+│  GET /v1/match_scorecard?id=<ext_id>                │
+│  → compare score delta vs last known state          │
+│  → derive delivery outcome (dot/1/2/3/4/6/W/wd/nb) │
+│  → insert into deliveries table                     │
+│  → open prediction window before each ball          │
+│  → auto-lock + resolve window after recording       │
+│  → update match_live_state + leaderboard            │
+│                                                     │
+│  Phase 3: MATCH LIFECYCLE                           │
+│  Innings break detection → set phase='break'        │
+│  Match end detection → set status='ended'           │
+└─────────────────────────────────────────────────────┘
 ```
 
-`site_config` data is purely cosmetic text with fallbacks for every single key. There is zero reason to block the match section on whether site config has loaded. If `configLoading` gets stuck (network miss, cache race, etc.), the skeleton stays forever — even when `loading` (match data) is already `false`.
+### Key technical decisions
 
-**Fix**: Remove `configLoading` from the skeleton condition. The match section should render as soon as match data is ready. Config text has hardcoded fallbacks (`get('hero_title', 'T20 Fan Night')`) so it renders perfectly without waiting for DB.
+1. **API key storage**: Store `3cd5ae6b-3053-4c9d-8697-e049696924c3` as `CRICKET_API_KEY` secret (already paid plan)
+2. **External match ID tracking**: Add `external_match_id` column to `matches` table to link our matches to CricketData.org match IDs and prevent duplicate creation
+3. **Score delta derivation**: When the API reports score changed from 45/2 to 49/2 with overs going from 6.3→6.4, we derive "boundary_4". When wickets increment, we derive "wicket". Extras (wide/no-ball) detected from overs not incrementing + score changing.
+4. **Prediction window automation**: Each detected new ball auto-opens a prediction window (5s before detection), then locks and resolves it with the derived outcome.
+5. **Sync state table**: New `api_sync_state` table stores last-seen score/overs/wickets per match to compute deltas accurately.
 
-Also fix `useSiteConfig` to never start in `loading = true` when `cache` is null on first mount — initialise it as non-blocking so it doesn't hold up the page.
+### Limitations (honest)
+- CricketData.org provides scorecard-level data, not true ball-by-ball. The system **derives** ball outcomes from score deltas, which is ~90% accurate. Edge cases: byes vs leg-byes, no-ball+runs combos may be approximated.
+- Data is "a few minutes behind real-time" per CricketData.org's terms. Prediction windows will lag live TV by 1-3 minutes.
+- Lineup data (playing XI) depends on what the API provides in `match_scorecard` — batting/bowling lists effectively give us the XI.
 
-## Changes
+### Database changes (2 migrations)
 
-### `src/pages/Index.tsx`
-- Line 251: Change `{(loading || configLoading) ?` → `{loading ?`
-- That's the only change needed here
+**Migration 1**: Add external ID tracking
+```sql
+ALTER TABLE matches ADD COLUMN external_match_id text UNIQUE;
 
-### `src/hooks/useSiteConfig.ts`
-- Change `loading` initial state from `!cache` to always `false`
-- The hook will fetch in background and update config text, but never block rendering
-- All `get()` calls have fallbacks so content is immediately visible
+CREATE TABLE api_sync_state (
+  match_id uuid PRIMARY KEY REFERENCES matches(id),
+  external_match_id text NOT NULL,
+  last_innings1_score int DEFAULT 0,
+  last_innings1_wickets int DEFAULT 0,
+  last_innings1_overs numeric DEFAULT 0,
+  last_innings2_score int DEFAULT 0,
+  last_innings2_wickets int DEFAULT 0,
+  last_innings2_overs numeric DEFAULT 0,
+  last_synced_at timestamptz DEFAULT now(),
+  sync_enabled boolean DEFAULT true,
+  created_at timestamptz DEFAULT now()
+);
 
-```ts
-// Before:
-const [loading, setLoading] = useState(!cache);
-
-// After:
-const [loading, setLoading] = useState(false);
+ALTER TABLE api_sync_state ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Sync state readable by all" ON api_sync_state FOR SELECT USING (true);
+CREATE POLICY "Sync state writable by authenticated" ON api_sync_state FOR ALL USING (auth.role() = 'authenticated');
 ```
 
-This makes `configLoading` always `false` on mount, so it can never block the page. The fetch still runs in background and updates text once loaded.
+**Migration 2**: Enable realtime on sync state
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE api_sync_state;
+```
 
-## Why this is the correct fix
+### New edge function: `cricket-api-sync`
 
-The `site_config` data contains display text (hero title, subtitles, feature labels). Every single `get()` call in Index.tsx has a hardcoded fallback string. There is no functional need to wait for this data before showing the page — the fallbacks are production-quality text. Blocking the page on it was always wrong; this removes that coupling entirely.
+Single function handling 3 actions via `?action=discover|sync|status`:
+- **discover**: Fetches `currentMatches`, filters IPL T20s, creates matches + teams + roster + live_state + sync_state + scoring_config. Skips already-imported matches.
+- **sync**: For each match with `sync_enabled=true` and status `live`/`in_progress`, fetches `match_scorecard`, computes deltas, derives deliveries, manages prediction windows, updates leaderboard.
+- **status**: Returns current sync state for admin dashboard.
 
-## Files Changed
-| File | Change |
-|---|---|
-| `src/hooks/useSiteConfig.ts` | Set initial `loading` state to `false` so it never blocks consumers |
-| `src/pages/Index.tsx` | Remove `configLoading` from skeleton gate condition — match data alone controls skeleton |
+### Cron job setup
+Using `pg_cron` + `pg_net` to call the edge function:
+- **discover**: Every 30 minutes between 12:00-23:59 IST
+- **sync**: Every 30 seconds when any match is live (or every 60s to conserve API hits)
+
+### Admin UI: API Sync panel
+New section in `AdminMatches.tsx` or a dedicated admin page:
+- Toggle auto-sync on/off per match
+- Show sync status (last synced, current delta, API hits remaining)
+- Manual "Sync Now" button
+- Link/unlink external match ID
+
+### Files changed
+1. `supabase/functions/cricket-api-sync/index.ts` — new edge function (~300 lines)
+2. `supabase/config.toml` — add function config
+3. `src/pages/admin/AdminMatches.tsx` — add API sync status panel
+4. 2 database migrations (schema changes above)
+5. 1 SQL insert (cron job schedule)
+
