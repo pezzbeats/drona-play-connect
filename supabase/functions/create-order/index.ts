@@ -34,6 +34,15 @@ async function generateSignedQR(matchId: string, mobile: string, seatIndex: numb
   return `${payload}-SIG:${sigHex}`;
 }
 
+async function generateGamePIN(): Promise<{ pin: string; hash: string }> {
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+  return { pin, hash };
+}
+
 async function checkRateLimit(supabase: any, key: string, limitCount: number, windowMs: number): Promise<boolean> {
   const windowStart = new Date(Date.now() - windowMs).toISOString();
   await supabase.from("rate_limit_events").delete().eq("key", key).lt("created_at", new Date(Date.now() - 600_000).toISOString());
@@ -67,11 +76,13 @@ serve(async (req) => {
     if (!payment_method) return fail("payment_method is required", "VALIDATION_ERROR");
     if (!seats_count || seats_count < 1) return fail("seats_count must be at least 1", "VALIDATION_ERROR");
 
+    const isFreeOrder = payment_method === "free";
+
     // ── Discount computation ──
-    const subtotal = pricing_snapshot?.total ?? 0;
+    const subtotal = isFreeOrder ? 0 : (pricing_snapshot?.total ?? 0);
     let discountAmount = 0;
 
-    if (discount_type && discount_value != null) {
+    if (!isFreeOrder && discount_type && discount_value != null) {
       const discountVal = parseFloat(discount_value) || 0;
 
       if (discount_type === "flat") {
@@ -84,8 +95,8 @@ serve(async (req) => {
       }
     }
 
-    const totalAmount = Math.max(0, subtotal - discountAmount);
-    const advancePaidAmount = Math.min(Math.max(parseInt(advance_paid ?? 0) || 0, 0), totalAmount);
+    const totalAmount = isFreeOrder ? 0 : Math.max(0, subtotal - discountAmount);
+    const advancePaidAmount = isFreeOrder ? 0 : Math.min(Math.max(parseInt(advance_paid ?? 0) || 0, 0), totalAmount);
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const hmacSecret = Deno.env.get("LOVABLE_API_KEY") || "fallback-secret";
@@ -96,6 +107,20 @@ serve(async (req) => {
       const allowed = await checkRateLimit(supabase, limitKey, 5, 600_000);
       if (!allowed) {
         return fail("Too many orders. Please wait before trying again.", "RATE_LIMITED");
+      }
+    }
+
+    // ── Duplicate check for free orders (one per match per mobile) ──
+    if (isFreeOrder) {
+      const { data: existing } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("match_id", match_id)
+        .eq("purchaser_mobile", purchaser_mobile)
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        return fail("You have already registered for this match. Use your existing PIN to play.", "DUPLICATE_ORDER");
       }
     }
 
@@ -112,10 +137,11 @@ serve(async (req) => {
     }
 
     // Determine payment status
-    const isFullyPaid = advancePaidAmount >= totalAmount && totalAmount > 0;
-    const paymentStatus = isFullyPaid ? "paid_manual_verified" : "unpaid";
+    const isFullyPaid = isFreeOrder || (advancePaidAmount >= totalAmount && totalAmount > 0);
+    const paymentStatus = isFreeOrder ? "paid_verified" : (isFullyPaid ? "paid_manual_verified" : "unpaid");
 
-    const canGenerate = payment_method === "pay_at_hotel"
+    const canGenerate = isFreeOrder
+      || payment_method === "pay_at_hotel"
       || payment_method === "cash"
       || payment_method === "card"
       || payment_method === "upi"
@@ -152,7 +178,7 @@ serve(async (req) => {
       return fail(`Failed to create order: ${orderError.message}`, "ORDER_INSERT_ERROR");
     }
 
-    // Generate HMAC-signed tickets for all manual-payment methods
+    // Generate HMAC-signed tickets
     let tickets: any[] = [];
     if (canGenerate) {
       for (let i = 0; i < seats_count; i++) {
@@ -166,6 +192,22 @@ serve(async (req) => {
         }
         if (ticket) tickets.push(ticket);
       }
+    }
+
+    // ── For free orders: auto-generate game_access with PIN ──
+    let game_pin: string | null = null;
+    if (isFreeOrder && tickets.length > 0) {
+      const { pin, hash } = await generateGamePIN();
+      game_pin = pin;
+
+      // Create game_access for the first ticket (one PIN per registration)
+      await supabase.from("game_access").insert({
+        match_id,
+        ticket_id: tickets[0].id,
+        mobile: purchaser_mobile,
+        pin_hash: hash,
+        is_active: true,
+      });
     }
 
     // Record advance payment collection if advance was paid
@@ -184,6 +226,7 @@ serve(async (req) => {
     return ok({
       order_id: order.id,
       tickets,
+      game_pin,
       advance_paid: advancePaidAmount,
       balance_due: totalAmount - advancePaidAmount,
       discount_amount: discountAmount,
