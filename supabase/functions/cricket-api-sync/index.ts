@@ -357,6 +357,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
     return { synced: 0, message: "No matches to sync" };
 
   const results: any[] = [];
+  let recommendedInterval = 20; // default 20s
 
   for (const state of syncStates) {
     const matchId = state.match_id;
