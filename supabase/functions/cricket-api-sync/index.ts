@@ -458,18 +458,40 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         return parseInt(val) || 0;
       };
 
+      // Extract overs from balls count or array length
+      const getOvers = (innings: any): number => {
+        // If overs is a number, use it directly
+        if (typeof innings?.overs === "number") return innings.overs;
+        // Calculate from score.balls
+        const balls = innings?.score?.balls;
+        if (typeof balls === "number" && balls > 0) {
+          return Math.floor(balls / 6) + (balls % 6) / 10;
+        }
+        // If overs is an array, use its length
+        if (Array.isArray(innings?.overs)) return innings.overs.length;
+        return 0;
+      };
+
+      const getWickets = (innings: any): number => {
+        if (typeof innings?.wickets === "number") return innings.wickets;
+        if (Array.isArray(innings?.wickets)) return innings.wickets.length;
+        // Try wicket_order array
+        if (Array.isArray(innings?.wicket_order)) return innings.wicket_order.length;
+        return 0;
+      };
+
       if (inningsKeys.length >= 1) {
         const i1 = innings[inningsKeys[0]];
-        console.log(`Match ${matchId} inn1 keys: ${i1 ? Object.keys(i1).join(",") : "null"}, score type: ${typeof i1?.score}, score raw: ${JSON.stringify(i1?.score)?.slice(0,100)}`);
+        console.log(`Match ${matchId} inn1 keys: ${i1 ? Object.keys(i1).join(",") : "null"}, score type: ${typeof i1?.score}, score raw: ${JSON.stringify(i1?.score)?.slice(0,100)}, wickets type: ${typeof i1?.wickets}, overs type: ${typeof i1?.overs}`);
         inn1Score = getNum(i1?.score) || getNum(i1?.runs) || 0;
-        inn1Wickets = getNum(i1?.wickets) || 0;
-        inn1Overs = getNum(i1?.overs) || 0;
+        inn1Wickets = getWickets(i1);
+        inn1Overs = getOvers(i1);
       }
       if (inningsKeys.length >= 2) {
         const i2 = innings[inningsKeys[1]];
         inn2Score = getNum(i2?.score) || getNum(i2?.runs) || 0;
-        inn2Wickets = getNum(i2?.wickets) || 0;
-        inn2Overs = getNum(i2?.overs) || 0;
+        inn2Wickets = getWickets(i2);
+        inn2Overs = getOvers(i2);
       }
 
       const currentInnings = inn2Overs > 0 || inn2Score > 0 ? 2 : 1;
