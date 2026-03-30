@@ -24,8 +24,6 @@ Deno.serve(async (req) => {
     return json({ error: "ROANUZ_API_KEY or ROANUZ_PROJECT_KEY not configured" }, 500);
   }
 
-  console.log("DEBUG: project_key length=", ROANUZ_PROJECT_KEY.length, "api_key length=", ROANUZ_API_KEY.length);
-  console.log("DEBUG: project_key first4=", ROANUZ_PROJECT_KEY.substring(0, 4), "api_key first4=", ROANUZ_API_KEY.substring(0, 4));
 
   // Step 1: Authenticate with Roanuz to get access token
   let accessToken: string;
