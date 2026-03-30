@@ -117,12 +117,14 @@ function json(data: any, status = 200) {
 }
 
 function isApiStatusLive(statusStr: string): boolean {
-  const s = (statusStr || "").toLowerCase();
+  const s = (statusStr || "").toLowerCase().trim();
+  // Exclude completed/not_started explicitly
+  if (s.includes("not_started") || s.includes("completed") || s.includes("result") || s === "not started") return false;
   return (
     s.includes("live") ||
     s.includes("in progress") ||
     s.includes("in_progress") ||
-    s.includes("started") ||
+    s === "started" ||
     s.includes("play") ||
     s.includes("innings") ||
     s.includes("stumps") ||
