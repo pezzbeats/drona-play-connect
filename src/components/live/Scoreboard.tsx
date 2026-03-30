@@ -545,10 +545,62 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
           <div className="text-center py-6">
             <div className="text-5xl mb-3">🏆</div>
             <p className="font-display text-xl font-bold text-foreground">Match Ended</p>
-            <div className="flex justify-center gap-6 mt-3 text-sm text-muted-foreground">
-              <span>1st: {state.innings1_score}/{state.innings1_wickets}</span>
-              <span>2nd: {state.innings2_score}/{state.innings2_wickets}</span>
+
+            {/* Winner banner */}
+            {matchSummary?.winnerTeam && (
+              <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/15 border border-primary/30">
+                <Trophy className="h-4 w-4 text-primary" />
+                <span className="text-sm text-primary font-bold">
+                  {matchSummary.winnerTeam} {matchSummary.winMargin}
+                </span>
+              </div>
+            )}
+            {matchSummary && !matchSummary.winnerTeam && matchSummary.winMargin && (
+              <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-warning/15 border border-warning/30">
+                <span className="text-sm text-warning font-bold">{matchSummary.winMargin}</span>
+              </div>
+            )}
+
+            {/* Innings scores */}
+            <div className="flex justify-center gap-6 mt-4 text-sm text-muted-foreground">
+              <span className="flex flex-col items-center">
+                <span className="font-bold text-[10px] uppercase mb-0.5 tracking-wider">1st Inn</span>
+                <span className="font-display font-bold text-foreground text-base">{state.innings1_score}/{state.innings1_wickets}</span>
+                <span className="text-xs">({(() => { const o = Number(state.innings1_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
+              </span>
+              <div className="w-px bg-border/40" />
+              <span className="flex flex-col items-center">
+                <span className="font-bold text-[10px] uppercase mb-0.5 tracking-wider">2nd Inn</span>
+                <span className="font-display font-bold text-foreground text-base">{state.innings2_score}/{state.innings2_wickets}</span>
+                <span className="text-xs">({(() => { const o = Number(state.innings2_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
+              </span>
             </div>
+
+            {/* Top performers */}
+            {matchSummary && (matchSummary.topScorer || matchSummary.topWicketTaker) && (
+              <div className="mt-4 flex flex-wrap justify-center gap-3">
+                {matchSummary.topScorer && (
+                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-success/10 border border-success/20">
+                    <Flame className="h-3.5 w-3.5 text-success" />
+                    <div className="text-left">
+                      <div className="text-[10px] uppercase font-bold text-success tracking-wider">Top Scorer</div>
+                      <div className="text-xs font-semibold text-foreground">{matchSummary.topScorer.name} — {matchSummary.topScorer.runs} runs</div>
+                    </div>
+                  </div>
+                )}
+                {matchSummary.topWicketTaker && (
+                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
+                    <Target className="h-3.5 w-3.5 text-primary" />
+                    <div className="text-left">
+                      <div className="text-[10px] uppercase font-bold text-primary tracking-wider">Top Wickets</div>
+                      <div className="text-xs font-semibold text-foreground">{matchSummary.topWicketTaker.name} — {matchSummary.topWicketTaker.wickets}W</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Super over note */}
             {hasDecidedViaSuperOver && latestRound && (
               <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-warning/15 border border-warning/30">
                 <span className="text-xs text-warning font-semibold">
