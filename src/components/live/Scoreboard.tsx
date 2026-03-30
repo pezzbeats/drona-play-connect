@@ -147,6 +147,28 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
     fetchData,
   );
 
+  // Auto-poll cricket API sync every 30s while match is live
+  useEffect(() => {
+    const isLivePhase = state?.phase === 'innings1' || state?.phase === 'innings2' || state?.phase === 'break' || state?.phase === 'super_over';
+    if (!isLivePhase) return;
+
+    const poll = async () => {
+      try {
+        await supabase.functions.invoke('cricket-api-sync', {
+          body: null,
+          headers: {},
+        });
+      } catch (e) {
+        console.warn('API sync poll failed:', e);
+      }
+    };
+
+    // Poll immediately on first live detection, then every 30s
+    poll();
+    const interval = setInterval(poll, 30000);
+    return () => clearInterval(interval);
+  }, [state?.phase]);
+
   const currentInnings = state?.current_innings || 1;
   const score = currentInnings === 1 ? state?.innings1_score : state?.innings2_score;
   const wickets = currentInnings === 1 ? state?.innings1_wickets : state?.innings2_wickets;
