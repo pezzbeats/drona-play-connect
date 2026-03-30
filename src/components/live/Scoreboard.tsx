@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, ChevronDown, ChevronUp, Trophy, Target, Flame } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
 interface LiveState {
