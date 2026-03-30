@@ -363,6 +363,15 @@ async function doSync(sb: any, projectKey: string, headers: any) {
     const extId = state.external_match_id;
     const matchStatus = state.matches?.status;
 
+    // ── Auto-lock expired prediction windows (locks_at passed) ──
+    await sb
+      .from("prediction_windows")
+      .update({ status: "locked" })
+      .eq("match_id", matchId)
+      .eq("status", "open")
+      .not("locks_at", "is", null)
+      .lte("locks_at", new Date().toISOString());
+
     // Skip ended matches, but allow registrations_open and live
     if (matchStatus === "ended" || matchStatus === "draft") {
       results.push({ match_id: matchId, status: "skipped", reason: `status is ${matchStatus}` });

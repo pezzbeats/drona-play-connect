@@ -412,15 +412,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
               })}
             </div>
 
-            {submitted && (
-              <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium mt-3 pt-3 border-t border-primary/20">
-                <CheckCircle2 className="h-4 w-4" />
-                Guess locked in — cannot be changed
-              </div>
-            )}
-          </GlassCard>
-        );
-      })}
 
       {/* Closed/Resolved Windows */}
       {closedWindows.slice(0, 3).map(window => {
