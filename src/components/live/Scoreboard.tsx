@@ -200,6 +200,100 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
     };
   }, [state?.phase]);
 
+  // Fetch match summary when phase is ended
+  useEffect(() => {
+    if (state?.phase !== 'ended' || Object.keys(teams).length === 0 || Object.keys(players).length === 0) return;
+
+    const fetchMatchSummary = async () => {
+      try {
+        // Get roster to determine which team batted first
+        const { data: rosterData } = await supabase
+          .from('match_roster')
+          .select('team_id, is_batting_first')
+          .eq('match_id', matchId);
+
+        let winnerTeam: string | null = null;
+        let winMargin: string | null = null;
+
+        if (rosterData && rosterData.length >= 2 && state) {
+          const battingFirst = rosterData.find(r => r.is_batting_first);
+          const battingSecond = rosterData.find(r => !r.is_batting_first);
+          const inn1 = state.innings1_score;
+          const inn2 = state.innings2_score;
+
+          if (inn1 > inn2 && battingFirst) {
+            winnerTeam = teams[battingFirst.team_id]?.name || null;
+            winMargin = `won by ${inn1 - inn2} runs`;
+          } else if (inn2 > inn1 && battingSecond) {
+            winnerTeam = teams[battingSecond.team_id]?.name || null;
+            winMargin = `won by ${10 - state.innings2_wickets} wickets`;
+          } else {
+            winnerTeam = null;
+            winMargin = 'Match Tied';
+          }
+        }
+
+        // Top scorer from deliveries
+        const { data: deliveries } = await supabase
+          .from('deliveries')
+          .select('striker_id, runs_off_bat')
+          .eq('match_id', matchId);
+
+        let topScorer: { name: string; runs: number } | null = null;
+        if (deliveries && deliveries.length > 0) {
+          const runsMap: Record<string, number> = {};
+          for (const d of deliveries) {
+            if (d.striker_id) {
+              runsMap[d.striker_id] = (runsMap[d.striker_id] || 0) + d.runs_off_bat;
+            }
+          }
+          const topId = Object.entries(runsMap).sort((a, b) => b[1] - a[1])[0];
+          if (topId && players[topId[0]]) {
+            topScorer = { name: players[topId[0]].name, runs: topId[1] };
+          }
+        }
+
+        // Top wicket-taker
+        let topWicketTaker: { name: string; wickets: number } | null = null;
+        if (deliveries && deliveries.length > 0) {
+          const { data: wicketDeliveries } = await supabase
+            .from('deliveries')
+            .select('bowler_id')
+            .eq('match_id', matchId)
+            .eq('is_wicket', true);
+
+          if (wicketDeliveries && wicketDeliveries.length > 0) {
+            const wicketMap: Record<string, number> = {};
+            for (const d of wicketDeliveries) {
+              if (d.bowler_id) {
+                wicketMap[d.bowler_id] = (wicketMap[d.bowler_id] || 0) + 1;
+              }
+            }
+            const topBowler = Object.entries(wicketMap).sort((a, b) => b[1] - a[1])[0];
+            if (topBowler && players[topBowler[0]]) {
+              topWicketTaker = { name: players[topBowler[0]].name, wickets: topBowler[1] };
+            }
+          }
+        }
+
+        // Check super over winner override
+        if (superOverRounds.length > 0) {
+          const lastRound = superOverRounds[superOverRounds.length - 1];
+          if (lastRound.winner) {
+            winnerTeam = lastRound.winner.name;
+            winMargin = `won via Super Over`;
+          }
+        }
+
+        setMatchSummary({ winnerTeam, winMargin, topScorer, topWicketTaker });
+      } catch (e) {
+        console.warn('Failed to fetch match summary:', e);
+      }
+    };
+
+    fetchMatchSummary();
+  }, [state?.phase, matchId, teams, players, superOverRounds]);
+
   const currentInnings = state?.current_innings || 1;
   const score = currentInnings === 1 ? state?.innings1_score : state?.innings2_score;
   const wickets = currentInnings === 1 ? state?.innings1_wickets : state?.innings2_wickets;
