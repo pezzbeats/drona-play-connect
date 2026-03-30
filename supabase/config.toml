@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.elevenlabs-tools]
 verify_jwt = false
+
+[functions.cricket-api-sync]
+verify_jwt = false
