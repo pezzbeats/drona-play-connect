@@ -12,6 +12,21 @@ import {
   Phone, MapPin, Calendar, Lock, Trophy,
 } from 'lucide-react';
 import { CountdownTimer } from '@/components/ui/CountdownTimer';
+import cskLogo from '@/assets/ipl-teams/csk.png';
+import miLogo from '@/assets/ipl-teams/mi.png';
+import rcbLogo from '@/assets/ipl-teams/rcb.png';
+import kkrLogo from '@/assets/ipl-teams/kkr.png';
+import srhLogo from '@/assets/ipl-teams/srh.png';
+import dcLogo from '@/assets/ipl-teams/dc.png';
+import pbksLogo from '@/assets/ipl-teams/pbks.png';
+import rrLogo from '@/assets/ipl-teams/rr.png';
+import gtLogo from '@/assets/ipl-teams/gt.png';
+import lsgLogo from '@/assets/ipl-teams/lsg.png';
+
+const IPL_TEAM_LOGOS: Record<string, string> = {
+  CSK: cskLogo, MI: miLogo, RCB: rcbLogo, KKR: kkrLogo, SRH: srhLogo,
+  DC: dcLogo, PBKS: pbksLogo, PBK: pbksLogo, RR: rrLogo, GT: gtLogo, LSG: lsgLogo,
+};
 
 interface Match {
   id: string; name: string; opponent: string | null;
@@ -191,30 +206,38 @@ export default function RegisterPage() {
           {homeTeam && awayTeam ? (
             <div className="flex items-center justify-center gap-4 mb-3">
               <div className="text-center flex-1">
-                <div
-                  className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
-                  style={{
-                    backgroundColor: homeTeam.color ? `${homeTeam.color}22` : 'hsl(var(--primary) / 0.1)',
-                    borderColor: homeTeam.color ? `${homeTeam.color}44` : 'hsl(var(--primary) / 0.3)',
-                    color: homeTeam.color || 'hsl(var(--primary))',
-                  }}
-                >
-                  {homeTeam.short_code}
-                </div>
+              {IPL_TEAM_LOGOS[homeTeam.short_code?.toUpperCase()] ? (
+                  <img src={IPL_TEAM_LOGOS[homeTeam.short_code.toUpperCase()]} alt={homeTeam.name} className="w-12 h-12 mx-auto object-contain mb-1" loading="lazy" />
+                ) : (
+                  <div
+                    className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
+                    style={{
+                      backgroundColor: homeTeam.color ? `${homeTeam.color}22` : 'hsl(var(--primary) / 0.1)',
+                      borderColor: homeTeam.color ? `${homeTeam.color}44` : 'hsl(var(--primary) / 0.3)',
+                      color: homeTeam.color || 'hsl(var(--primary))',
+                    }}
+                  >
+                    {homeTeam.short_code}
+                  </div>
+                )}
                 <p className="text-xs text-foreground/80 font-medium truncate">{homeTeam.name}</p>
               </div>
               <span className="text-muted-foreground font-display font-bold">vs</span>
               <div className="text-center flex-1">
-                <div
-                  className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
-                  style={{
-                    backgroundColor: awayTeam.color ? `${awayTeam.color}22` : 'hsl(var(--secondary) / 0.1)',
-                    borderColor: awayTeam.color ? `${awayTeam.color}44` : 'hsl(var(--secondary) / 0.3)',
-                    color: awayTeam.color || 'hsl(var(--secondary))',
-                  }}
-                >
-                  {awayTeam.short_code}
-                </div>
+              {IPL_TEAM_LOGOS[awayTeam.short_code?.toUpperCase()] ? (
+                  <img src={IPL_TEAM_LOGOS[awayTeam.short_code.toUpperCase()]} alt={awayTeam.name} className="w-12 h-12 mx-auto object-contain mb-1" loading="lazy" />
+                ) : (
+                  <div
+                    className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
+                    style={{
+                      backgroundColor: awayTeam.color ? `${awayTeam.color}22` : 'hsl(var(--secondary) / 0.1)',
+                      borderColor: awayTeam.color ? `${awayTeam.color}44` : 'hsl(var(--secondary) / 0.3)',
+                      color: awayTeam.color || 'hsl(var(--secondary))',
+                    }}
+                  >
+                    {awayTeam.short_code}
+                  </div>
+                )}
                 <p className="text-xs text-foreground/80 font-medium truncate">{awayTeam.name}</p>
               </div>
             </div>

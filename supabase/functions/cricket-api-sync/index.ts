@@ -9,6 +9,29 @@ const corsHeaders = {
 const ROANUZ_BASE = "https://api.sports.roanuz.com/v5/cricket";
 const IPL_TOURNAMENT_KEY = "a-rz--cricket--bcci--iplt20--2026-ZGwl";
 
+// Known IPL team name → short_code + brand color mapping
+const IPL_TEAM_MAP: Record<string, { code: string; color: string }> = {
+  "chennai super kings": { code: "CSK", color: "#f9cd05" },
+  "mumbai indians": { code: "MI", color: "#004BA0" },
+  "royal challengers bengaluru": { code: "RCB", color: "#EC1C24" },
+  "royal challengers bangalore": { code: "RCB", color: "#EC1C24" },
+  "kolkata knight riders": { code: "KKR", color: "#3A225D" },
+  "sunrisers hyderabad": { code: "SRH", color: "#FF822A" },
+  "delhi capitals": { code: "DC", color: "#004C93" },
+  "punjab kings": { code: "PBKS", color: "#ED1B24" },
+  "rajasthan royals": { code: "RR", color: "#EA1A85" },
+  "gujarat titans": { code: "GT", color: "#1B2133" },
+  "lucknow super giants": { code: "LSG", color: "#A72056" },
+};
+
+function getIplTeamInfo(name: string): { code: string; color: string } | null {
+  const lower = name.toLowerCase().trim();
+  for (const [key, val] of Object.entries(IPL_TEAM_MAP)) {
+    if (lower.includes(key) || key.includes(lower)) return val;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
@@ -132,14 +155,18 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
     for (const tKey of teamKeys.slice(0, 2)) {
       const t = teams[tKey];
       const tName = t.name || tKey;
-      const shortCode = (t.short_name || tKey).toUpperCase().slice(0, 3);
+      const iplInfo = getIplTeamInfo(tName);
+      const shortCode = iplInfo?.code || (t.short_name || tKey).toUpperCase().slice(0, 3);
+      const teamColor = iplInfo?.color || null;
       const { data: existingTeam } = await sb
         .from("teams").select("id").eq("name", tName).maybeSingle();
       if (existingTeam) {
+        // Update short_code and color if we have better info
+        await sb.from("teams").update({ short_code: shortCode, color: teamColor }).eq("id", existingTeam.id);
         teamIds.push(existingTeam.id);
       } else {
         const { data: newTeam } = await sb
-          .from("teams").insert({ name: tName, short_code: shortCode }).select("id").single();
+          .from("teams").insert({ name: tName, short_code: shortCode, color: teamColor }).select("id").single();
         if (newTeam) teamIds.push(newTeam.id);
       }
     }
