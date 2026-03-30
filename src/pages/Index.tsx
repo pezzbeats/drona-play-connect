@@ -431,7 +431,7 @@ export default function IndexPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const fetchData = async (attempt = 0): Promise<void> => {
+  const fetchData = async (attempt = 0): Promise<number> => {
     if (attempt === 0) setLoading(true);
     try {
       // Fetch today's matches: start_time within today (IST) OR is_active_for_registration
