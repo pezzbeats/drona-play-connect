@@ -180,7 +180,7 @@ export default function ApiSyncPanel() {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">
                   {s.sync_enabled ? (
-                    <Power className="h-3.5 w-3.5 text-green-500 inline" />
+                    <Power className="h-3.5 w-3.5 text-primary inline" />
                   ) : (
                     <PowerOff className="h-3.5 w-3.5 text-muted-foreground inline" />
                   )}
