@@ -132,7 +132,28 @@ interface TodayMatch {
 interface RosterTeam {
   match_id: string;
   side: string;
-  teams: { name: string; short_code: string; color: string | null } | null;
+  teams: { name: string; short_code: string; color: string | null; logo_path: string | null } | null;
+}
+
+// Well-known IPL team brand colors as fallback
+const IPL_TEAM_COLORS: Record<string, { bg: string; accent: string }> = {
+  CSK: { bg: '#f9cd05', accent: '#0058e0' },
+  MI: { bg: '#004ba0', accent: '#d1ab3e' },
+  RCB: { bg: '#d4213d', accent: '#2b2b2b' },
+  KKR: { bg: '#3a225d', accent: '#f0c230' },
+  SRH: { bg: '#ff822a', accent: '#000000' },
+  DC:  { bg: '#0055a3', accent: '#ef1c25' },
+  PBKS: { bg: '#dd1f2d', accent: '#a7a9ac' },
+  RR:  { bg: '#ea1a85', accent: '#254aa5' },
+  GT:  { bg: '#1c3c6b', accent: '#b09862' },
+  LSG: { bg: '#a72056', accent: '#ffcc00' },
+};
+
+function getTeamColors(shortCode: string, dbColor: string | null) {
+  const ipl = IPL_TEAM_COLORS[shortCode.toUpperCase()];
+  if (ipl) return ipl;
+  if (dbColor) return { bg: dbColor, accent: dbColor };
+  return { bg: 'hsl(var(--primary))', accent: 'hsl(var(--secondary))' };
 }
 
 const FEATURE_ICONS = [
