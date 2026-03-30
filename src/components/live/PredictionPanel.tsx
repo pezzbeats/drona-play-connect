@@ -359,60 +359,6 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
           }}
         />
       ))}
-
-            {/* Option cards — 4-column grid */}
-            <div className="grid grid-cols-4 gap-2">
-              {(window.options || []).map((opt: any, optIdx: number) => {
-                const isSubmitted = submitted === opt.key;
-                const isThisSpinning = isThisWindowSubmitting && submittingKey?.optKey === opt.key;
-                const isDisabled = !!submitted || frozen || isThisWindowSubmitting;
-                const colors = KEY_COLORS[opt.key] || fallbackColor;
-
-                // Derive emoji from BALL_OUTCOMES lookup, fall back to opt.label first char
-                const outcomeData = BALL_OUTCOMES.find(o => o.key === opt.key);
-                const emoji = outcomeData?.emoji ?? opt.label.slice(0, 2);
-
-                let cardCls = '';
-                if (frozen && !isSubmitted) {
-                  cardCls = 'border-border/20 bg-muted/10 text-muted-foreground/40 cursor-not-allowed';
-                } else if (isThisSpinning) {
-                  cardCls = 'border-primary/60 bg-primary/10 text-primary cursor-wait';
-                } else if (isSubmitted) {
-                  cardCls = `${colors.selected} ring-2 ring-primary/40`;
-                } else if (isDisabled) {
-                  cardCls = 'border-border/20 bg-muted/10 text-muted-foreground/40 cursor-not-allowed opacity-50';
-                } else {
-                  cardCls = 'border-border/40 bg-card/50 text-foreground hover:border-primary/50 hover:bg-primary/8 hover:scale-105 active:scale-95';
-                }
-
-                return (
-                  <button
-                    key={opt.key}
-                    disabled={isDisabled && !isSubmitted}
-                    onClick={() => handleOptionTap(window.id, opt.key)}
-                    className={`flex flex-col items-center justify-center gap-1 rounded-2xl border-2 h-[72px] transition-all touch-manipulation select-none ${cardCls} ${
-                      shouldAnimate ? 'animate-slide-up' : ''
-                    }`}
-                    style={shouldAnimate ? { animationDelay: `${optIdx * 50}ms`, animationFillMode: 'both' } as React.CSSProperties : undefined}
-                  >
-                    {isThisSpinning ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <>
-                        <span className={`text-xl font-black leading-none ${isSubmitted ? '' : (KEY_COLORS[opt.key] || fallbackColor).emoji}`}>
-                          {isSubmitted ? <CheckCircle2 className="h-5 w-5" /> : emoji}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wide leading-none opacity-80">
-                          {opt.label}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-
       {/* Closed/Resolved Windows */}
       {closedWindows.slice(0, 3).map(window => {
         const submitted = submittedWindows[window.id];
