@@ -1,60 +1,40 @@
 
 
-## Problem
+## Match Summary on Ended State
 
-Three issues identified from the logs:
+When users view an ended match, the Scoreboard's "ended" section currently only shows basic innings scores. We'll enhance it with a rich match summary card showing the winner, top run-scorer, and top wicket-taker.
 
-### 1. Wrong External Match ID
-The RR vs CSK match (`fa4fd1a8`) is linked to external ID `a-rz--cricket--hC2031799080170184707`, but the Roanuz API returns `"completed"` for it. This is likely pointing to an **old/wrong match** — not today's live game. Score shows `0/0 (0ov)` because the match data response has no innings data (`hasInnings: undefined`), and since the status is "completed", the sync skips score updates.
+### Data Source
 
-The discover function only runs once per match and stores the external ID. If the wrong ID was mapped initially, it never self-corrects.
+All data comes from existing tables — no schema changes needed:
+- **Winner**: Compare `innings1_score` vs `innings2_score` from `match_live_state`, map to team names via `match_roster` (side `home`/`away` + `is_batting_first`)
+- **Top Scorer**: Aggregate `deliveries` table — `SUM(runs_off_bat)` grouped by `striker_id`, pick highest
+- **Top Wicket-Taker**: Count deliveries where `is_wicket = true` grouped by `bowler_id`, pick highest
 
-### 2. Gemini API 404
-The model name `gemini-2.0-flash-lite` returns 404. This is not a valid model in the Gemini API. Need to use `gemini-2.0-flash` or `gemini-1.5-flash`.
+### Changes
 
-### 3. Prediction Game Not Working
-Since scores aren't syncing (wrong external match ID → "completed" status), no new deliveries are recorded, so no prediction windows are being opened automatically.
+**File: `src/components/live/Scoreboard.tsx`**
 
-## Solution
+1. Add state for `matchSummary` (winner team name, top scorer name + runs, top wicket-taker name + wickets)
+2. On mount (or when phase becomes `ended`), run two aggregation queries against `deliveries` table for this match:
+   - Top scorer: group by `striker_id`, sum `runs_off_bat`, order desc, limit 1
+   - Top wicket-taker: group by `bowler_id` where `is_wicket = true`, count, order desc, limit 1
+3. Determine winner from `match_live_state` scores + `match_roster` batting order
+4. Replace the sparse "ended" block (lines 442-458) with a richer card:
+   - Trophy icon + "Match Ended"
+   - Winner banner (team name + "won by X runs" or "won by X wickets")
+   - Both innings scores side by side
+   - Top Scorer chip (player name + runs)
+   - Top Wicket-Taker chip (player name + wickets)
+   - Super over note if applicable (existing logic preserved)
 
-### File 1: `supabase/functions/cricket-api-sync/index.ts`
+### Technical Detail
 
-**A. Add debug logging of full API response structure** to diagnose the external match ID issue:
-```ts
-// After fetching match data, log the key fields
-console.log(`Match ${matchId} ext=${extId} raw keys: ${Object.keys(matchData).join(',')}`);
-console.log(`Match ${matchId} status_str=${matchData.status_str}, status=${matchData.status}, play_status=${matchData.play_status}`);
-```
+Since the `deliveries` table doesn't support aggregation via the Supabase JS client natively, we'll fetch deliveries for the match and compute aggregates client-side. For an ended match this is a one-time fetch, so performance is fine.
 
-**B. Add auto-re-discover logic**: When a match has status `live` in our DB but the API says `completed` and the score is 0/0, the external ID is wrong. Add a fallback that re-fetches today's fixtures and finds the correct match by team names:
-```ts
-// If our match is "live" but API says "completed" with no score data, 
-// the external_match_id is likely wrong — attempt re-discovery
-if (matchStatus === "live" && !apiIsLive && inn1Score === 0 && inn2Score === 0) {
-  console.warn(`Match ${matchId} appears mislinked (API=${apiStatusStr}, score=0). Attempting re-discovery...`);
-  const correctExtId = await rediscoverMatchId(sb, projectKey, headers, matchId);
-  if (correctExtId && correctExtId !== extId) {
-    // Update the sync state with the correct external ID and retry
-    await sb.from("api_sync_state").update({ external_match_id: correctExtId }).eq("match_id", matchId);
-    results.push({ match_id: matchId, status: "relinked", old_ext_id: extId, new_ext_id: correctExtId });
-    continue; // Will pick up correct data on next sync cycle
-  }
-}
-```
-
-**C. New `rediscoverMatchId` function**: Fetches tournament fixtures, matches by team names against our DB match name, and returns the correct external ID.
-
-**D. Fix Gemini model name**: Change `gemini-2.0-flash-lite` to `gemini-2.0-flash` (line 693).
-
-**E. Improve innings detection**: The API may nest innings under `matchData.innings` or `matchData.play?.innings`. Check both:
-```ts
-const inningsObj = matchData.innings || matchData.play?.innings || {};
-const hasInningsData = Object.keys(inningsObj).length > 0;
-```
-
-### File Summary
-
-| File | Change |
-|---|---|
-| `supabase/functions/cricket-api-sync/index.ts` | Add auto-re-discovery for mislinked matches; fix Gemini model to `gemini-2.0-flash`; check `matchData.play?.innings` fallback; add debug logging |
+Winner logic:
+- Get roster entries; the team with `is_batting_first = true` batted first (innings 1)
+- If `innings2_score > innings1_score` → batting-second team won by `(10 - innings2_wickets)` wickets
+- If `innings1_score > innings2_score` → batting-first team won by `(innings1_score - innings2_score)` runs
+- If equal → tie / decided via super over
 
