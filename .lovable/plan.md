@@ -2,42 +2,59 @@
 
 ## Problem
 
-The RR vs CSK match is live on TV but the app is stuck on "Pre-Match". The sync response confirms: `"reason":"not live yet per API"` for all 3 matches.
+Three issues identified from the logs:
 
-The root cause is the `isApiStatusLive()` function in `cricket-api-sync` — it only checks for `"live"`, `"in progress"`, and `"in_progress"` in the `status_str` field. The Roanuz Cricket API v5 likely returns different status strings (e.g., `"started"`, `"play"`, `"1st innings"`, `"2nd innings"`, `"innings break"`, `"stumps"`) that aren't being matched.
+### 1. Wrong External Match ID
+The RR vs CSK match (`fa4fd1a8`) is linked to external ID `a-rz--cricket--hC2031799080170184707`, but the Roanuz API returns `"completed"` for it. This is likely pointing to an **old/wrong match** — not today's live game. Score shows `0/0 (0ov)` because the match data response has no innings data (`hasInnings: undefined`), and since the status is "completed", the sync skips score updates.
 
-Additionally, the function only reads `matchData.status_str` but Roanuz v5 may use `matchData.status` (a structured object) or `matchData.status_overview` instead.
+The discover function only runs once per match and stores the external ID. If the wrong ID was mapped initially, it never self-corrects.
+
+### 2. Gemini API 404
+The model name `gemini-2.0-flash-lite` returns 404. This is not a valid model in the Gemini API. Need to use `gemini-2.0-flash` or `gemini-1.5-flash`.
+
+### 3. Prediction Game Not Working
+Since scores aren't syncing (wrong external match ID → "completed" status), no new deliveries are recorded, so no prediction windows are being opened automatically.
 
 ## Solution
 
-### 1. Fix `isApiStatusLive()` in `cricket-api-sync/index.ts`
+### File 1: `supabase/functions/cricket-api-sync/index.ts`
 
-Broaden the live-detection logic to cover all Roanuz status variations:
-
+**A. Add debug logging of full API response structure** to diagnose the external match ID issue:
 ```ts
-function isApiStatusLive(statusStr: string): boolean {
-  const s = (statusStr || "").toLowerCase();
-  return (
-    s.includes("live") ||
-    s.includes("in progress") ||
-    s.includes("in_progress") ||
-    s.includes("started") ||
-    s.includes("play") ||
-    s.includes("innings") ||
-    s.includes("stumps") ||
-    s.includes("break")
-  );
+// After fetching match data, log the key fields
+console.log(`Match ${matchId} ext=${extId} raw keys: ${Object.keys(matchData).join(',')}`);
+console.log(`Match ${matchId} status_str=${matchData.status_str}, status=${matchData.status}, play_status=${matchData.play_status}`);
+```
+
+**B. Add auto-re-discover logic**: When a match has status `live` in our DB but the API says `completed` and the score is 0/0, the external ID is wrong. Add a fallback that re-fetches today's fixtures and finds the correct match by team names:
+```ts
+// If our match is "live" but API says "completed" with no score data, 
+// the external_match_id is likely wrong — attempt re-discovery
+if (matchStatus === "live" && !apiIsLive && inn1Score === 0 && inn2Score === 0) {
+  console.warn(`Match ${matchId} appears mislinked (API=${apiStatusStr}, score=0). Attempting re-discovery...`);
+  const correctExtId = await rediscoverMatchId(sb, projectKey, headers, matchId);
+  if (correctExtId && correctExtId !== extId) {
+    // Update the sync state with the correct external ID and retry
+    await sb.from("api_sync_state").update({ external_match_id: correctExtId }).eq("match_id", matchId);
+    results.push({ match_id: matchId, status: "relinked", old_ext_id: extId, new_ext_id: correctExtId });
+    continue; // Will pick up correct data on next sync cycle
+  }
 }
 ```
 
-### 2. Add fallback status detection from multiple API fields
+**C. New `rediscoverMatchId` function**: Fetches tournament fixtures, matches by team names against our DB match name, and returns the correct external ID.
 
-In `doSync`, also check `matchData.status` (which may be a string like `"started"`) and `matchData.play_status` as fallbacks, not just `matchData.status_str`. Log the actual value so we can debug in production:
+**D. Fix Gemini model name**: Change `gemini-2.0-flash-lite` to `gemini-2.0-flash` (line 693).
 
+**E. Improve innings detection**: The API may nest innings under `matchData.innings` or `matchData.play?.innings`. Check both:
 ```ts
-const apiStatusStr = matchData.status_str || matchData.status || "";
-console.log(`Match ${matchId} API status_str: "${apiStatusStr}"`);
-const apiIsLive = isApiStatusLive(apiStatusStr);
+const inningsObj = matchData.innings || matchData.play?.innings || {};
+const hasInningsData = Object.keys(inningsObj).length > 0;
 ```
 
-Also check if `matchData.innings` has data — if innings data exists, the match is definitely live regardless of status string
+### File Summary
+
+| File | Change |
+|---|---|
+| `supabase/functions/cricket-api-sync/index.ts` | Add auto-re-discovery for mislinked matches; fix Gemini model to `gemini-2.0-flash`; check `matchData.play?.innings` fallback; add debug logging |
+
