@@ -2,40 +2,31 @@
 
 ## Problem
 
-Three gaps exist in the current system:
+When a new prediction window opens after resolving the previous ball, it stays open indefinitely until the next API sync (~30 seconds). A user watching the match on TV could see the ball outcome and still submit a prediction before the system detects the new delivery. There is no countdown or auto-lock timer.
 
-1. **Manual match activation required**: When `cricket-api-sync` discovers a match via the Roanuz API, it creates it but the admin must manually activate it. If a match goes live on TV, players with game access see "No Active Match."
+## Solution
 
-2. **No automatic polling for live scores**: The `doSync()` function works correctly but is only triggered by manual admin clicks or a cron job. There's no client-side or server-side continuous polling to keep scores updated in near real-time.
+Add a **12-second auto-lock timer** to every prediction window. The window opens, users get 12 seconds to predict, then it auto-locks — well before the next ball is bowled (~25-40 seconds between deliveries in cricket).
 
-3. **Prediction windows don't auto-close on ball delivery**: Currently, prediction windows are only closed when an admin manually records a delivery via `record-delivery` (which locks open windows before inserting). The API-synced deliveries in `doSync()` explicitly skip prediction window management (line 452: "Admin controls prediction window open/lock/resolve via Match Command Center").
+### Changes
 
-## Plan
+**1. Backend: Set `locks_at` when opening windows** (`supabase/functions/cricket-api-sync/index.ts`)
 
-### 1. Auto-activate matches when API detects them as "live"
+When auto-opening a new prediction window after a delivery sync, set `locks_at` to `now() + 12 seconds`. This is the source of truth for when the window closes.
 
-**File**: `supabase/functions/cricket-api-sync/index.ts` — in `doSync()`
+**2. Backend: Auto-lock expired windows on every sync** (`supabase/functions/cricket-api-sync/index.ts`)
 
-Currently, `doSync()` skips matches where `status !== 'live'` (line 351). But a newly discovered match starts as `registrations_open` and never transitions to `live` unless an admin does it.
+At the start of `doSync()`, before processing any deliveries, run a query to lock any open windows whose `locks_at` has passed:
+```sql
+UPDATE prediction_windows SET status = 'locked' 
+WHERE status = 'open' AND locks_at IS NOT NULL AND locks_at <= now()
+```
 
-**Fix**: In `doSync()`, when the API returns a match status that indicates "live" or "in progress", automatically update the match status to `live` in the `matches` table and set `is_active_for_registration = true`. Also update `match_live_state.phase` from `pre` to `innings1`.
+**3. Backend: Set `locks_at` in `resolve-prediction-window` (open action)** (`supabase/functions/resolve-prediction-window/index.ts`)
 
-Additionally, in `doDiscover()` (which already runs on the `auto` action), if the API shows a match as live during discovery, set its status to `live` directly instead of `registrations_open`.
+When admin manually opens a window via the "open" action, also set `locks_at` to 12 seconds from now, so manually-opened windows also auto-lock.
 
-### 2. Auto-poll live scores from client side
+**4. Frontend: Countdown timer on open windows** (`src/components/live/PredictionPanel.tsx`)
 
-**File**: `src/components/live/Scoreboard.tsx`
-
-Add a `setInterval` (every 30 seconds) that calls the `cricket-api-sync?action=sync` endpoint. This ensures that even without admin intervention, live scores from the Roanuz API are continuously fetched and written to the database — which then propagates via existing Realtime subscriptions.
-
-This polling only runs when the match is in a "live" phase (not pre-match or ended).
-
-**File**: `supabase/functions/cricket-api-sync/index.ts` — in `doSync()`
-
-Broaden the filter: instead of only syncing matches with `status = 'live'`, also sync matches with `status = 'registrations_open'` whose API status shows them as live. Auto-transition their status to `live`.
-
-### 3. Auto-lock prediction windows on new API-synced delivery
-
-**File**: `supabase/functions/cricket-api-sync/index.ts` — in `doSync()`, inside the new-ball insert loop
-
-When a new delivery is detected from the API (line 415–456), **before** inserting it, lock any open prediction windows for that match — exactly like `record-delivery` already does. Remove the comment on line 452 and add:
+- Read the `locks_at` field from each open prediction window
+- Add a visible countdown (e.g., "
