@@ -86,7 +86,7 @@ function GameLoginCard() {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2.5">
           <div>
-            <p className="text-xs text-muted-foreground mb-1.5 font-medium">Mobile Number</p>
+            <p className="text-xs text-muted-foreground mb-1.5 font-medium">Mobile Number (+91)</p>
             <input
               className="glass-input w-full h-11 px-3 rounded-lg text-sm bg-background/40 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-success/50 focus:ring-1 focus:ring-success/30 transition-colors"
               placeholder="10-digit mobile"
@@ -124,12 +124,15 @@ function GameLoginCard() {
         </GlassButton>
       </div>
 
-      <p className="text-xs text-muted-foreground text-center mt-3">
-        PIN is sent after you register for a match ·{' '}
-        <Link to="/play" className="text-success/80 hover:text-success underline-offset-2 hover:underline transition-colors">
+      <div className="flex items-center justify-between mt-3 px-1">
+        <p className="text-xs text-muted-foreground">
+          Forgot PIN?{' '}
+          <span className="text-foreground/70">Contact the venue</span>
+        </p>
+        <Link to="/play" className="text-xs text-success/80 hover:text-success underline-offset-2 hover:underline transition-colors">
           Full screen login →
         </Link>
-      </p>
+      </div>
     </GlassCard>
   );
 }
@@ -460,20 +463,31 @@ export default function IndexPage() {
       const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS); // 00:00 IST in UTC
       const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 60 * 60 * 1000 - 1); // 23:59:59.999 IST in UTC
 
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .select('id, name, opponent, venue, start_time, status, match_type')
-        .gte('start_time', todayStartUTC.toISOString())
-        .lte('start_time', todayEndUTC.toISOString())
-        .neq('status', 'draft')
-        .order('start_time', { ascending: true });
+      // Query 1: matches scheduled today (IST)
+      const [todayRes, activeRes] = await Promise.all([
+        supabase
+          .from('matches')
+          .select('id, name, opponent, venue, start_time, status, match_type')
+          .gte('start_time', todayStartUTC.toISOString())
+          .lte('start_time', todayEndUTC.toISOString())
+          .neq('status', 'draft')
+          .order('start_time', { ascending: true }),
+        // Query 2: any admin-activated match (fallback so it always shows)
+        supabase
+          .from('matches')
+          .select('id, name, opponent, venue, start_time, status, match_type')
+          .eq('is_active_for_registration', true)
+          .neq('status', 'draft'),
+      ]);
 
-      if (matchError) throw matchError;
+      if (todayRes.error) throw todayRes.error;
       setFetchError(false);
 
-      const uniqueMatches = matchData?.filter(
+      // Merge & deduplicate by ID
+      const merged = [...(todayRes.data || []), ...(activeRes.data || [])];
+      const uniqueMatches = merged.filter(
         (m, i, arr) => arr.findIndex(x => x.id === m.id) === i
-      ) || [];
+      );
       setMatches(uniqueMatches);
 
       // Fetch roster/teams for these matches

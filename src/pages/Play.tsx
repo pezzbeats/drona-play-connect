@@ -419,6 +419,10 @@ export default function PlayPage() {
           Don't have a PIN? Check in at the gate with your QR ticket.
         </p>
         <p className="text-center text-xs text-muted-foreground mt-2 px-4">
+          Forgot your PIN?{' '}
+          <span className="text-foreground/70 font-medium">Contact the venue to reset it.</span>
+        </p>
+        <p className="text-center text-xs text-muted-foreground mt-2 px-4">
           Don't have a pass yet?{' '}
           <Link to="/register" className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors font-semibold">
             Book your seats first →
