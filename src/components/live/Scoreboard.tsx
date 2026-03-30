@@ -202,14 +202,14 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
 
   // Fetch match summary when phase is ended
   useEffect(() => {
-    if (state?.phase !== 'ended' || Object.keys(teams).length === 0 || Object.keys(players).length === 0) return;
+    if (state?.phase !== 'ended' || Object.keys(teams).length === 0) return;
 
     const fetchMatchSummary = async () => {
       try {
         // Get roster to determine which team batted first
         const { data: rosterData } = await supabase
           .from('match_roster')
-          .select('team_id, is_batting_first')
+          .select('team_id, is_batting_first, side')
           .eq('match_id', matchId);
 
         let winnerTeam: string | null = null;
@@ -221,19 +221,55 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
           const inn1 = state.innings1_score;
           const inn2 = state.innings2_score;
 
-          if (inn1 > inn2 && battingFirst) {
-            winnerTeam = teams[battingFirst.team_id]?.name || null;
-            winMargin = `won by ${inn1 - inn2} runs`;
-          } else if (inn2 > inn1 && battingSecond) {
-            winnerTeam = teams[battingSecond.team_id]?.name || null;
-            winMargin = `won by ${10 - state.innings2_wickets} wickets`;
+          if (battingFirst && rosterData.some(r => r.is_batting_first)) {
+            // Normal path: is_batting_first is properly set
+            if (inn1 > inn2) {
+              winnerTeam = teams[battingFirst.team_id]?.name || null;
+              winMargin = `won by ${inn1 - inn2} runs`;
+            } else if (inn2 > inn1 && battingSecond) {
+              winnerTeam = teams[battingSecond.team_id]?.name || null;
+              winMargin = `won by ${10 - state.innings2_wickets} wickets`;
+            } else {
+              winnerTeam = null;
+              winMargin = 'Match Tied';
+            }
           } else {
-            winnerTeam = null;
-            winMargin = 'Match Tied';
+            // Fallback: is_batting_first not set — use batting_team_id from live state
+            // batting_team_id at end of match = team that was batting last (2nd innings)
+            const battingTeamId = state.batting_team_id;
+            const bowlingTeamId = state.bowling_team_id;
+
+            if (inn1 > inn2) {
+              // Team that batted first won by runs
+              // bowling_team_id at end = team bowling in 2nd innings = team that batted first
+              const winTeamId = bowlingTeamId;
+              winnerTeam = winTeamId ? (teams[winTeamId]?.name || null) : null;
+              winMargin = `won by ${inn1 - inn2} runs`;
+            } else if (inn2 > inn1) {
+              // Team that batted second won by wickets
+              const winTeamId = battingTeamId;
+              winnerTeam = winTeamId ? (teams[winTeamId]?.name || null) : null;
+              winMargin = `won by ${10 - state.innings2_wickets} wickets`;
+            } else {
+              winnerTeam = null;
+              winMargin = 'Match Tied';
+            }
+
+            // If still no winner name, fall back to roster side names
+            if (!winnerTeam && (inn1 !== inn2)) {
+              const home = rosterData.find(r => r.side === 'home');
+              const away = rosterData.find(r => r.side === 'away');
+              if (inn1 > inn2 && home) {
+                winnerTeam = teams[home.team_id]?.name || 'Home Team';
+              } else if (inn2 > inn1 && away) {
+                winnerTeam = teams[away.team_id]?.name || 'Away Team';
+              }
+              // This is a heuristic — home may not always bat first
+            }
           }
         }
 
-        // Top scorer from deliveries
+        // Top scorer from deliveries (may be empty)
         const { data: deliveries } = await supabase
           .from('deliveries')
           .select('striker_id, runs_off_bat')
@@ -253,7 +289,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
           }
         }
 
-        // Top wicket-taker
+        // Top wicket-taker (may be empty)
         let topWicketTaker: { name: string; wickets: number } | null = null;
         if (deliveries && deliveries.length > 0) {
           const { data: wicketDeliveries } = await supabase
@@ -292,7 +328,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
     };
 
     fetchMatchSummary();
-  }, [state?.phase, matchId, teams, players, superOverRounds]);
+  }, [state?.phase, matchId, teams, superOverRounds]);
 
   const currentInnings = state?.current_innings || 1;
   const score = currentInnings === 1 ? state?.innings1_score : state?.innings2_score;
