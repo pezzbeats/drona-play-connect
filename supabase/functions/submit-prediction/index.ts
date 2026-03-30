@@ -99,6 +99,13 @@ serve(async (req) => {
       });
     }
 
+    // ── Reject late submissions even if status not yet flipped to "locked" ──
+    if (window.locks_at && new Date(window.locks_at) <= new Date()) {
+      return new Response(JSON.stringify({ error: "Time's up! Window has expired.", code: "WINDOW_EXPIRED", retryable: false }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Immutability check: block any overwrite ──
     const { data: existing } = await supabase
       .from("predictions")

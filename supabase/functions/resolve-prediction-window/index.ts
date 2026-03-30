@@ -264,6 +264,8 @@ serve(async (req) => {
         );
       }
 
+      const nowOpen = new Date();
+      const locksAtOpen = new Date(nowOpen.getTime() + 12_000); // 12 seconds auto-lock
       const { data, error } = await supabase
         .from("prediction_windows")
         .insert({
@@ -279,7 +281,8 @@ serve(async (req) => {
             { key: "wicket", label: "Wicket 🏏" },
           ],
           status: "open",
-          opens_at: new Date().toISOString(),
+          opens_at: nowOpen.toISOString(),
+          locks_at: locksAtOpen.toISOString(),
         })
         .select()
         .single();

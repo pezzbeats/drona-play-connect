@@ -363,6 +363,15 @@ async function doSync(sb: any, projectKey: string, headers: any) {
     const extId = state.external_match_id;
     const matchStatus = state.matches?.status;
 
+    // ── Auto-lock expired prediction windows (locks_at passed) ──
+    await sb
+      .from("prediction_windows")
+      .update({ status: "locked" })
+      .eq("match_id", matchId)
+      .eq("status", "open")
+      .not("locks_at", "is", null)
+      .lte("locks_at", new Date().toISOString());
+
     // Skip ended matches, but allow registrations_open and live
     if (matchStatus === "ended" || matchStatus === "draft") {
       results.push({ match_id: matchId, status: "skipped", reason: `status is ${matchStatus}` });
@@ -521,7 +530,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           newDeliveries++;
         }
 
-        // ── Auto-open next prediction window if predictions enabled ──
+        // ── Auto-open next prediction window with 12s auto-lock timer ──
         const predictionsEnabled = state.matches?.predictions_enabled;
         const predictionMode = state.matches?.prediction_mode;
         if (predictionsEnabled && predictionMode !== "off" && newDeliveries > 0) {
@@ -533,6 +542,8 @@ async function doSync(sb: any, projectKey: string, headers: any) {
             .maybeSingle();
 
           if (!existingOpen) {
+            const now = new Date();
+            const locksAt = new Date(now.getTime() + 12_000); // 12 seconds
             await sb.from("prediction_windows").insert({
               match_id: matchId,
               window_type: "ball",
@@ -549,7 +560,8 @@ async function doSync(sb: any, projectKey: string, headers: any) {
                 { key: "no_ball", label: "No Ball" },
                 { key: "wicket", label: "Wicket 🏏" },
               ],
-              opens_at: new Date().toISOString(),
+              opens_at: now.toISOString(),
+              locks_at: locksAt.toISOString(),
             });
           }
         }
