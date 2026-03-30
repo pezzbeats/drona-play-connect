@@ -48,6 +48,7 @@ interface PredictionWindow {
   options: Array<{ key: string; label: string }>;
   status: 'open' | 'locked' | 'resolved';
   correct_answer: any;
+  locks_at: string | null;
 }
 
 interface MatchFlags {
