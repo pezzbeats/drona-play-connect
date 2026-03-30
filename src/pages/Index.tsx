@@ -86,7 +86,7 @@ function GameLoginCard() {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2.5">
           <div>
-            <p className="text-xs text-muted-foreground mb-1.5 font-medium">Mobile Number</p>
+            <p className="text-xs text-muted-foreground mb-1.5 font-medium">Mobile Number (+91)</p>
             <input
               className="glass-input w-full h-11 px-3 rounded-lg text-sm bg-background/40 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-success/50 focus:ring-1 focus:ring-success/30 transition-colors"
               placeholder="10-digit mobile"

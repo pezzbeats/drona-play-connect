@@ -49,22 +49,23 @@ serve(async (req) => {
     // Get active match
     const { data: match } = await supabase.from("matches").select("id").eq("is_active_for_registration", true).single();
     if (!match) {
-      // Try to find any match with active game access for this mobile
+      // No active match — find user's most recent game_access entry
       const { data: access } = await supabase
         .from("game_access")
-        .select("*, matches(id)")
+        .select("match_id")
         .eq("mobile", mobile)
         .eq("pin_hash", pinHash)
         .eq("is_active", true)
+        .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (access) {
-        return new Response(JSON.stringify({ valid: true, match_id: (access as any).matches?.id || access.match_id }), {
+        return new Response(JSON.stringify({ valid: true, match_id: access.match_id }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error("No active match");
+      throw new Error("No active match found for this mobile/PIN");
     }
 
     const { data: access } = await supabase
