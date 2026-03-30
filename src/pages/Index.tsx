@@ -500,31 +500,32 @@ export default function IndexPage() {
       const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS); // 00:00 IST in UTC
       const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 60 * 60 * 1000 - 1); // 23:59:59.999 IST in UTC
 
-      // Query 1: matches scheduled today (IST)
-      const [todayRes, activeRes] = await Promise.all([
-        supabase
-          .from('matches')
-          .select('id, name, opponent, venue, start_time, status, match_type')
-          .gte('start_time', todayStartUTC.toISOString())
-          .lte('start_time', todayEndUTC.toISOString())
-          .in('status', ['registrations_open', 'live'])
-          .order('start_time', { ascending: true }),
-        // Query 2: any admin-activated match (fallback so it always shows)
-        supabase
-          .from('matches')
-          .select('id, name, opponent, venue, start_time, status, match_type')
-          .eq('is_active_for_registration', true)
-          .neq('status', 'draft'),
-      ]);
+      // Query 1: today's active/live matches (IST)
+      const todayRes = await supabase
+        .from('matches')
+        .select('id, name, opponent, venue, start_time, status, match_type')
+        .gte('start_time', todayStartUTC.toISOString())
+        .lte('start_time', todayEndUTC.toISOString())
+        .in('status', ['registrations_open', 'live'])
+        .order('start_time', { ascending: true });
 
       if (todayRes.error) throw todayRes.error;
       setFetchError(false);
 
-      // Merge & deduplicate by ID
-      const merged = [...(todayRes.data || []), ...(activeRes.data || [])];
-      const uniqueMatches = merged.filter(
-        (m, i, arr) => arr.findIndex(x => x.id === m.id) === i
-      );
+      let uniqueMatches = todayRes.data || [];
+
+      // Fallback: if nothing active today, show next upcoming match
+      if (uniqueMatches.length === 0) {
+        const nextRes = await supabase
+          .from('matches')
+          .select('id, name, opponent, venue, start_time, status, match_type')
+          .gt('start_time', now.toISOString())
+          .in('status', ['registrations_open'])
+          .order('start_time', { ascending: true })
+          .limit(1);
+        uniqueMatches = nextRes.data || [];
+      }
+
       setMatches(uniqueMatches);
 
       // Fetch roster/teams for these matches
