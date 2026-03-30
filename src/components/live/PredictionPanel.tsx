@@ -114,7 +114,10 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
     },
   ], [matchId, mobile]);
 
-  useRealtimeChannel(`score-panel-${matchId}-${mobile}`, scoreSubscriptions, fetchMyScore);
+  // Removed separate score-panel channel — leaderboard updates come via
+  // LiveContent's `live-match` channel. The fetchMyScore on mount + realtime
+  // UPDATE callback in scoreSubscriptions is now handled by the main predictions channel.
+  // We still keep the leaderboard subscriptions but merge them into the main channel below.
 
   // Animate score increment when points increase
   useEffect(() => {
