@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const ROANUZ_BASE = "https://api.sports.roanuz.com/v5/cricket";
-const IPL_TOURNAMENT_KEY = "ipl_2025";
+const IPL_TOURNAMENT_KEY = "a-rz--cricket--bcci--iplt20--2026-ZGwl";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
