@@ -397,18 +397,16 @@ export default function IndexPage() {
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 10000);
-    fetchData(0).then((count) => {
+    fetchData(0).finally(() => {
+      clearTimeout(timeout);
       // If no matches found locally, trigger the API sync to discover them
-      if (count === 0) {
+      if (matches.length === 0) {
         supabase.functions.invoke('cricket-api-sync', {
           body: null,
           method: 'GET',
-        }).then(() => {
-          // Re-fetch after sync attempt
-          fetchData(0);
-        }).catch(() => {});
+        }).then(() => fetchData(0)).catch(() => {});
       }
-    }).finally(() => clearTimeout(timeout));
+    });
   }, []);
 
   // Realtime: listen for newly inserted matches and show banner
