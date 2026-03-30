@@ -1,77 +1,30 @@
 
 
-## Plan: Auto-Show Today's IPL Matches on Landing Page with Free Registration
+## Problem
 
-### What changes
+The `teams` table has incorrect `short_code` values — all teams are stored as "A" or "B" instead of their proper IPL codes (RR, CSK, PBKS, GT). This means the `IPL_TEAM_LOGOS` lookup by short_code never matches, so it falls back to displaying the raw text "A" or "B".
 
-Transform the landing page from showing a single admin-activated match to automatically displaying all of today's IPL matches (already auto-created by the Roanuz cron sync). Users register for free with just their phone number and name — no payment flow, no ticket pricing.
+## Plan
 
-### Architecture
+### 1. Fix team short_codes and colors in database
+Run a migration to update the existing teams with correct short codes and brand colors:
 
-```text
-Landing Page (Index.tsx)
-├── Fetches ALL matches where start_time is today (not just is_active_for_registration)
-├── Shows match cards for each today's match
-│   └── Each card: team names, venue, start time, countdown, "Join Free" button
-│
-├── "Join Free" button → inline registration form OR /register?match_id=xxx
-│   └── Collects: Full Name + Mobile Number only
-│   └── Creates order with total_amount=0, payment_status='paid_verified'
-│   └── Auto-generates game_access + PIN
-│   └── Redirects to /live
-│
-└── No pricing cards, no payment flow for these matches
-```
+| Team | short_code | color |
+|------|-----------|-------|
+| Rajasthan Royals | RR | #EA1A85 |
+| Chennai Super Kings | CSK | #f9cd05 |
+| Punjab Kings | PBKS | #ED1B24 |
+| Gujarat Titans | GT | #1B2133 |
 
-### Database changes
+### 2. Fix the cricket-api-sync edge function
+Update the sync logic so that when it creates/upserts teams from the Roanuz API, it maps teams to their correct IPL short codes and colors instead of defaulting to "A"/"B". This likely happens because the API returns `home`/`away` as sides and the code uses those as short codes.
 
-**No schema migrations needed.** The existing `orders` table supports `total_amount = 0` and the `create-order` edge function already handles order creation. We just need to allow free orders.
+### 3. Also update Register.tsx
+The Register page has the same team display pattern — ensure it also uses the `IPL_TEAM_LOGOS` mapping so logos appear on the registration page too.
 
-### Key changes by file
+## Technical Details
 
-**1. `src/pages/Index.tsx`** (major rewrite of data fetching + match display)
-- Instead of querying `matches` with `is_active_for_registration = true`, query all matches where `start_time` is today (within 24h window)
-- Display multiple match cards in a scrollable list
-- Each card shows: match name, teams (from match_roster + teams), venue, start time, countdown timer, live status badge
-- Replace "Reserve Your Seats Now" CTA with "Join Free" button per match
-- Remove pricing card section entirely for free matches
-- Remove "Already Booked? View Your Passes" when matches are free
-- Keep the GameLoginCard for users who already have a PIN
-
-**2. `src/pages/Register.tsx`** (simplify for free registration)
-- Accept `match_id` query param to know which match the user is registering for
-- Remove payment steps (step 2 pricing, step 3 payment) — go straight from details to game access
-- Collect only: Full Name + Mobile Number (email optional)
-- On submit:
-  - Create order via `create-order` edge function with `payment_method: 'free'`, `total_amount: 0`
-  - OR create a simplified direct-insert flow: insert order + generate game_access + PIN
-  - Show the user their 4-digit PIN and redirect to /live
-
-**3. `supabase/functions/create-order/index.ts`** (minor update)
-- Support `payment_method: 'free'` that sets `payment_status = 'paid_verified'` and `total_amount = 0`
-- Auto-generate tickets + game_access with PIN immediately (no payment verification step)
-
-**4. `supabase/functions/cricket-api-sync/index.ts`** (minor tweak)
-- When discovering matches, set `is_active_for_registration = true` automatically for today's matches so existing queries still work as fallback
-
-### Registration flow (user perspective)
-
-1. User opens landing page → sees today's IPL match(es) with team logos, countdown
-2. Taps "Join Free" on a match card
-3. Enters Full Name + 10-digit Mobile Number
-4. System creates free order, generates game PIN
-5. User sees their 4-digit PIN + "Enter the Game" button
-6. Redirected to /live page
-
-### What stays the same
-- Admin can still manually control matches via admin panel
-- GameLoginCard for returning users with existing PINs
-- Legal disclaimer, trust blocks, footer
-- The Roanuz cron sync continues discovering and syncing matches automatically
-
-### Files changed
-1. `src/pages/Index.tsx` — fetch today's matches, show multiple cards, free join CTA
-2. `src/pages/Register.tsx` — simplified free registration flow (name + mobile only)
-3. `supabase/functions/create-order/index.ts` — support free orders with auto game access
-4. `supabase/functions/cricket-api-sync/index.ts` — auto-set `is_active_for_registration` for discovered matches
+- **Migration SQL**: `UPDATE teams SET short_code = 'RR', color = '#EA1A85' WHERE name = 'Rajasthan Royals'` (and similar for other teams)
+- **Edge function fix**: In `cricket-api-sync/index.ts`, look at how teams are created and ensure the `short_code` is derived from a known IPL team name mapping rather than the match side ("A"/"B")
+- **No new assets needed** — the PNG logos are already in `src/assets/ipl-teams/` and the lookup map exists; they just need correct short_codes to match against
 
