@@ -451,17 +451,25 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       let inn1Score = 0, inn1Wickets = 0, inn1Overs = 0;
       let inn2Score = 0, inn2Wickets = 0, inn2Overs = 0;
 
+      // Helper to extract numeric score from potentially nested objects
+      const getNum = (val: any): number => {
+        if (typeof val === "number") return val;
+        if (typeof val === "object" && val !== null) return val.runs ?? val.value ?? val.score ?? 0;
+        return parseInt(val) || 0;
+      };
+
       if (inningsKeys.length >= 1) {
         const i1 = innings[inningsKeys[0]];
-        inn1Score = i1?.score || i1?.runs || 0;
-        inn1Wickets = i1?.wickets || 0;
-        inn1Overs = i1?.overs || 0;
+        console.log(`Match ${matchId} inn1 keys: ${i1 ? Object.keys(i1).join(",") : "null"}, score type: ${typeof i1?.score}, score raw: ${JSON.stringify(i1?.score)?.slice(0,100)}`);
+        inn1Score = getNum(i1?.score) || getNum(i1?.runs) || 0;
+        inn1Wickets = getNum(i1?.wickets) || 0;
+        inn1Overs = getNum(i1?.overs) || 0;
       }
       if (inningsKeys.length >= 2) {
         const i2 = innings[inningsKeys[1]];
-        inn2Score = i2?.score || i2?.runs || 0;
-        inn2Wickets = i2?.wickets || 0;
-        inn2Overs = i2?.overs || 0;
+        inn2Score = getNum(i2?.score) || getNum(i2?.runs) || 0;
+        inn2Wickets = getNum(i2?.wickets) || 0;
+        inn2Overs = getNum(i2?.overs) || 0;
       }
 
       const currentInnings = inn2Overs > 0 || inn2Score > 0 ? 2 : 1;
