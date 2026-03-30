@@ -397,7 +397,15 @@ export default function IndexPage() {
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 10000);
-    fetchData(0).finally(() => clearTimeout(timeout));
+    fetchData(0).then((count) => {
+      clearTimeout(timeout);
+      if (count === 0) {
+        supabase.functions.invoke('cricket-api-sync', {
+          body: null,
+          method: 'GET',
+        }).then(() => fetchData(0)).catch(() => {});
+      }
+    });
   }, []);
 
   // Realtime: listen for newly inserted matches and show banner
@@ -422,7 +430,7 @@ export default function IndexPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const fetchData = async (attempt = 0): Promise<void> => {
+  const fetchData = async (attempt = 0): Promise<number> => {
     if (attempt === 0) setLoading(true);
     try {
       // Fetch today's matches: start_time within today (IST) OR is_active_for_registration
@@ -455,13 +463,15 @@ export default function IndexPage() {
           .in('match_id', matchIds);
         setRoster((rosterData as any[]) || []);
       }
+      return uniqueMatches.length;
     } catch (e) {
       console.error(`[Index] fetchData error (attempt ${attempt + 1}):`, e);
       if (attempt < 2) {
         setTimeout(() => fetchData(attempt + 1), 1500 * (attempt + 1));
-        return;
+        return 0;
       }
       setFetchError(true);
+      return 0;
     } finally {
       setLoading(false);
     }
