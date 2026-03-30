@@ -406,9 +406,25 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       const matchData = matchBody.data;
       const apiStatusStr = matchData.status_str || matchData.status || matchData.play_status || "";
-      const hasInningsData = matchData.innings && Object.keys(matchData.innings).length > 0;
-      console.log(`Match ${matchId} API status: "${apiStatusStr}", hasInnings: ${hasInningsData}`);
+      // Check innings in multiple possible locations
+      const inningsObj = matchData.innings || matchData.play?.innings || {};
+      const hasInningsData = inningsObj && typeof inningsObj === "object" && Object.keys(inningsObj).length > 0;
+      console.log(`Match ${matchId} ext=${extId} API status: "${apiStatusStr}", hasInnings: ${hasInningsData}, raw keys: ${Object.keys(matchData).join(",")}`);
       const apiIsLive = isApiStatusLive(apiStatusStr) || hasInningsData;
+
+      // ── Auto-re-discover: if our DB says live but API says completed/not_started with 0 score ──
+      if ((matchStatus === "live" || matchStatus === "registrations_open") && !apiIsLive) {
+        const sLower = (apiStatusStr || "").toLowerCase();
+        if (sLower.includes("completed") || sLower.includes("not_started") || sLower === "not started") {
+          console.warn(`Match ${matchId} appears mislinked (API="${apiStatusStr}", score=0). Attempting re-discovery...`);
+          const correctExtId = await rediscoverMatchId(sb, projectKey, headers, matchId);
+          if (correctExtId && correctExtId !== extId) {
+            await sb.from("api_sync_state").update({ external_match_id: correctExtId }).eq("match_id", matchId);
+            results.push({ match_id: matchId, status: "relinked", old_ext_id: extId, new_ext_id: correctExtId });
+            continue; // Will pick up correct data on next sync cycle
+          }
+        }
+      }
 
       // ── Auto-activate: transition registrations_open → live when API says live ──
       if (matchStatus === "registrations_open" && apiIsLive) {
