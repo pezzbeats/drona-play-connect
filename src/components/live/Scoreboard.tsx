@@ -147,26 +147,40 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
     fetchData,
   );
 
-  // Auto-poll cricket API sync every 30s while match is live
+  // Auto-poll cricket API sync with AI-adaptive interval while match is live
+  const pollIntervalRef = useRef<number>(20);
+
   useEffect(() => {
     const isLivePhase = state?.phase === 'innings1' || state?.phase === 'innings2' || state?.phase === 'break' || state?.phase === 'super_over';
     if (!isLivePhase) return;
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
     const poll = async () => {
+      if (cancelled) return;
       try {
-        await supabase.functions.invoke('cricket-api-sync', {
+        const { data } = await supabase.functions.invoke('cricket-api-sync', {
           body: null,
           headers: {},
         });
+        if (data?.recommended_interval) {
+          pollIntervalRef.current = data.recommended_interval;
+        }
       } catch (e) {
         console.warn('API sync poll failed:', e);
       }
+      if (!cancelled) {
+        timeoutId = setTimeout(poll, pollIntervalRef.current * 1000);
+      }
     };
 
-    // Poll immediately on first live detection, then every 30s
+    // Poll immediately, then schedule dynamically
     poll();
-    const interval = setInterval(poll, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [state?.phase]);
 
   const currentInnings = state?.current_innings || 1;
