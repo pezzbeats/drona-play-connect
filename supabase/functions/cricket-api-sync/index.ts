@@ -9,7 +9,6 @@ const corsHeaders = {
 const ROANUZ_BASE = "https://api.sports.roanuz.com/v5/cricket";
 const IPL_TOURNAMENT_KEY = "a-rz--cricket--bcci--iplt20--2026-ZGwl";
 
-// Known IPL team name → short_code + brand color mapping
 const IPL_TEAM_MAP: Record<string, { code: string; color: string }> = {
   "chennai super kings": { code: "CSK", color: "#f9cd05" },
   "mumbai indians": { code: "MI", color: "#004BA0" },
@@ -32,11 +31,24 @@ function getIplTeamInfo(name: string): { code: string; color: string } | null {
   return null;
 }
 
+// Map delivery data to prediction outcome key
+function deliveryToOutcomeKey(runsOffBat: number, isWicket: boolean, extrasType: string): string {
+  if (isWicket) return "wicket";
+  if (extrasType === "wide") return "wide";
+  if (extrasType === "no_ball") return "no_ball";
+  if (runsOffBat === 0) return "dot_ball";
+  if (runsOffBat === 1) return "runs_1";
+  if (runsOffBat === 2) return "runs_2";
+  if (runsOffBat === 3) return "runs_3";
+  if (runsOffBat === 4) return "boundary_4";
+  if (runsOffBat === 6) return "six_6";
+  return `runs_${runsOffBat}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
 
-  // Secret storage may lowercase the key; Roanuz keys are case-sensitive (RS5:xxx)
   const rawApiKey = Deno.env.get("ROANUZ_API_KEY") || "";
   const ROANUZ_API_KEY = rawApiKey.startsWith("rs5:") ? "RS5:" + rawApiKey.slice(4) : rawApiKey;
   const ROANUZ_PROJECT_KEY = Deno.env.get("ROANUZ_PROJECT_KEY");
@@ -47,8 +59,6 @@ Deno.serve(async (req) => {
     return json({ error: "ROANUZ_API_KEY or ROANUZ_PROJECT_KEY not configured" }, 500);
   }
 
-
-  // Step 1: Authenticate with Roanuz to get access token
   let accessToken: string;
   try {
     const authRes = await fetch(
@@ -77,7 +87,6 @@ Deno.serve(async (req) => {
 
   try {
     if (action === "auto") {
-      // Cron-triggered: discover → lineup → sync (all automatic)
       const discoverResult = await doDiscover(sb, ROANUZ_PROJECT_KEY, roanuzHeaders);
       const lineupResult = await doAutoLineup(sb, ROANUZ_PROJECT_KEY, roanuzHeaders);
       const syncResult = await doSync(sb, ROANUZ_PROJECT_KEY, roanuzHeaders);
@@ -107,6 +116,11 @@ function json(data: any, status = 200) {
   });
 }
 
+function isApiStatusLive(statusStr: string): boolean {
+  const s = (statusStr || "").toLowerCase();
+  return s.includes("live") || s.includes("in progress") || s.includes("in_progress");
+}
+
 // ── DISCOVER ─────────────────────────────────────────────────────────
 async function doDiscover(sb: any, projectKey: string, headers: any) {
   const res = await fetch(
@@ -127,7 +141,6 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
 
   const matches = body.data?.matches || [];
   const now = new Date();
-  // Compute today's IST boundaries: 00:00 IST to 23:59:59 IST, plus 6h past buffer
   const IST_OFFSET_MS = 5.5 * 3600 * 1000;
   const istNow = new Date(now.getTime() + IST_OFFSET_MS);
   const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
@@ -137,7 +150,6 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
   const todayMatches = matches.filter((m: any) => {
     const startTime = m.start_at ? new Date(m.start_at * 1000) : null;
     if (!startTime) return false;
-    // Include matches starting today (IST) plus 6h buffer for ongoing matches
     return startTime.getTime() >= (todayStartUTC.getTime() - 6 * 3600 * 1000) &&
            startTime.getTime() <= todayEndUTC.getTime();
   });
@@ -168,7 +180,6 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
       const { data: existingTeam } = await sb
         .from("teams").select("id").eq("name", tName).maybeSingle();
       if (existingTeam) {
-        // Update short_code and color if we have better info
         await sb.from("teams").update({ short_code: shortCode, color: teamColor }).eq("id", existingTeam.id);
         teamIds.push(existingTeam.id);
       } else {
@@ -183,11 +194,16 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
     const opponent = teamNames.length > 1 ? teamNames[1] : null;
     const startTime = m.start_at ? new Date(m.start_at * 1000).toISOString() : null;
 
-    let status: string = "draft";
+    // Auto-detect live status from API
     const mStatus = (m.status_str || "").toLowerCase();
-    if (mStatus.includes("live") || mStatus.includes("in progress")) status = "live";
-    else if (mStatus.includes("completed") || mStatus.includes("result")) status = "ended";
-    else if (startTime) status = "registrations_open";
+    let status: string = "draft";
+    if (isApiStatusLive(m.status_str || "")) {
+      status = "live";
+    } else if (mStatus.includes("completed") || mStatus.includes("result")) {
+      status = "ended";
+    } else if (startTime) {
+      status = "registrations_open";
+    }
 
     const { data: newMatch, error: matchErr } = await sb
       .from("matches")
@@ -222,7 +238,7 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
   return { discovered: todayMatches.length, created: created.length, skipped: skipped.length };
 }
 
-// ── AUTO LINEUP (fetch for all synced matches that don't have lineup yet) ──
+// ── AUTO LINEUP ──────────────────────────────────────────────────────
 async function doAutoLineup(sb: any, projectKey: string, headers: any) {
   const { data: syncStates } = await sb
     .from("api_sync_state")
@@ -234,16 +250,14 @@ async function doAutoLineup(sb: any, projectKey: string, headers: any) {
   let fetched = 0;
   for (const state of syncStates) {
     const matchStatus = state.matches?.status;
-    // Fetch lineup for live or upcoming matches
     if (matchStatus !== "live" && matchStatus !== "registrations_open") continue;
 
-    // Check if lineup already exists
     const { count } = await sb
       .from("match_lineup")
       .select("id", { count: "exact", head: true })
       .eq("match_id", state.match_id);
 
-    if ((count || 0) > 0) continue; // Already has lineup
+    if ((count || 0) > 0) continue;
 
     try {
       await doLineup(sb, projectKey, headers, state.match_id);
@@ -331,11 +345,12 @@ async function doLineup(sb: any, projectKey: string, headers: any, matchId: stri
   return { success: true, players_added: playersAdded };
 }
 
-// ── SYNC (scores + ball-by-ball, NO prediction window management) ───
+// ── SYNC (scores + ball-by-ball + auto-activation + prediction lifecycle) ───
 async function doSync(sb: any, projectKey: string, headers: any) {
+  // Broaden: sync matches that are live OR registrations_open (to detect auto-activation)
   const { data: syncStates } = await sb
     .from("api_sync_state")
-    .select("*, matches!inner(id, status, external_match_id)")
+    .select("*, matches!inner(id, status, external_match_id, predictions_enabled, prediction_mode)")
     .eq("sync_enabled", true);
 
   if (!syncStates || syncStates.length === 0)
@@ -348,8 +363,9 @@ async function doSync(sb: any, projectKey: string, headers: any) {
     const extId = state.external_match_id;
     const matchStatus = state.matches?.status;
 
-    if (matchStatus !== "live") {
-      results.push({ match_id: matchId, status: "skipped", reason: "not live" });
+    // Skip ended matches, but allow registrations_open and live
+    if (matchStatus === "ended" || matchStatus === "draft") {
+      results.push({ match_id: matchId, status: "skipped", reason: `status is ${matchStatus}` });
       continue;
     }
 
@@ -364,6 +380,29 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       }
 
       const matchData = matchBody.data;
+      const apiStatusStr = matchData.status_str || "";
+      const apiIsLive = isApiStatusLive(apiStatusStr);
+
+      // ── Auto-activate: transition registrations_open → live when API says live ──
+      if (matchStatus === "registrations_open" && apiIsLive) {
+        await sb.from("matches").update({
+          status: "live",
+          is_active_for_registration: true,
+        }).eq("id", matchId);
+
+        await sb.from("match_live_state").update({
+          phase: "innings1",
+        }).eq("match_id", matchId);
+
+        console.log(`Auto-activated match ${matchId} to live`);
+      }
+
+      // If match is registrations_open but API is NOT live yet, skip score sync
+      if (matchStatus === "registrations_open" && !apiIsLive) {
+        results.push({ match_id: matchId, status: "skipped", reason: "not live yet per API" });
+        continue;
+      }
+
       const innings = matchData.innings || {};
       const inningsKeys = Object.keys(innings);
       let inn1Score = 0, inn1Wickets = 0, inn1Overs = 0;
@@ -416,6 +455,48 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           const overNo = ball._overNo;
           const ballNo = ball.ball_number || ball.ball || 1;
 
+          const runsOffBat = ball.runs?.batting || ball.batsman_runs || ball.runs || 0;
+          const extrasRuns = ball.runs?.extras || ball.extras_runs || 0;
+          let extrasType = "none";
+          const ballExtras = ball.extras || {};
+          if (ballExtras.wide || ball.is_wide) extrasType = "wide";
+          else if (ballExtras.no_ball || ball.is_no_ball) extrasType = "no_ball";
+          else if (ballExtras.bye || ball.is_bye) extrasType = "bye";
+          else if (ballExtras.leg_bye || ball.is_leg_bye) extrasType = "leg_bye";
+
+          const isWicket = ball.wicket?.is_out || ball.is_wicket || false;
+          const wicketType = ball.wicket?.type || ball.wicket_type || null;
+
+          // ── Auto-lock open prediction windows BEFORE inserting delivery ──
+          const { data: openWindows } = await sb
+            .from("prediction_windows")
+            .select("id")
+            .eq("match_id", matchId)
+            .eq("status", "open");
+
+          if (openWindows && openWindows.length > 0) {
+            const windowIds = openWindows.map((w: any) => w.id);
+            await sb
+              .from("prediction_windows")
+              .update({ status: "locked", locks_at: new Date().toISOString() })
+              .in("id", windowIds);
+
+            // ── Auto-resolve: set correct answer and score predictions ──
+            const outcomeKey = deliveryToOutcomeKey(runsOffBat, isWicket, extrasType);
+            const correctAnswer = { key: outcomeKey };
+
+            for (const wId of windowIds) {
+              await sb
+                .from("prediction_windows")
+                .update({ status: "resolved", correct_answer: correctAnswer })
+                .eq("id", wId);
+
+              // Score predictions for this window
+              await scorePredictions(sb, matchId, wId, outcomeKey);
+            }
+          }
+
+          // Insert the delivery
           let { data: overCtrl } = await sb
             .from("over_control").select("id")
             .eq("match_id", matchId).eq("innings_no", currentInnings).eq("over_no", overNo)
@@ -430,18 +511,6 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           }
           if (!overCtrl) continue;
 
-          const runsOffBat = ball.runs?.batting || ball.batsman_runs || ball.runs || 0;
-          const extrasRuns = ball.runs?.extras || ball.extras_runs || 0;
-          let extrasType = "none";
-          const ballExtras = ball.extras || {};
-          if (ballExtras.wide || ball.is_wide) extrasType = "wide";
-          else if (ballExtras.no_ball || ball.is_no_ball) extrasType = "no_ball";
-          else if (ballExtras.bye || ball.is_bye) extrasType = "bye";
-          else if (ballExtras.leg_bye || ball.is_leg_bye) extrasType = "leg_bye";
-
-          const isWicket = ball.wicket?.is_out || ball.is_wicket || false;
-          const wicketType = ball.wicket?.type || ball.wicket_type || null;
-
           await sb.from("deliveries").insert({
             match_id: matchId, over_id: overCtrl.id, over_no: overNo,
             innings_no: currentInnings, ball_no: ballNo, delivery_no: ballNo,
@@ -449,10 +518,40 @@ async function doSync(sb: any, projectKey: string, headers: any) {
             is_wicket: isWicket, wicket_type: wicketType,
           });
 
-          // NOTE: Prediction windows are NOT auto-managed here.
-          // Admin controls prediction window open/lock/resolve via Match Command Center.
-
           newDeliveries++;
+        }
+
+        // ── Auto-open next prediction window if predictions enabled ──
+        const predictionsEnabled = state.matches?.predictions_enabled;
+        const predictionMode = state.matches?.prediction_mode;
+        if (predictionsEnabled && predictionMode !== "off" && newDeliveries > 0) {
+          const { data: existingOpen } = await sb
+            .from("prediction_windows")
+            .select("id")
+            .eq("match_id", matchId)
+            .eq("status", "open")
+            .maybeSingle();
+
+          if (!existingOpen) {
+            await sb.from("prediction_windows").insert({
+              match_id: matchId,
+              window_type: "ball",
+              status: "open",
+              question: "What will happen on the next ball?",
+              options: [
+                { key: "dot_ball", label: "Dot Ball" },
+                { key: "runs_1", label: "1 Run" },
+                { key: "runs_2", label: "2 Runs" },
+                { key: "runs_3", label: "3 Runs" },
+                { key: "boundary_4", label: "4 Boundary" },
+                { key: "six_6", label: "6 Sixer" },
+                { key: "wide", label: "Wide" },
+                { key: "no_ball", label: "No Ball" },
+                { key: "wicket", label: "Wicket 🏏" },
+              ],
+              opens_at: new Date().toISOString(),
+            });
+          }
         }
       }
 
@@ -473,6 +572,11 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       if (phase === "ended") {
         await sb.from("matches").update({ status: "ended" }).eq("id", matchId);
+        // Lock any remaining open windows when match ends
+        await sb.from("prediction_windows")
+          .update({ status: "locked", locks_at: new Date().toISOString() })
+          .eq("match_id", matchId)
+          .eq("status", "open");
       }
 
       await sb.from("api_sync_state").update({
@@ -484,6 +588,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       results.push({
         match_id: matchId, status: "synced", new_deliveries: newDeliveries,
+        auto_activated: matchStatus === "registrations_open" && apiIsLive,
         score: `${inn1Score}/${inn1Wickets} (${inn1Overs}ov)${currentInnings === 2 ? ` | ${inn2Score}/${inn2Wickets} (${inn2Overs}ov)` : ""}`,
       });
     } catch (e: any) {
@@ -493,6 +598,110 @@ async function doSync(sb: any, projectKey: string, headers: any) {
   }
 
   return { synced: results.length, results };
+}
+
+// ── Score predictions for a resolved window ──────────────────────────
+async function scorePredictions(sb: any, matchId: string, windowId: string, correctKey: string) {
+  try {
+    // Get scoring config
+    const { data: config } = await sb
+      .from("match_scoring_config")
+      .select("*")
+      .eq("match_id", matchId)
+      .single();
+
+    const pointsPerCorrect = config?.points_per_correct || 10;
+
+    // Get all predictions for this window
+    const { data: predictions } = await sb
+      .from("predictions")
+      .select("id, mobile, player_name, prediction")
+      .eq("window_id", windowId);
+
+    if (!predictions || predictions.length === 0) return;
+
+    for (const pred of predictions) {
+      const predKey = pred.prediction?.key || pred.prediction;
+      const isCorrect = predKey === correctKey;
+      const points = isCorrect ? pointsPerCorrect : 0;
+
+      // Update prediction result
+      await sb.from("predictions").update({
+        is_correct: isCorrect,
+        points_earned: points,
+      }).eq("id", pred.id);
+
+      if (!isCorrect) continue;
+
+      // Update leaderboard
+      const { data: existing } = await sb
+        .from("leaderboard")
+        .select("id, total_points, correct_predictions, total_predictions")
+        .eq("match_id", matchId)
+        .eq("mobile", pred.mobile)
+        .maybeSingle();
+
+      if (existing) {
+        await sb.from("leaderboard").update({
+          total_points: (existing.total_points || 0) + points,
+          correct_predictions: (existing.correct_predictions || 0) + 1,
+          last_correct_at: new Date().toISOString(),
+          last_updated: new Date().toISOString(),
+        }).eq("id", existing.id);
+      } else {
+        await sb.from("leaderboard").insert({
+          match_id: matchId,
+          mobile: pred.mobile,
+          player_name: pred.player_name,
+          total_points: points,
+          correct_predictions: 1,
+          total_predictions: 1,
+          last_correct_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Update total_predictions for all participants
+    for (const pred of predictions) {
+      const { data: lb } = await sb
+        .from("leaderboard")
+        .select("id, total_predictions")
+        .eq("match_id", matchId)
+        .eq("mobile", pred.mobile)
+        .maybeSingle();
+
+      if (lb) {
+        await sb.from("leaderboard").update({
+          total_predictions: (lb.total_predictions || 0) + 1,
+          last_updated: new Date().toISOString(),
+        }).eq("id", lb.id);
+      } else {
+        await sb.from("leaderboard").insert({
+          match_id: matchId,
+          mobile: pred.mobile,
+          player_name: pred.player_name,
+          total_predictions: 1,
+        });
+      }
+    }
+
+    // Recompute ranks
+    const { data: allEntries } = await sb
+      .from("leaderboard")
+      .select("id, total_points, correct_predictions, last_correct_at")
+      .eq("match_id", matchId)
+      .order("total_points", { ascending: false })
+      .order("correct_predictions", { ascending: false })
+      .order("last_correct_at", { ascending: true });
+
+    if (allEntries) {
+      for (let i = 0; i < allEntries.length; i++) {
+        await sb.from("leaderboard").update({ rank_position: i + 1 }).eq("id", allEntries[i].id);
+      }
+    }
+  } catch (e: any) {
+    console.error(`scorePredictions error for window ${windowId}:`, e.message);
+  }
 }
 
 // ── STATUS ───────────────────────────────────────────────────────────
