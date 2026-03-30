@@ -206,16 +206,20 @@ export default function RegisterPage() {
           {homeTeam && awayTeam ? (
             <div className="flex items-center justify-center gap-4 mb-3">
               <div className="text-center flex-1">
-                <div
-                  className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
-                  style={{
-                    backgroundColor: homeTeam.color ? `${homeTeam.color}22` : 'hsl(var(--primary) / 0.1)',
-                    borderColor: homeTeam.color ? `${homeTeam.color}44` : 'hsl(var(--primary) / 0.3)',
-                    color: homeTeam.color || 'hsl(var(--primary))',
-                  }}
-                >
-                  {homeTeam.short_code}
-                </div>
+              {IPL_TEAM_LOGOS[homeTeam.short_code?.toUpperCase()] ? (
+                  <img src={IPL_TEAM_LOGOS[homeTeam.short_code.toUpperCase()]} alt={homeTeam.name} className="w-12 h-12 mx-auto object-contain mb-1" loading="lazy" />
+                ) : (
+                  <div
+                    className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
+                    style={{
+                      backgroundColor: homeTeam.color ? `${homeTeam.color}22` : 'hsl(var(--primary) / 0.1)',
+                      borderColor: homeTeam.color ? `${homeTeam.color}44` : 'hsl(var(--primary) / 0.3)',
+                      color: homeTeam.color || 'hsl(var(--primary))',
+                    }}
+                  >
+                    {homeTeam.short_code}
+                  </div>
+                )}
                 <p className="text-xs text-foreground/80 font-medium truncate">{homeTeam.name}</p>
               </div>
               <span className="text-muted-foreground font-display font-bold">vs</span>
