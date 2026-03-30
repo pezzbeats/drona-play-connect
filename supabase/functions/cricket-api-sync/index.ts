@@ -410,7 +410,10 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       const inningsObj = matchData.innings || matchData.play?.innings || {};
       const hasInningsData = inningsObj && typeof inningsObj === "object" && Object.keys(inningsObj).length > 0;
       console.log(`Match ${matchId} ext=${extId} API status: "${apiStatusStr}", hasInnings: ${hasInningsData}, raw keys: ${Object.keys(matchData).join(",")}`);
-      const apiIsLive = isApiStatusLive(apiStatusStr) || hasInningsData;
+      // hasInningsData alone doesn't mean live — completed matches also have innings
+      const statusLower = (apiStatusStr || "").toLowerCase();
+      const isExplicitlyCompleted = statusLower.includes("completed") || statusLower.includes("result");
+      const apiIsLive = isApiStatusLive(apiStatusStr) || (hasInningsData && !isExplicitlyCompleted);
 
       // ── Auto-re-discover: if our DB says live but API says completed/not_started with 0 score ──
       if ((matchStatus === "live" || matchStatus === "registrations_open") && !apiIsLive) {
