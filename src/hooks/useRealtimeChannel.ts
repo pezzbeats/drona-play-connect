@@ -10,9 +10,11 @@ export interface ChannelSubscription {
 }
 
 const BACKOFF_DELAYS = [2000, 4000, 8000, 16000, 30000];
+const INITIAL_FETCH_TIMEOUT = 3000; // fetch data if channel hasn't connected in 3s
 
 /**
  * Shared realtime channel hook with:
+ * - Immediate data fetch on mount (not gated behind WebSocket)
  * - Auto-reconnect on CHANNEL_ERROR / TIMED_OUT with exponential backoff
  * - Missed-update replay via onReconnect callback
  * - Connection state (connected, reconnecting)
@@ -28,7 +30,9 @@ export function useRealtimeChannel(
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const backoffIndexRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const initialFetchTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
+  const hasFetchedRef = useRef(false);
   const onReconnectRef = useRef(onReconnect);
   // Keep ref up-to-date without re-subscribing
   onReconnectRef.current = onReconnect;
