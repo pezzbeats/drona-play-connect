@@ -430,6 +430,43 @@ export default function IndexPage() {
     });
   }, []);
 
+  // Background sync: poll every 60s for matches near start time to auto-activate
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const bgSync = async () => {
+      if (cancelled) return;
+      // Check if any match is registrations_open with start_time within 2 hours
+      const now = new Date();
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      const twoHoursAhead = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+      const { data: nearMatches } = await supabase
+        .from('matches')
+        .select('id')
+        .in('status', ['registrations_open', 'live'])
+        .gte('start_time', twoHoursAgo.toISOString())
+        .lte('start_time', twoHoursAhead.toISOString())
+        .limit(1);
+
+      if (nearMatches && nearMatches.length > 0) {
+        await supabase.functions.invoke('cricket-api-sync', { body: null, headers: {} }).catch(() => {});
+        fetchData(0);
+      }
+
+      if (!cancelled) {
+        timeoutId = setTimeout(bgSync, 60000);
+      }
+    };
+
+    bgSync();
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
   // Realtime: listen for newly inserted matches and show banner
   useEffect(() => {
     const channel = supabase
