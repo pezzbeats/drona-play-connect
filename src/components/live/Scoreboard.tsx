@@ -150,9 +150,18 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
   // Auto-poll cricket API sync with AI-adaptive interval while match is live
   const pollIntervalRef = useRef<number>(20);
 
+  // Immediate sync on mount to catch any phase transitions (e.g. pre → innings1)
   useEffect(() => {
-    const isLivePhase = state?.phase === 'innings1' || state?.phase === 'innings2' || state?.phase === 'break' || state?.phase === 'super_over';
-    if (!isLivePhase) return;
+    supabase.functions.invoke('cricket-api-sync', { body: null, headers: {} }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const isActivePhase = state?.phase === 'pre' || state?.phase === 'innings1' || state?.phase === 'innings2' || state?.phase === 'break' || state?.phase === 'super_over';
+    if (!isActivePhase) return;
+
+    // Use longer interval for pre-match, adaptive for live phases
+    const baseInterval = state?.phase === 'pre' ? 60 : 20;
+    pollIntervalRef.current = baseInterval;
 
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
