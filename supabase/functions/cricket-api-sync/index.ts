@@ -841,6 +841,71 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
   }
 }
 
+// ── RE-DISCOVER: find correct external match ID by team names ────────
+async function rediscoverMatchId(sb: any, projectKey: string, headers: any, matchId: string): Promise<string | null> {
+  try {
+    // Get our match name to extract team names
+    const { data: match } = await sb.from("matches").select("name").eq("id", matchId).single();
+    if (!match?.name) return null;
+
+    const matchNameLower = match.name.toLowerCase();
+    console.log(`Re-discovering match for: "${match.name}"`);
+
+    // Fetch tournament fixtures
+    const res = await fetch(
+      `${ROANUZ_BASE}/${projectKey}/tournament/${IPL_TOURNAMENT_KEY}/fixtures/`,
+      { headers }
+    );
+    const body = await res.json();
+    const fixtures = body.data?.matches || [];
+
+    // Find today's matches
+    const now = new Date();
+    const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+    const istNow = new Date(now.getTime() + IST_OFFSET_MS);
+    const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
+    const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS);
+    const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 3600 * 1000 - 1);
+
+    for (const m of fixtures) {
+      const startTime = m.start_at ? new Date(m.start_at * 1000) : null;
+      if (!startTime) continue;
+      if (startTime.getTime() < todayStartUTC.getTime() - 6 * 3600 * 1000 || startTime.getTime() > todayEndUTC.getTime()) continue;
+
+      // Check if team names match
+      const teams = m.teams || {};
+      const teamNames = Object.values(teams).map((t: any) => (t.name || "").toLowerCase());
+      const fixtureNameLower = (m.name || "").toLowerCase();
+
+      // Match by checking if both team codes or names appear in our match name
+      const matchesByName = teamNames.some((tn: string) => {
+        const words = tn.split(" ");
+        return words.some((w: string) => w.length > 3 && matchNameLower.includes(w));
+      });
+
+      const matchesByFixtureName = fixtureNameLower.includes("vs") && matchNameLower.includes("vs") &&
+        fixtureNameLower.split("vs").some((part: string) => matchNameLower.includes(part.trim().split(" ")[0]));
+
+      if (matchesByName || matchesByFixtureName) {
+        // Check the API status of this fixture
+        const statusStr = m.status_str || m.status || "";
+        const sLower = statusStr.toLowerCase();
+        // Only pick non-completed matches
+        if (!sLower.includes("completed") && !sLower.includes("result")) {
+          console.log(`Re-discovered: ${m.key} (status: ${statusStr}) for match "${match.name}"`);
+          return m.key;
+        }
+      }
+    }
+
+    console.log(`Re-discovery found no better match for "${match.name}"`);
+    return null;
+  } catch (e: any) {
+    console.error("rediscoverMatchId error:", e.message);
+    return null;
+  }
+}
+
 // ── STATUS ───────────────────────────────────────────────────────────
 async function handleStatus(sb: any) {
   const { data } = await sb
