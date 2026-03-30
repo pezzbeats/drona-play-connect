@@ -22,10 +22,32 @@ Deno.serve(async (req) => {
     return json({ error: "ROANUZ_API_KEY or ROANUZ_PROJECT_KEY not configured" }, 500);
   }
 
+  // Step 1: Authenticate with Roanuz to get access token
+  let accessToken: string;
+  try {
+    const authRes = await fetch(
+      `https://api.sports.roanuz.com/v5/core/${ROANUZ_PROJECT_KEY}/auth/`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: ROANUZ_API_KEY }),
+      }
+    );
+    const authBody = await authRes.json();
+    if (!authBody.data?.token) {
+      console.error("Roanuz auth failed:", JSON.stringify(authBody));
+      return json({ error: "Roanuz authentication failed", detail: authBody }, 500);
+    }
+    accessToken = authBody.data.token;
+  } catch (e: any) {
+    console.error("Roanuz auth error:", e);
+    return json({ error: "Failed to authenticate with Roanuz", detail: e.message }, 500);
+  }
+
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const url = new URL(req.url);
   const action = url.searchParams.get("action") || "auto";
-  const roanuzHeaders = { "rs-token": ROANUZ_API_KEY };
+  const roanuzHeaders = { "rs-token": accessToken };
 
   try {
     if (action === "auto") {
