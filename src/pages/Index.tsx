@@ -354,6 +354,37 @@ function TodayMatchCard({
   );
 }
 
+// ─── New Match Notification Banner ────────────────────────────────────────────
+function NewMatchBanner({ matchNames, onDismiss }: { matchNames: string[]; onDismiss: () => void }) {
+  return (
+    <div className="animate-slide-up mb-4">
+      <div className="relative overflow-hidden rounded-xl border border-secondary/40 bg-secondary/10 px-4 py-3">
+        {/* Shimmer overlay */}
+        <div className="absolute inset-0 shimmer pointer-events-none" />
+        <div className="relative flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg bg-secondary/20 border border-secondary/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Trophy className="h-4 w-4 text-secondary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-display font-bold text-secondary text-sm leading-tight">
+              🏏 New Match{matchNames.length > 1 ? 'es' : ''} Today!
+            </p>
+            <p className="text-xs text-secondary/80 mt-0.5 truncate">
+              {matchNames.join(' · ')}
+            </p>
+          </div>
+          <button
+            onClick={onDismiss}
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-secondary/60 hover:text-secondary hover:bg-secondary/10 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function IndexPage() {
   const { get } = useSiteConfig();
   const [matches, setMatches] = useState<TodayMatch[]>([]);
@@ -361,10 +392,34 @@ export default function IndexPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [barDismissed, setBarDismissed] = useState(() => sessionStorage.getItem('barDismissed') === '1');
+  const [newMatchNames, setNewMatchNames] = useState<string[]>([]);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 10000);
     fetchData(0).finally(() => clearTimeout(timeout));
+  }, []);
+
+  // Realtime: listen for newly inserted matches and show banner
+  useEffect(() => {
+    const channel = supabase
+      .channel('new-matches-landing')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'matches' },
+        (payload) => {
+          const newMatch = payload.new as TodayMatch;
+          if (newMatch.status !== 'draft') {
+            setNewMatchNames(prev => [...prev, newMatch.name]);
+            setBannerDismissed(false);
+            // Refresh data to include the new match
+            fetchData(0);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const fetchData = async (attempt = 0): Promise<void> => {
@@ -516,6 +571,13 @@ export default function IndexPage() {
           <MatchSectionSkeleton />
         ) : matches.length > 0 ? (
           <>
+            {/* New match notification banner */}
+            {newMatchNames.length > 0 && !bannerDismissed && (
+              <NewMatchBanner
+                matchNames={newMatchNames}
+                onDismiss={() => setBannerDismissed(true)}
+              />
+            )}
             <div className="text-center mb-5 animate-slide-up">
               <p className="section-title mb-1">Today's IPL Matches</p>
               <h3 className="font-display text-xl font-bold text-foreground">
