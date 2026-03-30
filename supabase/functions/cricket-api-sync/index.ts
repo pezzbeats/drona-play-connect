@@ -610,7 +610,98 @@ async function doSync(sb: any, projectKey: string, headers: any) {
     }
   }
 
-  return { synced: results.length, results };
+  // ── AI-adaptive polling interval ──
+  try {
+    recommendedInterval = await analyzeGamePace(sb, results);
+  } catch (e: any) {
+    console.warn("AI pace analysis failed, using default 20s:", e.message);
+  }
+
+  return { synced: results.length, results, recommended_interval: recommendedInterval };
+}
+
+// ── Analyze game pace with Gemini to determine optimal polling interval ──
+async function analyzeGamePace(sb: any, syncResults: any[]): Promise<number> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) return 20;
+
+  // Gather context from the most recently synced match
+  const activeSyncs = syncResults.filter((r: any) => r.status === "synced");
+  if (activeSyncs.length === 0) return 20;
+
+  const matchId = activeSyncs[0].match_id;
+
+  // Get recent deliveries to measure pace
+  const twoMinAgo = new Date(Date.now() - 2 * 60_000).toISOString();
+  const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+
+  const [del2m, del5m, liveState] = await Promise.all([
+    sb.from("deliveries").select("id", { count: "exact", head: true })
+      .eq("match_id", matchId).gte("created_at", twoMinAgo),
+    sb.from("deliveries").select("id", { count: "exact", head: true })
+      .eq("match_id", matchId).gte("created_at", fiveMinAgo),
+    sb.from("match_live_state").select("*").eq("match_id", matchId).single(),
+  ]);
+
+  const state = liveState.data;
+  if (!state) return 20;
+
+  const currentInnings = state.current_innings || 1;
+  const score = currentInnings === 1 ? state.innings1_score : state.innings2_score;
+  const wickets = currentInnings === 1 ? state.innings1_wickets : state.innings2_wickets;
+  const overs = currentInnings === 1 ? state.innings1_overs : state.innings2_overs;
+  const target = state.target_runs;
+  const phase = state.phase;
+
+  const prompt = `You are a cricket match pace analyzer. Given the current match state, return ONLY a JSON object with "interval" (integer 10-20) and "reason" (short string).
+
+Match state:
+- Phase: ${phase}
+- Innings: ${currentInnings}
+- Score: ${score}/${wickets} (${overs} overs)
+- Target: ${target || "N/A"}
+- Deliveries in last 2 min: ${del2m.count || 0}
+- Deliveries in last 5 min: ${del5m.count || 0}
+- New deliveries this sync: ${activeSyncs[0].new_deliveries || 0}
+
+Rules:
+- 10s: Death overs (17-20) with high required rate, wicket just fell, tight chase
+- 12s: Powerplay (1-6), regular active play with frequent deliveries
+- 15s: Mid-innings steady play
+- 20s: Breaks, very slow over rate, no new deliveries recently
+
+Return ONLY valid JSON like: {"interval": 12, "reason": "powerplay active play"}`;
+
+  try {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=" + GEMINI_API_KEY, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 100 },
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn("Gemini API error:", res.status);
+      return 20;
+    }
+
+    const body = await res.json();
+    const text = body.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[^}]+\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const interval = Math.min(20, Math.max(10, parseInt(parsed.interval) || 20));
+      console.log(`AI pace: ${interval}s - ${parsed.reason}`);
+      return interval;
+    }
+  } catch (e: any) {
+    console.warn("Gemini parse error:", e.message);
+  }
+
+  return 20;
 }
 
 // ── Score predictions for a resolved window ──────────────────────────
