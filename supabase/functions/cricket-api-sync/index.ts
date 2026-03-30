@@ -446,7 +446,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         continue;
       }
 
-      const innings = matchData.innings || {};
+      const innings = matchData.innings || matchData.play?.innings || {};
       const inningsKeys = Object.keys(innings);
       let inn1Score = 0, inn1Wickets = 0, inn1Overs = 0;
       let inn2Score = 0, inn2Wickets = 0, inn2Overs = 0;
