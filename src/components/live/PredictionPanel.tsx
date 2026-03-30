@@ -90,34 +90,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   useEffect(() => { fetchMyScore(); }, [fetchMyScore]);
 
-  // Realtime: update myScore whenever the leaderboard row changes
-  const scoreSubscriptions = useMemo<ChannelSubscription[]>(() => [
-    {
-      event: 'UPDATE', schema: 'public', table: 'leaderboard',
-      filter: `match_id=eq.${matchId}`,
-      callback: (payload) => {
-        if (payload.new && (payload.new as any).mobile === mobile) {
-          const { total_points, correct_predictions, total_predictions } = payload.new as any;
-          setMyScore({ total_points, correct_predictions, total_predictions });
-        }
-      },
-    },
-    {
-      event: 'INSERT', schema: 'public', table: 'leaderboard',
-      filter: `match_id=eq.${matchId}`,
-      callback: (payload) => {
-        if (payload.new && (payload.new as any).mobile === mobile) {
-          const { total_points, correct_predictions, total_predictions } = payload.new as any;
-          setMyScore({ total_points, correct_predictions, total_predictions });
-        }
-      },
-    },
-  ], [matchId, mobile]);
 
-  // Removed separate score-panel channel — leaderboard updates come via
-  // LiveContent's `live-match` channel. The fetchMyScore on mount + realtime
-  // UPDATE callback in scoreSubscriptions is now handled by the main predictions channel.
-  // We still keep the leaderboard subscriptions but merge them into the main channel below.
 
   // Animate score increment when points increase
   useEffect(() => {
