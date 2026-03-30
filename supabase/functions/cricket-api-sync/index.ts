@@ -13,7 +13,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
 
-  const ROANUZ_API_KEY = Deno.env.get("ROANUZ_API_KEY");
+  // Secret storage may lowercase the key; Roanuz keys are case-sensitive (RS5:xxx)
+  const rawApiKey = Deno.env.get("ROANUZ_API_KEY") || "";
+  const ROANUZ_API_KEY = rawApiKey.startsWith("rs5:") ? "RS5:" + rawApiKey.slice(4) : rawApiKey;
   const ROANUZ_PROJECT_KEY = Deno.env.get("ROANUZ_PROJECT_KEY");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
