@@ -71,6 +71,56 @@ export type Database = {
         }
         Relationships: []
       }
+      api_sync_state: {
+        Row: {
+          created_at: string | null
+          external_match_id: string
+          last_innings1_overs: number | null
+          last_innings1_score: number | null
+          last_innings1_wickets: number | null
+          last_innings2_overs: number | null
+          last_innings2_score: number | null
+          last_innings2_wickets: number | null
+          last_synced_at: string | null
+          match_id: string
+          sync_enabled: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_match_id: string
+          last_innings1_overs?: number | null
+          last_innings1_score?: number | null
+          last_innings1_wickets?: number | null
+          last_innings2_overs?: number | null
+          last_innings2_score?: number | null
+          last_innings2_wickets?: number | null
+          last_synced_at?: string | null
+          match_id: string
+          sync_enabled?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          external_match_id?: string
+          last_innings1_overs?: number | null
+          last_innings1_score?: number | null
+          last_innings1_wickets?: number | null
+          last_innings2_overs?: number | null
+          last_innings2_score?: number | null
+          last_innings2_wickets?: number | null
+          last_synced_at?: string | null
+          match_id?: string
+          sync_enabled?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_sync_state_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           code: string
@@ -819,6 +869,7 @@ export type Database = {
           created_at: string
           disclaimer_enabled: boolean
           event_id: string
+          external_match_id: string | null
           id: string
           is_active_for_registration: boolean
           match_type: Database["public"]["Enums"]["match_type_enum"]
@@ -834,6 +885,7 @@ export type Database = {
           created_at?: string
           disclaimer_enabled?: boolean
           event_id: string
+          external_match_id?: string | null
           id?: string
           is_active_for_registration?: boolean
           match_type?: Database["public"]["Enums"]["match_type_enum"]
@@ -849,6 +901,7 @@ export type Database = {
           created_at?: string
           disclaimer_enabled?: boolean
           event_id?: string
+          external_match_id?: string | null
           id?: string
           is_active_for_registration?: boolean
           match_type?: Database["public"]["Enums"]["match_type_enum"]

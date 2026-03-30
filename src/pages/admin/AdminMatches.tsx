@@ -8,6 +8,7 @@ import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Plus, ToggleLeft, ToggleRight, Edit, Zap, Trophy } from 'lucide-react';
+import ApiSyncPanel from '@/components/admin/ApiSyncPanel';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -111,6 +112,7 @@ export default function AdminMatches() {
 
   return (
     <div className="px-4 py-5 space-y-5 max-w-2xl mx-auto md:max-w-none md:p-6">
+      <ApiSyncPanel />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold gradient-text-accent">Matches</h1>
