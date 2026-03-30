@@ -124,12 +124,15 @@ function GameLoginCard() {
         </GlassButton>
       </div>
 
-      <p className="text-xs text-muted-foreground text-center mt-3">
-        PIN is sent after you register for a match ·{' '}
-        <Link to="/play" className="text-success/80 hover:text-success underline-offset-2 hover:underline transition-colors">
+      <div className="flex items-center justify-between mt-3 px-1">
+        <p className="text-xs text-muted-foreground">
+          Forgot PIN?{' '}
+          <span className="text-foreground/70">Contact the venue</span>
+        </p>
+        <Link to="/play" className="text-xs text-success/80 hover:text-success underline-offset-2 hover:underline transition-colors">
           Full screen login →
         </Link>
-      </p>
+      </div>
     </GlassCard>
   );
 }
