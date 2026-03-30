@@ -127,12 +127,19 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
 
   const matches = body.data?.matches || [];
   const now = new Date();
-  // Wider window: past 6h to 48h ahead — ensures matches are discovered a day early
+  // Compute today's IST boundaries: 00:00 IST to 23:59:59 IST, plus 6h past buffer
+  const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+  const istNow = new Date(now.getTime() + IST_OFFSET_MS);
+  const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
+  const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS);
+  const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 3600 * 1000 - 1);
+
   const todayMatches = matches.filter((m: any) => {
     const startTime = m.start_at ? new Date(m.start_at * 1000) : null;
     if (!startTime) return false;
-    const diffMs = startTime.getTime() - now.getTime();
-    return diffMs > -6 * 3600 * 1000 && diffMs < 48 * 3600 * 1000;
+    // Include matches starting today (IST) plus 6h buffer for ongoing matches
+    return startTime.getTime() >= (todayStartUTC.getTime() - 6 * 3600 * 1000) &&
+           startTime.getTime() <= todayEndUTC.getTime();
   });
 
   const created: string[] = [];
