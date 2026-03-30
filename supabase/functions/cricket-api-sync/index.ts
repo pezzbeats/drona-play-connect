@@ -117,8 +117,21 @@ function json(data: any, status = 200) {
 }
 
 function isApiStatusLive(statusStr: string): boolean {
-  const s = (statusStr || "").toLowerCase();
-  return s.includes("live") || s.includes("in progress") || s.includes("in_progress");
+  const s = (statusStr || "").toLowerCase().trim();
+  // Exclude completed/not_started explicitly
+  if (s.includes("not_started") || s.includes("completed") || s.includes("result") || s === "not started") return false;
+  return (
+    s.includes("live") ||
+    s.includes("in progress") ||
+    s.includes("in_progress") ||
+    s === "started" ||
+    s.includes("play") ||
+    s.includes("innings") ||
+    s.includes("stumps") ||
+    s.includes("break") ||
+    s.includes("strategic") ||
+    s.includes("timeout")
+  );
 }
 
 // ── DISCOVER ─────────────────────────────────────────────────────────
@@ -194,10 +207,12 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
     const opponent = teamNames.length > 1 ? teamNames[1] : null;
     const startTime = m.start_at ? new Date(m.start_at * 1000).toISOString() : null;
 
-    // Auto-detect live status from API
-    const mStatus = (m.status_str || "").toLowerCase();
+    // Auto-detect live status from API — check multiple fields
+    const mStatusRaw = m.status_str || m.status || m.play_status || "";
+    const mStatus = mStatusRaw.toLowerCase();
+    const hasInningsData = m.innings && Object.keys(m.innings).length > 0;
     let status: string = "draft";
-    if (isApiStatusLive(m.status_str || "")) {
+    if (isApiStatusLive(mStatusRaw) || hasInningsData) {
       status = "live";
     } else if (mStatus.includes("completed") || mStatus.includes("result")) {
       status = "ended";
@@ -390,8 +405,10 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       }
 
       const matchData = matchBody.data;
-      const apiStatusStr = matchData.status_str || "";
-      const apiIsLive = isApiStatusLive(apiStatusStr);
+      const apiStatusStr = matchData.status_str || matchData.status || matchData.play_status || "";
+      const hasInningsData = matchData.innings && Object.keys(matchData.innings).length > 0;
+      console.log(`Match ${matchId} API status: "${apiStatusStr}", hasInnings: ${hasInningsData}`);
+      const apiIsLive = isApiStatusLive(apiStatusStr) || hasInningsData;
 
       // ── Auto-activate: transition registrations_open → live when API says live ──
       if (matchStatus === "registrations_open" && apiIsLive) {
