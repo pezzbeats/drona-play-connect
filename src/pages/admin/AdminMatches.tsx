@@ -8,6 +8,7 @@ import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Plus, ToggleLeft, ToggleRight, Edit, Zap, Trophy } from 'lucide-react';
+import ApiSyncPanel from '@/components/admin/ApiSyncPanel';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
