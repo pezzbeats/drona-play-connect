@@ -90,31 +90,7 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   useEffect(() => { fetchMyScore(); }, [fetchMyScore]);
 
-  // Realtime: update myScore whenever the leaderboard row changes
-  const scoreSubscriptions = useMemo<ChannelSubscription[]>(() => [
-    {
-      event: 'UPDATE', schema: 'public', table: 'leaderboard',
-      filter: `match_id=eq.${matchId}`,
-      callback: (payload) => {
-        if (payload.new && (payload.new as any).mobile === mobile) {
-          const { total_points, correct_predictions, total_predictions } = payload.new as any;
-          setMyScore({ total_points, correct_predictions, total_predictions });
-        }
-      },
-    },
-    {
-      event: 'INSERT', schema: 'public', table: 'leaderboard',
-      filter: `match_id=eq.${matchId}`,
-      callback: (payload) => {
-        if (payload.new && (payload.new as any).mobile === mobile) {
-          const { total_points, correct_predictions, total_predictions } = payload.new as any;
-          setMyScore({ total_points, correct_predictions, total_predictions });
-        }
-      },
-    },
-  ], [matchId, mobile]);
 
-  useRealtimeChannel(`score-panel-${matchId}-${mobile}`, scoreSubscriptions, fetchMyScore);
 
   // Animate score increment when points increase
   useEffect(() => {
@@ -215,9 +191,34 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         }
       },
     },
-  ], [matchId, fetchWindows]);
+    // Merged: leaderboard personal score updates (was separate score-panel channel)
+    {
+      event: 'UPDATE', schema: 'public', table: 'leaderboard',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new && (payload.new as any).mobile === mobile) {
+          const { total_points, correct_predictions, total_predictions } = payload.new as any;
+          setMyScore({ total_points, correct_predictions, total_predictions });
+        }
+      },
+    },
+    {
+      event: 'INSERT', schema: 'public', table: 'leaderboard',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new && (payload.new as any).mobile === mobile) {
+          const { total_points, correct_predictions, total_predictions } = payload.new as any;
+          setMyScore({ total_points, correct_predictions, total_predictions });
+        }
+      },
+    },
+  ], [matchId, mobile, fetchWindows]);
 
-  useRealtimeChannel(`predictions-panel-${matchId}`, subscriptions, fetchWindows);
+  const fetchAll = useCallback(async () => {
+    await Promise.all([fetchWindows(), fetchMyScore()]);
+  }, [fetchWindows, fetchMyScore]);
+
+  useRealtimeChannel(`predictions-panel-${matchId}`, subscriptions, fetchAll);
 
   const handleOptionTap = async (windowId: string, optKey: string) => {
     if (submittedWindows[windowId]) return;
