@@ -43,6 +43,13 @@ const phaseLabel: Record<string, string> = {
   ended: 'Match Ended',
 };
 
+interface MatchSummary {
+  winnerTeam: string | null;
+  winMargin: string | null;
+  topScorer: { name: string; runs: number } | null;
+  topWicketTaker: { name: string; wickets: number } | null;
+}
+
 export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
   const [state, setState] = useState<LiveState | null>(initialState || null);
   const [teams, setTeams] = useState<Record<string, any>>({});
@@ -51,6 +58,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
   const [flash, setFlash] = useState(false);
   const [scoreKey, setScoreKey] = useState(0);
   const [matchSummaryOpen, setMatchSummaryOpen] = useState(false);
+  const [matchSummary, setMatchSummary] = useState<MatchSummary | null>(null);
   const prevScoreRef = useRef<number | null>(null);
 
   // Score animation trigger
