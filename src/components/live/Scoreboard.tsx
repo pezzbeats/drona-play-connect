@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, ChevronDown, ChevronUp, Trophy, Target, Flame } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 
 interface LiveState {
@@ -43,6 +43,13 @@ const phaseLabel: Record<string, string> = {
   ended: 'Match Ended',
 };
 
+interface MatchSummary {
+  winnerTeam: string | null;
+  winMargin: string | null;
+  topScorer: { name: string; runs: number } | null;
+  topWicketTaker: { name: string; wickets: number } | null;
+}
+
 export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
   const [state, setState] = useState<LiveState | null>(initialState || null);
   const [teams, setTeams] = useState<Record<string, any>>({});
@@ -51,6 +58,7 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
   const [flash, setFlash] = useState(false);
   const [scoreKey, setScoreKey] = useState(0);
   const [matchSummaryOpen, setMatchSummaryOpen] = useState(false);
+  const [matchSummary, setMatchSummary] = useState<MatchSummary | null>(null);
   const prevScoreRef = useRef<number | null>(null);
 
   // Score animation trigger
@@ -191,6 +199,100 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [state?.phase]);
+
+  // Fetch match summary when phase is ended
+  useEffect(() => {
+    if (state?.phase !== 'ended' || Object.keys(teams).length === 0 || Object.keys(players).length === 0) return;
+
+    const fetchMatchSummary = async () => {
+      try {
+        // Get roster to determine which team batted first
+        const { data: rosterData } = await supabase
+          .from('match_roster')
+          .select('team_id, is_batting_first')
+          .eq('match_id', matchId);
+
+        let winnerTeam: string | null = null;
+        let winMargin: string | null = null;
+
+        if (rosterData && rosterData.length >= 2 && state) {
+          const battingFirst = rosterData.find(r => r.is_batting_first);
+          const battingSecond = rosterData.find(r => !r.is_batting_first);
+          const inn1 = state.innings1_score;
+          const inn2 = state.innings2_score;
+
+          if (inn1 > inn2 && battingFirst) {
+            winnerTeam = teams[battingFirst.team_id]?.name || null;
+            winMargin = `won by ${inn1 - inn2} runs`;
+          } else if (inn2 > inn1 && battingSecond) {
+            winnerTeam = teams[battingSecond.team_id]?.name || null;
+            winMargin = `won by ${10 - state.innings2_wickets} wickets`;
+          } else {
+            winnerTeam = null;
+            winMargin = 'Match Tied';
+          }
+        }
+
+        // Top scorer from deliveries
+        const { data: deliveries } = await supabase
+          .from('deliveries')
+          .select('striker_id, runs_off_bat')
+          .eq('match_id', matchId);
+
+        let topScorer: { name: string; runs: number } | null = null;
+        if (deliveries && deliveries.length > 0) {
+          const runsMap: Record<string, number> = {};
+          for (const d of deliveries) {
+            if (d.striker_id) {
+              runsMap[d.striker_id] = (runsMap[d.striker_id] || 0) + d.runs_off_bat;
+            }
+          }
+          const topId = Object.entries(runsMap).sort((a, b) => b[1] - a[1])[0];
+          if (topId && players[topId[0]]) {
+            topScorer = { name: players[topId[0]].name, runs: topId[1] };
+          }
+        }
+
+        // Top wicket-taker
+        let topWicketTaker: { name: string; wickets: number } | null = null;
+        if (deliveries && deliveries.length > 0) {
+          const { data: wicketDeliveries } = await supabase
+            .from('deliveries')
+            .select('bowler_id')
+            .eq('match_id', matchId)
+            .eq('is_wicket', true);
+
+          if (wicketDeliveries && wicketDeliveries.length > 0) {
+            const wicketMap: Record<string, number> = {};
+            for (const d of wicketDeliveries) {
+              if (d.bowler_id) {
+                wicketMap[d.bowler_id] = (wicketMap[d.bowler_id] || 0) + 1;
+              }
+            }
+            const topBowler = Object.entries(wicketMap).sort((a, b) => b[1] - a[1])[0];
+            if (topBowler && players[topBowler[0]]) {
+              topWicketTaker = { name: players[topBowler[0]].name, wickets: topBowler[1] };
+            }
+          }
+        }
+
+        // Check super over winner override
+        if (superOverRounds.length > 0) {
+          const lastRound = superOverRounds[superOverRounds.length - 1];
+          if (lastRound.winner) {
+            winnerTeam = lastRound.winner.name;
+            winMargin = `won via Super Over`;
+          }
+        }
+
+        setMatchSummary({ winnerTeam, winMargin, topScorer, topWicketTaker });
+      } catch (e) {
+        console.warn('Failed to fetch match summary:', e);
+      }
+    };
+
+    fetchMatchSummary();
+  }, [state?.phase, matchId, teams, players, superOverRounds]);
 
   const currentInnings = state?.current_innings || 1;
   const score = currentInnings === 1 ? state?.innings1_score : state?.innings2_score;
@@ -443,10 +545,62 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
           <div className="text-center py-6">
             <div className="text-5xl mb-3">🏆</div>
             <p className="font-display text-xl font-bold text-foreground">Match Ended</p>
-            <div className="flex justify-center gap-6 mt-3 text-sm text-muted-foreground">
-              <span>1st: {state.innings1_score}/{state.innings1_wickets}</span>
-              <span>2nd: {state.innings2_score}/{state.innings2_wickets}</span>
+
+            {/* Winner banner */}
+            {matchSummary?.winnerTeam && (
+              <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/15 border border-primary/30">
+                <Trophy className="h-4 w-4 text-primary" />
+                <span className="text-sm text-primary font-bold">
+                  {matchSummary.winnerTeam} {matchSummary.winMargin}
+                </span>
+              </div>
+            )}
+            {matchSummary && !matchSummary.winnerTeam && matchSummary.winMargin && (
+              <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-warning/15 border border-warning/30">
+                <span className="text-sm text-warning font-bold">{matchSummary.winMargin}</span>
+              </div>
+            )}
+
+            {/* Innings scores */}
+            <div className="flex justify-center gap-6 mt-4 text-sm text-muted-foreground">
+              <span className="flex flex-col items-center">
+                <span className="font-bold text-[10px] uppercase mb-0.5 tracking-wider">1st Inn</span>
+                <span className="font-display font-bold text-foreground text-base">{state.innings1_score}/{state.innings1_wickets}</span>
+                <span className="text-xs">({(() => { const o = Number(state.innings1_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
+              </span>
+              <div className="w-px bg-border/40" />
+              <span className="flex flex-col items-center">
+                <span className="font-bold text-[10px] uppercase mb-0.5 tracking-wider">2nd Inn</span>
+                <span className="font-display font-bold text-foreground text-base">{state.innings2_score}/{state.innings2_wickets}</span>
+                <span className="text-xs">({(() => { const o = Number(state.innings2_overs); return o === Math.floor(o) ? Math.floor(o) : o.toFixed(1); })()} ov)</span>
+              </span>
             </div>
+
+            {/* Top performers */}
+            {matchSummary && (matchSummary.topScorer || matchSummary.topWicketTaker) && (
+              <div className="mt-4 flex flex-wrap justify-center gap-3">
+                {matchSummary.topScorer && (
+                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-success/10 border border-success/20">
+                    <Flame className="h-3.5 w-3.5 text-success" />
+                    <div className="text-left">
+                      <div className="text-[10px] uppercase font-bold text-success tracking-wider">Top Scorer</div>
+                      <div className="text-xs font-semibold text-foreground">{matchSummary.topScorer.name} — {matchSummary.topScorer.runs} runs</div>
+                    </div>
+                  </div>
+                )}
+                {matchSummary.topWicketTaker && (
+                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
+                    <Target className="h-3.5 w-3.5 text-primary" />
+                    <div className="text-left">
+                      <div className="text-[10px] uppercase font-bold text-primary tracking-wider">Top Wickets</div>
+                      <div className="text-xs font-semibold text-foreground">{matchSummary.topWicketTaker.name} — {matchSummary.topWicketTaker.wickets}W</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Super over note */}
             {hasDecidedViaSuperOver && latestRound && (
               <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-warning/15 border border-warning/30">
                 <span className="text-xs text-warning font-semibold">
