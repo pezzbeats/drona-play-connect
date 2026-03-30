@@ -62,6 +62,146 @@ interface PredictionPanelProps {
   pin: string;
 }
 
+// ── Countdown hook for locks_at ──────────────────────────────────────
+function useCountdown(locksAt: string | null) {
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(() => {
+    if (!locksAt) return null;
+    const diff = Math.ceil((new Date(locksAt).getTime() - Date.now()) / 1000);
+    return diff > 0 ? diff : 0;
+  });
+
+  useEffect(() => {
+    if (!locksAt) { setSecondsLeft(null); return; }
+    const update = () => {
+      const diff = Math.ceil((new Date(locksAt).getTime() - Date.now()) / 1000);
+      setSecondsLeft(diff > 0 ? diff : 0);
+    };
+    update();
+    const id = setInterval(update, 200);
+    return () => clearInterval(id);
+  }, [locksAt]);
+
+  return secondsLeft;
+}
+
+// ── Open Window Card with countdown ─────────────────────────────────
+function OpenWindowCard({
+  window: w,
+  frozen,
+  submitted,
+  submittingKey,
+  shouldAnimate,
+  onOptionTap,
+  onExpired,
+}: {
+  window: PredictionWindow;
+  frozen: boolean;
+  submitted: string | undefined;
+  submittingKey: { windowId: string; optKey: string } | null;
+  shouldAnimate: boolean;
+  onOptionTap: (windowId: string, optKey: string) => void;
+  onExpired: () => void;
+}) {
+  const secondsLeft = useCountdown(w.locks_at);
+  const expired = secondsLeft !== null && secondsLeft <= 0;
+  const expiredRef = useRef(false);
+
+  useEffect(() => {
+    if (expired && !expiredRef.current) {
+      expiredRef.current = true;
+      onExpired();
+    }
+  }, [expired, onExpired]);
+
+  const isThisWindowSubmitting = submittingKey?.windowId === w.id;
+  const isDisabled = !!submitted || frozen || isThisWindowSubmitting || expired;
+
+  return (
+    <GlassCard className={`p-4 border ${frozen ? 'border-warning/30 opacity-75' : 'border-primary/30'}`} glow={!frozen && !expired}>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`w-2 h-2 rounded-full ${frozen ? 'bg-warning' : expired ? 'bg-muted-foreground' : 'bg-primary animate-pulse'}`} />
+        <span className={`text-xs font-bold uppercase tracking-wide ${frozen ? 'text-warning' : expired ? 'text-muted-foreground' : 'text-primary'}`}>
+          {frozen ? '⏸ Guesses Paused' : expired ? '⏱ Time Up' : submitted ? '✓ Guess Locked' : '🎯 Tap to Lock Your Guess!'}
+        </span>
+        {secondsLeft !== null && !expired && (
+          <span className={`ml-auto text-xs font-black tabular-nums px-2 py-0.5 rounded-full border ${
+            secondsLeft <= 3
+              ? 'text-destructive bg-destructive/15 border-destructive/40 animate-pulse'
+              : secondsLeft <= 6
+                ? 'text-warning bg-warning/15 border-warning/40'
+                : 'text-primary bg-primary/15 border-primary/40'
+          }`}>
+            ⏱ {secondsLeft}s
+          </span>
+        )}
+      </div>
+
+      <p className="text-foreground font-semibold text-sm mb-4">
+        {w.question || 'What will happen on the next ball?'}
+      </p>
+
+      {/* Option cards — 4-column grid */}
+      <div className="grid grid-cols-4 gap-2">
+        {(w.options || []).map((opt: any, optIdx: number) => {
+          const isSubmitted = submitted === opt.key;
+          const isThisSpinning = isThisWindowSubmitting && submittingKey?.optKey === opt.key;
+          const colors = KEY_COLORS[opt.key] || fallbackColor;
+          const outcomeData = BALL_OUTCOMES.find(o => o.key === opt.key);
+          const emoji = outcomeData?.emoji ?? opt.label.slice(0, 2);
+
+          let cardCls = '';
+          if (expired && !isSubmitted) {
+            cardCls = 'border-border/20 bg-muted/10 text-muted-foreground/40 cursor-not-allowed opacity-50';
+          } else if (frozen && !isSubmitted) {
+            cardCls = 'border-border/20 bg-muted/10 text-muted-foreground/40 cursor-not-allowed';
+          } else if (isThisSpinning) {
+            cardCls = 'border-primary/60 bg-primary/10 text-primary cursor-wait';
+          } else if (isSubmitted) {
+            cardCls = `${colors.selected} ring-2 ring-primary/40`;
+          } else if (isDisabled) {
+            cardCls = 'border-border/20 bg-muted/10 text-muted-foreground/40 cursor-not-allowed opacity-50';
+          } else {
+            cardCls = 'border-border/40 bg-card/50 text-foreground hover:border-primary/50 hover:bg-primary/8 hover:scale-105 active:scale-95';
+          }
+
+          return (
+            <button
+              key={opt.key}
+              disabled={isDisabled && !isSubmitted}
+              onClick={() => onOptionTap(w.id, opt.key)}
+              className={`flex flex-col items-center justify-center gap-1 rounded-2xl border-2 h-[72px] transition-all touch-manipulation select-none ${cardCls} ${
+                shouldAnimate ? 'animate-slide-up' : ''
+              }`}
+              style={shouldAnimate ? { animationDelay: `${optIdx * 50}ms`, animationFillMode: 'both' } as React.CSSProperties : undefined}
+            >
+              {isThisSpinning ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <span className={`text-xl font-black leading-none ${isSubmitted ? '' : (KEY_COLORS[opt.key] || fallbackColor).emoji}`}>
+                    {isSubmitted ? <CheckCircle2 className="h-5 w-5" /> : emoji}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide leading-none opacity-80">
+                    {opt.label}
+                  </span>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {submitted && (
+        <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium mt-3 pt-3 border-t border-primary/20">
+          <CheckCircle2 className="h-4 w-4" />
+          Guess locked in — cannot be changed
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
 export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) {
   const [windows, setWindows] = useState<PredictionWindow[]>([]);
   const [loading, setLoading] = useState(true);
