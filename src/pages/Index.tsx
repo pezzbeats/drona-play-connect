@@ -132,7 +132,28 @@ interface TodayMatch {
 interface RosterTeam {
   match_id: string;
   side: string;
-  teams: { name: string; short_code: string; color: string | null } | null;
+  teams: { name: string; short_code: string; color: string | null; logo_path: string | null } | null;
+}
+
+// Well-known IPL team brand colors as fallback
+const IPL_TEAM_COLORS: Record<string, { bg: string; accent: string }> = {
+  CSK: { bg: '#f9cd05', accent: '#0058e0' },
+  MI: { bg: '#004ba0', accent: '#d1ab3e' },
+  RCB: { bg: '#d4213d', accent: '#2b2b2b' },
+  KKR: { bg: '#3a225d', accent: '#f0c230' },
+  SRH: { bg: '#ff822a', accent: '#000000' },
+  DC:  { bg: '#0055a3', accent: '#ef1c25' },
+  PBKS: { bg: '#dd1f2d', accent: '#a7a9ac' },
+  RR:  { bg: '#ea1a85', accent: '#254aa5' },
+  GT:  { bg: '#1c3c6b', accent: '#b09862' },
+  LSG: { bg: '#a72056', accent: '#ffcc00' },
+};
+
+function getTeamColors(shortCode: string, dbColor: string | null) {
+  const ipl = IPL_TEAM_COLORS[shortCode.toUpperCase()];
+  if (ipl) return ipl;
+  if (dbColor) return { bg: dbColor, accent: dbColor };
+  return { bg: 'hsl(var(--primary))', accent: 'hsl(var(--secondary))' };
 }
 
 const FEATURE_ICONS = [
@@ -208,33 +229,76 @@ function TodayMatchCard({
 
       {/* Team vs Team */}
       {homeTeam && awayTeam ? (
-        <div className="flex items-center justify-center gap-4 mb-3">
-          <div className="text-center flex-1">
-            <div
-              className="w-14 h-14 mx-auto rounded-xl flex items-center justify-center text-2xl font-display font-bold border mb-1"
-              style={{
-                backgroundColor: homeTeam.color ? `${homeTeam.color}22` : 'hsl(var(--primary) / 0.1)',
-                borderColor: homeTeam.color ? `${homeTeam.color}44` : 'hsl(var(--primary) / 0.3)',
-                color: homeTeam.color || 'hsl(var(--primary))',
-              }}
-            >
-              {homeTeam.short_code}
-            </div>
-            <p className="text-xs text-foreground/80 font-medium truncate">{homeTeam.name}</p>
+        <div className="flex items-center justify-center gap-3 mb-4">
+          {/* Home team */}
+          <div className="text-center flex-1 min-w-0">
+            {(() => {
+              const colors = getTeamColors(homeTeam.short_code, homeTeam.color);
+              const logoUrl = homeTeam.logo_path
+                ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${homeTeam.logo_path}`
+                : null;
+              return (
+                <>
+                  <div
+                    className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center border-2 mb-1.5 shadow-lg"
+                    style={{
+                      background: `linear-gradient(135deg, ${colors.bg}30, ${colors.bg}15)`,
+                      borderColor: `${colors.bg}66`,
+                      boxShadow: `0 4px 20px ${colors.bg}33, inset 0 1px 0 ${colors.bg}22`,
+                    }}
+                  >
+                    {logoUrl ? (
+                      <img src={logoUrl} alt={homeTeam.name} className="w-10 h-10 object-contain" />
+                    ) : (
+                      <span className="text-xl font-display font-bold" style={{ color: colors.bg }}>
+                        {homeTeam.short_code}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-foreground font-semibold truncate">{homeTeam.short_code}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{homeTeam.name}</p>
+                </>
+              );
+            })()}
           </div>
-          <span className="text-muted-foreground font-display font-bold text-lg">vs</span>
-          <div className="text-center flex-1">
-            <div
-              className="w-14 h-14 mx-auto rounded-xl flex items-center justify-center text-2xl font-display font-bold border mb-1"
-              style={{
-                backgroundColor: awayTeam.color ? `${awayTeam.color}22` : 'hsl(var(--secondary) / 0.1)',
-                borderColor: awayTeam.color ? `${awayTeam.color}44` : 'hsl(var(--secondary) / 0.3)',
-                color: awayTeam.color || 'hsl(var(--secondary))',
-              }}
-            >
-              {awayTeam.short_code}
+
+          {/* VS divider */}
+          <div className="flex flex-col items-center gap-1 px-2">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-muted/30 border border-border/50">
+              <span className="font-display font-bold text-sm text-muted-foreground">VS</span>
             </div>
-            <p className="text-xs text-foreground/80 font-medium truncate">{awayTeam.name}</p>
+          </div>
+
+          {/* Away team */}
+          <div className="text-center flex-1 min-w-0">
+            {(() => {
+              const colors = getTeamColors(awayTeam.short_code, awayTeam.color);
+              const logoUrl = awayTeam.logo_path
+                ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${awayTeam.logo_path}`
+                : null;
+              return (
+                <>
+                  <div
+                    className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center border-2 mb-1.5 shadow-lg"
+                    style={{
+                      background: `linear-gradient(135deg, ${colors.bg}30, ${colors.bg}15)`,
+                      borderColor: `${colors.bg}66`,
+                      boxShadow: `0 4px 20px ${colors.bg}33, inset 0 1px 0 ${colors.bg}22`,
+                    }}
+                  >
+                    {logoUrl ? (
+                      <img src={logoUrl} alt={awayTeam.name} className="w-10 h-10 object-contain" />
+                    ) : (
+                      <span className="text-xl font-display font-bold" style={{ color: colors.bg }}>
+                        {awayTeam.short_code}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-foreground font-semibold truncate">{awayTeam.short_code}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{awayTeam.name}</p>
+                </>
+              );
+            })()}
           </div>
         </div>
       ) : (
@@ -332,7 +396,7 @@ export default function IndexPage() {
         const matchIds = uniqueMatches.map(m => m.id);
         const { data: rosterData } = await supabase
           .from('match_roster')
-          .select('match_id, side, teams(name, short_code, color)')
+          .select('match_id, side, teams(name, short_code, color, logo_path)')
           .in('match_id', matchIds);
         setRoster((rosterData as any[]) || []);
       }
