@@ -452,16 +452,19 @@ export default function IndexPage() {
   const fetchData = async (attempt = 0): Promise<number> => {
     if (attempt === 0) setLoading(true);
     try {
-      // Fetch today's matches: start_time within today (IST) OR is_active_for_registration
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
+      // Compute today's boundaries in IST (UTC+5:30), then convert to UTC ISO strings
+      const now = new Date();
+      const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+      const istNow = new Date(now.getTime() + IST_OFFSET_MS);
+      const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
+      const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS); // 00:00 IST in UTC
+      const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 60 * 60 * 1000 - 1); // 23:59:59.999 IST in UTC
 
       const { data: matchData, error: matchError } = await supabase
         .from('matches')
         .select('id, name, opponent, venue, start_time, status, match_type')
-        .or(`and(start_time.gte.${todayStart.toISOString()},start_time.lte.${todayEnd.toISOString()}),is_active_for_registration.eq.true`)
+        .gte('start_time', todayStartUTC.toISOString())
+        .lte('start_time', todayEndUTC.toISOString())
         .neq('status', 'draft')
         .order('start_time', { ascending: true });
 
