@@ -9,6 +9,29 @@ const corsHeaders = {
 const ROANUZ_BASE = "https://api.sports.roanuz.com/v5/cricket";
 const IPL_TOURNAMENT_KEY = "a-rz--cricket--bcci--iplt20--2026-ZGwl";
 
+// Known IPL team name → short_code + brand color mapping
+const IPL_TEAM_MAP: Record<string, { code: string; color: string }> = {
+  "chennai super kings": { code: "CSK", color: "#f9cd05" },
+  "mumbai indians": { code: "MI", color: "#004BA0" },
+  "royal challengers bengaluru": { code: "RCB", color: "#EC1C24" },
+  "royal challengers bangalore": { code: "RCB", color: "#EC1C24" },
+  "kolkata knight riders": { code: "KKR", color: "#3A225D" },
+  "sunrisers hyderabad": { code: "SRH", color: "#FF822A" },
+  "delhi capitals": { code: "DC", color: "#004C93" },
+  "punjab kings": { code: "PBKS", color: "#ED1B24" },
+  "rajasthan royals": { code: "RR", color: "#EA1A85" },
+  "gujarat titans": { code: "GT", color: "#1B2133" },
+  "lucknow super giants": { code: "LSG", color: "#A72056" },
+};
+
+function getIplTeamInfo(name: string): { code: string; color: string } | null {
+  const lower = name.toLowerCase().trim();
+  for (const [key, val] of Object.entries(IPL_TEAM_MAP)) {
+    if (lower.includes(key) || key.includes(lower)) return val;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });

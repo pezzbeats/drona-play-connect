@@ -224,16 +224,20 @@ export default function RegisterPage() {
               </div>
               <span className="text-muted-foreground font-display font-bold">vs</span>
               <div className="text-center flex-1">
-                <div
-                  className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
-                  style={{
-                    backgroundColor: awayTeam.color ? `${awayTeam.color}22` : 'hsl(var(--secondary) / 0.1)',
-                    borderColor: awayTeam.color ? `${awayTeam.color}44` : 'hsl(var(--secondary) / 0.3)',
-                    color: awayTeam.color || 'hsl(var(--secondary))',
-                  }}
-                >
-                  {awayTeam.short_code}
-                </div>
+              {IPL_TEAM_LOGOS[awayTeam.short_code?.toUpperCase()] ? (
+                  <img src={IPL_TEAM_LOGOS[awayTeam.short_code.toUpperCase()]} alt={awayTeam.name} className="w-12 h-12 mx-auto object-contain mb-1" loading="lazy" />
+                ) : (
+                  <div
+                    className="w-12 h-12 mx-auto rounded-lg flex items-center justify-center text-xl font-display font-bold border mb-1"
+                    style={{
+                      backgroundColor: awayTeam.color ? `${awayTeam.color}22` : 'hsl(var(--secondary) / 0.1)',
+                      borderColor: awayTeam.color ? `${awayTeam.color}44` : 'hsl(var(--secondary) / 0.3)',
+                      color: awayTeam.color || 'hsl(var(--secondary))',
+                    }}
+                  >
+                    {awayTeam.short_code}
+                  </div>
+                )}
                 <p className="text-xs text-foreground/80 font-medium truncate">{awayTeam.name}</p>
               </div>
             </div>
