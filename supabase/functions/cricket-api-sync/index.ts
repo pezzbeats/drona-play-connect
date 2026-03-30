@@ -403,8 +403,10 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       }
 
       const matchData = matchBody.data;
-      const apiStatusStr = matchData.status_str || "";
-      const apiIsLive = isApiStatusLive(apiStatusStr);
+      const apiStatusStr = matchData.status_str || matchData.status || matchData.play_status || "";
+      const hasInningsData = matchData.innings && Object.keys(matchData.innings).length > 0;
+      console.log(`Match ${matchId} API status: "${apiStatusStr}", hasInnings: ${hasInningsData}`);
+      const apiIsLive = isApiStatusLive(apiStatusStr) || hasInningsData;
 
       // ── Auto-activate: transition registrations_open → live when API says live ──
       if (matchStatus === "registrations_open" && apiIsLive) {
