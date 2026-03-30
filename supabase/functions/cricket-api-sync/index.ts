@@ -7,13 +7,15 @@ const corsHeaders = {
 };
 
 const ROANUZ_BASE = "https://api.sports.roanuz.com/v5/cricket";
-const IPL_TOURNAMENT_KEY = "ipl_2025";
+const IPL_TOURNAMENT_KEY = "a-rz--cricket--bcci--iplt20--2026-ZGwl";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
 
-  const ROANUZ_API_KEY = Deno.env.get("ROANUZ_API_KEY");
+  // Secret storage may lowercase the key; Roanuz keys are case-sensitive (RS5:xxx)
+  const rawApiKey = Deno.env.get("ROANUZ_API_KEY") || "";
+  const ROANUZ_API_KEY = rawApiKey.startsWith("rs5:") ? "RS5:" + rawApiKey.slice(4) : rawApiKey;
   const ROANUZ_PROJECT_KEY = Deno.env.get("ROANUZ_PROJECT_KEY");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -22,16 +24,12 @@ Deno.serve(async (req) => {
     return json({ error: "ROANUZ_API_KEY or ROANUZ_PROJECT_KEY not configured" }, 500);
   }
 
-  console.log("DEBUG: project_key length=", ROANUZ_PROJECT_KEY.length, "api_key length=", ROANUZ_API_KEY.length);
-  console.log("DEBUG: project_key first4=", ROANUZ_PROJECT_KEY.substring(0, 4), "api_key first4=", ROANUZ_API_KEY.substring(0, 4));
 
   // Step 1: Authenticate with Roanuz to get access token
   let accessToken: string;
   try {
-    const authUrl = `https://api.sports.roanuz.com/v5/core/${ROANUZ_PROJECT_KEY}/auth/`;
-    console.log("DEBUG: auth URL=", authUrl);
     const authRes = await fetch(
-      authUrl,
+      `https://api.sports.roanuz.com/v5/core/${ROANUZ_PROJECT_KEY}/auth/`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
