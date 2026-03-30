@@ -264,6 +264,8 @@ function TodayMatchCard({
                   >
                     {logoUrl ? (
                       <img src={logoUrl} alt={homeTeam.name} className="w-10 h-10 object-contain" />
+                    ) : IPL_TEAM_LOGOS[homeTeam.short_code.toUpperCase()] ? (
+                      <img src={IPL_TEAM_LOGOS[homeTeam.short_code.toUpperCase()]} alt={homeTeam.name} className="w-10 h-10 object-contain" loading="lazy" />
                     ) : (
                       <span className="text-xl font-display font-bold" style={{ color: colors.bg }}>
                         {homeTeam.short_code}
