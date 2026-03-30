@@ -112,6 +112,7 @@ export default function AdminMatches() {
 
   return (
     <div className="px-4 py-5 space-y-5 max-w-2xl mx-auto md:max-w-none md:p-6">
+      <ApiSyncPanel />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold gradient-text-accent">Matches</h1>
