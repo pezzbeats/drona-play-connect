@@ -464,13 +464,15 @@ export default function IndexPage() {
           .in('match_id', matchIds);
         setRoster((rosterData as any[]) || []);
       }
+      return uniqueMatches.length;
     } catch (e) {
       console.error(`[Index] fetchData error (attempt ${attempt + 1}):`, e);
       if (attempt < 2) {
         setTimeout(() => fetchData(attempt + 1), 1500 * (attempt + 1));
-        return;
+        return 0;
       }
       setFetchError(true);
+      return 0;
     } finally {
       setLoading(false);
     }
