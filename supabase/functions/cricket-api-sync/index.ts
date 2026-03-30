@@ -521,7 +521,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           newDeliveries++;
         }
 
-        // ── Auto-open next prediction window if predictions enabled ──
+        // ── Auto-open next prediction window with 12s auto-lock timer ──
         const predictionsEnabled = state.matches?.predictions_enabled;
         const predictionMode = state.matches?.prediction_mode;
         if (predictionsEnabled && predictionMode !== "off" && newDeliveries > 0) {
@@ -533,6 +533,8 @@ async function doSync(sb: any, projectKey: string, headers: any) {
             .maybeSingle();
 
           if (!existingOpen) {
+            const now = new Date();
+            const locksAt = new Date(now.getTime() + 12_000); // 12 seconds
             await sb.from("prediction_windows").insert({
               match_id: matchId,
               window_type: "ball",
@@ -549,7 +551,8 @@ async function doSync(sb: any, projectKey: string, headers: any) {
                 { key: "no_ball", label: "No Ball" },
                 { key: "wicket", label: "Wicket 🏏" },
               ],
-              opens_at: new Date().toISOString(),
+              opens_at: now.toISOString(),
+              locks_at: locksAt.toISOString(),
             });
           }
         }
