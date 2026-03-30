@@ -570,7 +570,14 @@ export default function IndexPage() {
         {loading ? (
           <MatchSectionSkeleton />
         ) : matches.length > 0 ? (
-          <>
+          {/* New match notification banner */}
+          {newMatchNames.length > 0 && !bannerDismissed && (
+            <NewMatchBanner
+              matchNames={newMatchNames}
+              onDismiss={() => setBannerDismissed(true)}
+            />
+          )}
+          
             <div className="text-center mb-5 animate-slide-up">
               <p className="section-title mb-1">Today's IPL Matches</p>
               <h3 className="font-display text-xl font-bold text-foreground">
