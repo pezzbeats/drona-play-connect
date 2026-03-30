@@ -161,7 +161,7 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
         event_id: eventId, name: matchName, opponent, match_type: "group",
         venue: m.venue?.name || "", start_time: startTime, status,
         external_match_id: extId, predictions_enabled: true, prediction_mode: "per_ball",
-        is_active_for_registration: true,
+        is_active_for_registration: false,
       })
       .select("id").single();
 
