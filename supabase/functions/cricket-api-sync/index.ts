@@ -28,10 +28,8 @@ Deno.serve(async (req) => {
   // Step 1: Authenticate with Roanuz to get access token
   let accessToken: string;
   try {
-    const authUrl = `https://api.sports.roanuz.com/v5/core/${ROANUZ_PROJECT_KEY}/auth/`;
-    console.log("DEBUG: auth URL=", authUrl);
     const authRes = await fetch(
-      authUrl,
+      `https://api.sports.roanuz.com/v5/core/${ROANUZ_PROJECT_KEY}/auth/`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
