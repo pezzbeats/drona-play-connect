@@ -1,0 +1,1 @@
+ALTER TYPE public.payment_method_enum ADD VALUE IF NOT EXISTS 'free';

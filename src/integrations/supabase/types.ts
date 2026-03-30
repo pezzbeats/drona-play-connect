@@ -1709,6 +1709,7 @@ export type Database = {
         | "cash"
         | "card"
         | "razorpay"
+        | "free"
       payment_status_enum:
         | "unpaid"
         | "pending_verification"
@@ -1893,6 +1894,7 @@ export const Constants = {
         "cash",
         "card",
         "razorpay",
+        "free",
       ],
       payment_status_enum: [
         "unpaid",
