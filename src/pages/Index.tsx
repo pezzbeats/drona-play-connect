@@ -397,10 +397,9 @@ export default function IndexPage() {
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 10000);
-    fetchData(0).finally(() => {
+    fetchData(0).then((count) => {
       clearTimeout(timeout);
-      // If no matches found locally, trigger the API sync to discover them
-      if (matches.length === 0) {
+      if (count === 0) {
         supabase.functions.invoke('cricket-api-sync', {
           body: null,
           method: 'GET',
