@@ -365,7 +365,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
   // Broaden: sync matches that are live OR registrations_open (to detect auto-activation)
   const { data: syncStates } = await sb
     .from("api_sync_state")
-    .select("*, matches!inner(id, status, external_match_id, predictions_enabled, prediction_mode)")
+    .select("*, matches!inner(id, status, external_match_id, predictions_enabled, prediction_mode, start_time)")
     .eq("sync_enabled", true);
 
   if (!syncStates || syncStates.length === 0)
