@@ -79,11 +79,12 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
 
   const matches = body.data?.matches || [];
   const now = new Date();
+  // Wider window: past 6h to 48h ahead — ensures matches are discovered a day early
   const todayMatches = matches.filter((m: any) => {
     const startTime = m.start_at ? new Date(m.start_at * 1000) : null;
     if (!startTime) return false;
     const diffMs = startTime.getTime() - now.getTime();
-    return diffMs > -6 * 3600 * 1000 && diffMs < 24 * 3600 * 1000;
+    return diffMs > -6 * 3600 * 1000 && diffMs < 48 * 3600 * 1000;
   });
 
   const created: string[] = [];
