@@ -500,6 +500,8 @@ export default function IndexPage() {
       const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS); // 00:00 IST in UTC
       const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 60 * 60 * 1000 - 1); // 23:59:59.999 IST in UTC
 
+      console.log('[Index] Today IST window:', todayStartUTC.toISOString(), '→', todayEndUTC.toISOString());
+
       // Query 1: today's active/live matches (IST)
       const todayRes = await supabase
         .from('matches')
@@ -513,17 +515,19 @@ export default function IndexPage() {
       setFetchError(false);
 
       let uniqueMatches = todayRes.data || [];
+      console.log('[Index] Today matches:', uniqueMatches.length, uniqueMatches.map(m => m.name));
 
-      // Fallback: if nothing active today, show next upcoming match
+      // Fallback: if nothing active today, show next upcoming match only
       if (uniqueMatches.length === 0) {
         const nextRes = await supabase
           .from('matches')
           .select('id, name, opponent, venue, start_time, status, match_type')
-          .gt('start_time', now.toISOString())
+          .gte('start_time', todayEndUTC.toISOString())
           .in('status', ['registrations_open'])
           .order('start_time', { ascending: true })
           .limit(1);
         uniqueMatches = nextRes.data || [];
+        console.log('[Index] Fallback next match:', uniqueMatches.map(m => m.name));
       }
 
       setMatches(uniqueMatches);
