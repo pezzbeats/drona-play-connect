@@ -396,7 +396,7 @@ export default function IndexPage() {
         const matchIds = uniqueMatches.map(m => m.id);
         const { data: rosterData } = await supabase
           .from('match_roster')
-          .select('match_id, side, teams(name, short_code, color)')
+          .select('match_id, side, teams(name, short_code, color, logo_path)')
           .in('match_id', matchIds);
         setRoster((rosterData as any[]) || []);
       }
