@@ -345,24 +345,20 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       )}
 
       {/* Open Windows */}
-      {openWindows.map(window => {
-        const submitted = submittedWindows[window.id];
-        const isThisWindowSubmitting = submittingKey?.windowId === window.id;
-        const shouldAnimate = animatingWindowId === window.id;
-
-        return (
-          <GlassCard key={window.id} className={`p-4 border ${frozen ? 'border-warning/30 opacity-75' : 'border-primary/30'}`} glow={!frozen}>
-            {/* Header */}
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`w-2 h-2 rounded-full ${frozen ? 'bg-warning' : 'bg-primary animate-pulse'}`} />
-              <span className={`text-xs font-bold uppercase tracking-wide ${frozen ? 'text-warning' : 'text-primary'}`}>
-                {frozen ? '⏸ Guesses Paused' : submitted ? '✓ Guess Locked' : '🎯 Tap to Lock Your Guess!'}
-              </span>
-            </div>
-
-            <p className="text-foreground font-semibold text-sm mb-4">
-              {window.question || 'What will happen on the next ball?'}
-            </p>
+      {openWindows.map(window => (
+        <OpenWindowCard
+          key={window.id}
+          window={window}
+          frozen={frozen}
+          submitted={submittedWindows[window.id]}
+          submittingKey={submittingKey}
+          shouldAnimate={animatingWindowId === window.id}
+          onOptionTap={handleOptionTap}
+          onExpired={() => {
+            setWindows(prev => prev.map(w => w.id === window.id ? { ...w, status: 'locked' as const } : w));
+          }}
+        />
+      ))}
 
             {/* Option cards — 4-column grid */}
             <div className="grid grid-cols-4 gap-2">
