@@ -4,8 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { SkeletonStatCard } from '@/components/ui/SkeletonCard';
+import { CountdownTimer } from '@/components/ui/CountdownTimer';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
-import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight, AlertTriangle, Zap } from 'lucide-react';
+import { Users, Ticket, CheckCircle2, DollarSign, TrendingUp, ScanLine, BookOpen, Trophy, ArrowRight, AlertTriangle, Zap, Calendar, Clock } from 'lucide-react';
 
 interface Stats {
   totalOrders: number;
@@ -18,23 +19,37 @@ interface Stats {
   balanceDueCount: number;
 }
 
+interface UpcomingMatch {
+  id: string;
+  name: string;
+  status: string;
+  start_time: string | null;
+  opponent: string | null;
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeMatch, setActiveMatch] = useState<any>(null);
+  const [upcomingMatches, setUpcomingMatches] = useState<UpcomingMatch[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [matchRes, ordersRes] = await Promise.all([
+      const [matchRes, ordersRes, upcomingRes] = await Promise.all([
         supabase.from('matches').select('*').eq('is_active_for_registration', true).single(),
         supabase.from('orders').select('id, payment_status, seats_count, created_at, advance_paid, total_amount'),
+        supabase.from('matches').select('id, name, status, start_time, opponent')
+          .in('status', ['draft', 'registrations_open', 'registrations_closed', 'live'])
+          .gte('start_time', new Date().toISOString())
+          .order('start_time', { ascending: true })
+          .limit(5),
       ]);
 
       setActiveMatch(matchRes.data || null);
+      setUpcomingMatches(upcomingRes.data || []);
 
       const orders = ordersRes.data || [];
-      // IST-aware today date (UTC+5:30)
       const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
       const today = nowIST.toISOString().split('T')[0];
 
@@ -59,31 +74,20 @@ export default function AdminDashboard() {
         balanceDueTotal: notPaidOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
       });
     } catch {
-      // non-blocking — keep any existing stats visible
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Realtime: re-fetch stats on any new order INSERT
   const realtimeSubscriptions = useMemo<ChannelSubscription[]>(() => [
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'orders',
-      callback: () => { fetchData(); },
-    },
-    {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'orders',
-      callback: () => { fetchData(); },
-    },
+    { event: 'INSERT', schema: 'public', table: 'orders', callback: () => { fetchData(); } },
+    { event: 'UPDATE', schema: 'public', table: 'orders', callback: () => { fetchData(); } },
+    { event: 'INSERT', schema: 'public', table: 'matches', callback: () => { fetchData(); } },
+    { event: 'UPDATE', schema: 'public', table: 'matches', callback: () => { fetchData(); } },
   ], [fetchData]);
 
   useRealtimeChannel('dashboard-orders', realtimeSubscriptions, fetchData);
 
-  // Initial load
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const statCards = stats ? [
@@ -140,7 +144,7 @@ export default function AdminDashboard() {
         </GlassCard>
       )}
 
-      {/* Stats Grid — 2 cols on mobile, 3 on desktop */}
+      {/* Stats Grid */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -210,6 +214,54 @@ export default function AdminDashboard() {
           ))}
         </div>
       </div>
+
+      {/* Upcoming Matches */}
+      {upcomingMatches.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="section-title">Upcoming Matches</p>
+            <Link to="/admin/matches" className="text-xs text-primary hover:underline">View all →</Link>
+          </div>
+          <div className="space-y-2">
+            {upcomingMatches.slice(0, 3).map(m => (
+              <Link key={m.id} to={`/admin/matches/${m.id}`}>
+                <GlassCard className="p-3.5 hover:border-primary/40 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      {m.status === 'live' ? (
+                        <Zap className="h-4 w-4 text-success" />
+                      ) : (
+                        <Calendar className="h-4 w-4 text-primary" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground text-sm truncate">{m.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {m.status === 'live' ? (
+                          <span className="text-xs font-bold text-success">🔴 Live</span>
+                        ) : m.start_time ? (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {new Date(m.start_time).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No date set</span>
+                        )}
+                      </div>
+                    </div>
+                    {m.start_time && m.status !== 'live' && new Date(m.start_time) > new Date() && (
+                      <div className="shrink-0">
+                        <CountdownTimer targetTime={m.start_time} variant="compact" />
+                      </div>
+                    )}
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  </div>
+                </GlassCard>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Disclaimer */}
       <div className="disclaimer-bar rounded-lg p-3 text-xs">

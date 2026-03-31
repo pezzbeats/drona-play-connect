@@ -158,13 +158,15 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
   const istNow = new Date(now.getTime() + IST_OFFSET_MS);
   const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
   const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS);
-  const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 3600 * 1000 - 1);
+  // Expand window: 6h before today start → 48h ahead
+  const windowStart = new Date(todayStartUTC.getTime() - 6 * 3600 * 1000);
+  const windowEnd = new Date(now.getTime() + 48 * 3600 * 1000);
 
   const todayMatches = matches.filter((m: any) => {
     const startTime = m.start_at ? new Date(m.start_at * 1000) : null;
     if (!startTime) return false;
-    return startTime.getTime() >= (todayStartUTC.getTime() - 6 * 3600 * 1000) &&
-           startTime.getTime() <= todayEndUTC.getTime();
+    return startTime.getTime() >= windowStart.getTime() &&
+           startTime.getTime() <= windowEnd.getTime();
   });
 
   const created: string[] = [];
@@ -220,13 +222,17 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
       status = "registrations_open";
     }
 
+    // Auto-activate registration for matches starting within 24 hours
+    const startsWithin24h = startTime ? (new Date(startTime).getTime() - now.getTime()) < 24 * 3600 * 1000 : false;
+    const shouldActivate = status === "live" || (startsWithin24h && status !== "ended");
+
     const { data: newMatch, error: matchErr } = await sb
       .from("matches")
       .insert({
         event_id: eventId, name: matchName, opponent, match_type: "group",
-        venue: m.venue?.name || "", start_time: startTime, status,
+        venue: m.venue?.name || "", start_time: startTime, status: status === "live" ? "live" : (startsWithin24h ? "registrations_open" : "draft"),
         external_match_id: extId, predictions_enabled: true, prediction_mode: "per_ball",
-        is_active_for_registration: true,
+        is_active_for_registration: shouldActivate,
       })
       .select("id").single();
 

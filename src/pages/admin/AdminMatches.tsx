@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
+import { CountdownTimer } from '@/components/ui/CountdownTimer';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, ToggleLeft, ToggleRight, Edit, Zap, Trophy } from 'lucide-react';
+import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
+import { Plus, ToggleLeft, ToggleRight, Edit, Zap, Trophy, Clock, Calendar } from 'lucide-react';
 import ApiSyncPanel from '@/components/admin/ApiSyncPanel';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +36,68 @@ interface Match {
   created_at: string;
 }
 
+function MatchCard({ match, settingActive, onActivate, onDeactivate }: {
+  match: Match;
+  settingActive: string | null;
+  onActivate: (m: Match) => void;
+  onDeactivate: (m: Match) => void;
+}) {
+  return (
+    <GlassCard
+      className={`p-4 ${match.is_active_for_registration ? 'border-primary/50 glass-card-glow' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-display text-lg font-bold text-foreground">{match.name}</h3>
+            {match.is_active_for_registration && (
+              <span className="flex items-center gap-1 text-xs text-primary font-semibold">
+                <Zap className="h-3 w-3" /> Active
+              </span>
+            )}
+          </div>
+          {match.opponent && <p className="text-sm text-muted-foreground">vs {match.opponent}</p>}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <StatusBadge status={match.status as any} />
+            <span className="text-xs text-muted-foreground capitalize">{match.match_type.replace('_', ' ')}</span>
+            {match.start_time && (
+              <span className="text-xs text-muted-foreground">
+                {new Date(match.start_time).toLocaleString('en-IN')}
+              </span>
+            )}
+          </div>
+          {/* Countdown for upcoming */}
+          {match.start_time && !['ended', 'live'].includes(match.status) && new Date(match.start_time) > new Date() && (
+            <div className="mt-2">
+              <CountdownTimer targetTime={match.start_time} variant="compact" />
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Link to={`/admin/matches/${match.id}`}>
+            <GlassButton variant="ghost" size="sm"><Edit className="h-3.5 w-3.5" /></GlassButton>
+          </Link>
+          <GlassButton
+            variant={match.is_active_for_registration ? 'success' : 'outline'}
+            size="sm"
+            loading={settingActive === match.id}
+            onClick={() => {
+              if (match.is_active_for_registration) {
+                onDeactivate(match);
+              } else {
+                onActivate(match);
+              }
+            }}
+          >
+            {match.is_active_for_registration ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+            {match.is_active_for_registration ? 'Active' : 'Activate'}
+          </GlassButton>
+        </div>
+      </div>
+    </GlassCard>
+  );
+}
+
 export default function AdminMatches() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,19 +115,31 @@ export default function AdminMatches() {
     start_time: '', status: 'draft'
   });
 
-  useEffect(() => {
-    fetchMatches();
-    // Fetch real event_id dynamically
-    supabase.from('events').select('id').eq('is_active', true).limit(1).maybeSingle()
-      .then(({ data }) => { if (data?.id) setActiveEventId(data.id); });
-  }, []);
-
-  const fetchMatches = async () => {
+  const fetchMatches = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('matches').select('*').order('start_time', { ascending: false });
     setMatches(data || []);
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchMatches();
+    supabase.from('events').select('id').eq('is_active', true).limit(1).maybeSingle()
+      .then(({ data }) => { if (data?.id) setActiveEventId(data.id); });
+  }, [fetchMatches]);
+
+  // Realtime subscription for matches table
+  const realtimeSubscriptions = useMemo<ChannelSubscription[]>(() => [
+    { event: 'INSERT', schema: 'public', table: 'matches', callback: () => fetchMatches() },
+    { event: 'UPDATE', schema: 'public', table: 'matches', callback: () => fetchMatches() },
+  ], [fetchMatches]);
+
+  useRealtimeChannel('admin-matches', realtimeSubscriptions, fetchMatches);
+
+  // Group matches
+  const liveMatches = matches.filter(m => m.status === 'live');
+  const upcomingMatches = matches.filter(m => ['draft', 'registrations_open', 'registrations_closed'].includes(m.status));
+  const endedMatches = matches.filter(m => m.status === 'ended');
 
   const handleCreate = async () => {
     if (!form.name.trim()) return toast({ variant: 'destructive', title: 'Match name required' });
@@ -82,7 +158,6 @@ export default function AdminMatches() {
       toast({ title: '✅ Match created' });
       setCreateOpen(false);
       setForm({ name: '', opponent: '', match_type: 'group', venue: 'Hotel Drona Palace', start_time: '', status: 'draft' });
-      fetchMatches();
       if (user) {
         await supabase.from('admin_activity').insert({ admin_id: user.id, action: 'create_match', entity_type: 'match', meta: { name: form.name } });
       }
@@ -100,7 +175,6 @@ export default function AdminMatches() {
       });
       if (error) throw error;
       toast({ title: currentlyActive ? 'Registration deactivated' : '✅ Match is now active for registration' });
-      fetchMatches();
       if (user) {
         await supabase.from('admin_activity').insert({ admin_id: user.id, action: 'set_match_active', entity_type: 'match', entity_id: matchId });
       }
@@ -108,6 +182,28 @@ export default function AdminMatches() {
       toast({ variant: 'destructive', title: 'Failed', description: e.message });
     }
     setSettingActive(null);
+  };
+
+  const renderSection = (title: string, icon: React.ReactNode, items: Match[]) => {
+    if (items.length === 0) return null;
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h2 className="font-display text-lg font-bold text-foreground">{title}</h2>
+          <span className="text-xs text-muted-foreground bg-muted/30 rounded-full px-2 py-0.5">{items.length}</span>
+        </div>
+        {items.map((match) => (
+          <MatchCard
+            key={match.id}
+            match={match}
+            settingActive={settingActive}
+            onActivate={m => setConfirmActivateMatch(m)}
+            onDeactivate={m => setConfirmDeactivateMatch(m)}
+          />
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -191,57 +287,10 @@ export default function AdminMatches() {
           <p className="text-muted-foreground text-sm mt-1">Create your first match to get started</p>
         </GlassCard>
       ) : (
-        <div className="space-y-3">
-          {matches.map((match, i) => (
-            <GlassCard
-              key={match.id}
-              className={`p-4 animate-slide-up ${match.is_active_for_registration ? 'border-primary/50 glass-card-glow' : ''}`}
-              style={{ animationDelay: `${i * 0.04}s` } as React.CSSProperties}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-display text-lg font-bold text-foreground">{match.name}</h3>
-                    {match.is_active_for_registration && (
-                      <span className="flex items-center gap-1 text-xs text-primary font-semibold">
-                        <Zap className="h-3 w-3" /> Active
-                      </span>
-                    )}
-                  </div>
-                  {match.opponent && <p className="text-sm text-muted-foreground">vs {match.opponent}</p>}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <StatusBadge status={match.status as any} />
-                    <span className="text-xs text-muted-foreground capitalize">{match.match_type.replace('_', ' ')}</span>
-                    {match.start_time && (
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(match.start_time).toLocaleString('en-IN')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Link to={`/admin/matches/${match.id}`}>
-                    <GlassButton variant="ghost" size="sm"><Edit className="h-3.5 w-3.5" /></GlassButton>
-                  </Link>
-                  <GlassButton
-                    variant={match.is_active_for_registration ? 'success' : 'outline'}
-                    size="sm"
-                    loading={settingActive === match.id}
-                    onClick={() => {
-                      if (match.is_active_for_registration) {
-                        setConfirmDeactivateMatch(match);
-                      } else {
-                        setConfirmActivateMatch(match);
-                      }
-                    }}
-                  >
-                    {match.is_active_for_registration ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                    {match.is_active_for_registration ? 'Active' : 'Activate'}
-                  </GlassButton>
-                </div>
-              </div>
-            </GlassCard>
-          ))}
+        <div className="space-y-6">
+          {renderSection('🔴 Live Now', <Zap className="h-5 w-5 text-success" />, liveMatches)}
+          {renderSection('📅 Upcoming', <Clock className="h-5 w-5 text-primary" />, upcomingMatches)}
+          {renderSection('🏆 Ended', <Trophy className="h-5 w-5 text-muted-foreground" />, endedMatches)}
         </div>
       )}
 
@@ -253,21 +302,13 @@ export default function AdminMatches() {
             <AlertDialogDescription className="text-muted-foreground">
               This will deactivate any currently active match and open registration for{' '}
               <strong className="text-foreground">{confirmActivateMatch?.name}</strong>.
-              Fans will see this match on the registration page immediately.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (confirmActivateMatch) {
-                  handleSetActive(confirmActivateMatch.id, false);
-                  setConfirmActivateMatch(null);
-                }
-              }}
-            >
-              Activate
-            </AlertDialogAction>
+            <AlertDialogAction onClick={() => {
+              if (confirmActivateMatch) { handleSetActive(confirmActivateMatch.id, false); setConfirmActivateMatch(null); }
+            }}>Activate</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -280,7 +321,6 @@ export default function AdminMatches() {
             <AlertDialogDescription className="text-muted-foreground">
               This will <strong>close registrations</strong> for{' '}
               <strong className="text-foreground">{confirmDeactivateMatch?.name}</strong>.
-              No new bookings will be possible until you reactivate a match.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -288,14 +328,9 @@ export default function AdminMatches() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (confirmDeactivateMatch) {
-                  handleSetActive(confirmDeactivateMatch.id, true);
-                  setConfirmDeactivateMatch(null);
-                }
+                if (confirmDeactivateMatch) { handleSetActive(confirmDeactivateMatch.id, true); setConfirmDeactivateMatch(null); }
               }}
-            >
-              Deactivate
-            </AlertDialogAction>
+            >Deactivate</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

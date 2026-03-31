@@ -46,39 +46,40 @@ serve(async (req) => {
 
     const pinHash = await hashPin(pin);
 
-    // Get active match
-    const { data: match } = await supabase.from("matches").select("id").eq("is_active_for_registration", true).single();
-    if (!match) {
-      // No active match — find user's most recent game_access entry
-      const { data: access } = await supabase
-        .from("game_access")
-        .select("match_id")
-        .eq("mobile", mobile)
-        .eq("pin_hash", pinHash)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (access) {
-        return new Response(JSON.stringify({ valid: true, match_id: access.match_id }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error("No active match found for this mobile/PIN");
-    }
-
-    const { data: access } = await supabase
+    // Check if this mobile+PIN has ANY valid game_access record (any match)
+    const { data: anyAccess } = await supabase
       .from("game_access")
-      .select("*")
+      .select("match_id")
       .eq("mobile", mobile)
-      .eq("match_id", match.id)
       .eq("pin_hash", pinHash)
       .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!anyAccess) {
+      return new Response(
+        JSON.stringify({ valid: false, error: "Invalid mobile or PIN", code: "INVALID_CREDENTIALS" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // User is valid — return mobile + has_any_access flag
+    // Also return the most recent match_id for backward compatibility
+    // And try to find the currently active match
+    const { data: activeMatch } = await supabase
+      .from("matches")
+      .select("id")
+      .eq("is_active_for_registration", true)
       .single();
 
     return new Response(
-      JSON.stringify({ valid: !!access, match_id: match.id }),
+      JSON.stringify({
+        valid: true,
+        mobile,
+        has_any_access: true,
+        match_id: activeMatch?.id || anyAccess.match_id,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e: any) {
