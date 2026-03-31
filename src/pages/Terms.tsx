@@ -4,6 +4,7 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { ArrowLeft, Shield, CreditCard, Camera, Gamepad2, Zap } from 'lucide-react';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 interface TermsSection {
   icon: React.ReactNode;
