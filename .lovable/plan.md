@@ -1,58 +1,73 @@
 
 
-## Multi-Match Access & Admin Automation
+## Breadcrumb Navigation — All Pages
 
-### Part 1: Users Access All Active Matches
+### Approach
 
-**Current behavior**: The `/live` page loads only ONE match. `verify-game-pin` returns a single `match_id`. Users who registered for past matches can't see new active ones.
+Create a reusable `<MobileBreadcrumb>` component that renders a compact, mobile-native breadcrumb bar (back arrow + path trail). Use it consistently across all public pages and admin pages.
 
-**New behavior**: Users who have *any* `game_access` record can see all currently active/live matches and upcoming ones.
+### New File: `src/components/ui/MobileBreadcrumb.tsx`
 
-#### Changes:
+A single component accepting a `items` array of `{ label, to? }` objects:
+- Renders a fixed/sticky top bar with glass styling matching the app theme
+- Shows a back arrow (navigates to previous crumb or `/`) + breadcrumb trail
+- On mobile: truncates middle crumbs if more than 3 levels, shows only parent + current
+- Uses existing `Breadcrumb*` primitives from `src/components/ui/breadcrumb.tsx`
+- Compact height (~40px) to not waste mobile real estate
 
-**A. `supabase/functions/verify-game-pin/index.ts`**
-- After validating mobile+PIN against any `game_access` record, return `{ valid: true, mobile }` instead of a single `match_id`
-- Keep backward compatibility: still return `match_id` of the active match if one exists
-- Add a new field `has_any_access: true` so the client knows this user is a registered player
+```text
+┌─────────────────────────────┐
+│ ← Home / Live / RR vs CSK  │
+└─────────────────────────────┘
+```
 
-**B. `src/pages/Live.tsx` — Multi-match support**
-- After session validation, fetch ALL matches where status is `live` or `registrations_open` (not just `is_active_for_registration`)
-- Also fetch any match the user has `game_access` for that is `ended` (to see results)
-- If multiple matches: show a match selector/list before entering LiveContent
-- If single match: go directly to LiveContent (current behavior)
-- Match list shows: match name, teams, status badge (Live/Upcoming/Ended), start time
+### Public Pages — Add Breadcrumbs
 
-**C. `src/pages/Index.tsx` — GameLoginCard**
-- After successful login, if multiple active matches exist, navigate to `/live` which will show the match picker
-- Store session without a fixed `match_id` — let Live page resolve it
+Each page gets `<MobileBreadcrumb>` at the top of its content:
 
-### Part 2: Admin Panel — Auto-Discovery & Realtime
+| Page | Breadcrumb trail |
+|---|---|
+| `/register` | Home → Register |
+| `/ticket` | Home → My Tickets |
+| `/play` | Home → Play |
+| `/live` (match picker) | Home → Live |
+| `/live` (match view) | Home → Live → {Match Name} |
+| `/about` | Home → About |
+| `/terms`, `/privacy`, etc. | Home → About → {Page Title} |
+| `/contact` | Home → Contact Us |
 
-**D. `supabase/functions/cricket-api-sync/index.ts` — Expand discovery window**
-- Change `doDiscover` to find matches within **next 48 hours** instead of just today
-- This auto-creates upcoming matches from the API before they start
-- Auto-set `is_active_for_registration = true` for matches starting within 24 hours
-- Auto-set status transitions: `registrations_open` → `live` → `ended` based on API status
+### Admin Pages — Add Breadcrumbs
 
-**E. `src/pages/admin/AdminMatches.tsx` — Realtime + better organization**
-- Add realtime subscription on `matches` table for INSERT/UPDATE events
-- Group matches into sections: "Live Now", "Upcoming", "Ended" with visual separation
-- Show next match prominently with countdown
-- Auto-refresh on realtime events instead of manual reload
+Add `<MobileBreadcrumb>` inside `AdminLayout.tsx` before `<Outlet>`, reading the current route to auto-generate breadcrumbs:
 
-**F. `src/pages/admin/AdminDashboard.tsx` — Upcoming matches widget**
-- Add an "Upcoming Matches" section below quick actions
-- Show next 2-3 matches with start times and status
-- Realtime subscription already exists for orders; extend channel to include matches table
+| Route | Trail |
+|---|---|
+| `/admin/dashboard` | Admin → Dashboard |
+| `/admin/matches` | Admin → Matches |
+| `/admin/matches/:id` | Admin → Matches → Match Detail |
+| `/admin/orders` | Admin → Bookings |
+| `/admin/control` | Admin → Live Control |
+| etc. | Admin → {Page Label from sidebar navItems} |
 
-### File Summary
+For admin, auto-derive the breadcrumb from the sidebar `navItems` array (already defined in `AdminSidebar.tsx`) by matching the current path. This avoids duplicating route labels.
+
+### Files to Change
 
 | File | Change |
 |---|---|
-| `supabase/functions/verify-game-pin/index.ts` | Return access for any registered user, not just active match |
-| `src/pages/Live.tsx` | Multi-match picker when multiple active matches; fetch all accessible matches |
-| `src/pages/Index.tsx` | Update GameLoginCard to work without fixed match_id |
-| `supabase/functions/cricket-api-sync/index.ts` | Expand discover window to 48 hours; auto-activate matches within 24 hours |
-| `src/pages/admin/AdminMatches.tsx` | Add realtime subscription; group by Live/Upcoming/Ended sections |
-| `src/pages/admin/AdminDashboard.tsx` | Add upcoming matches widget with countdown |
+| `src/components/ui/MobileBreadcrumb.tsx` | **New** — reusable breadcrumb bar component |
+| `src/components/admin/AdminLayout.tsx` | Add auto-generated breadcrumb before `<Outlet>` using route matching against navItems |
+| `src/pages/Register.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/Ticket.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/Play.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/Live.tsx` | Add `<MobileBreadcrumb>` (dynamic: match picker vs match view) |
+| `src/pages/About.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/ContactUs.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/Terms.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/PrivacyPolicy.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/RefundPolicy.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/DisclaimerPolicy.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/EventParticipationTerms.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/PricingPolicy.tsx` | Add `<MobileBreadcrumb>` |
+| `src/pages/ShippingPolicy.tsx` | Add `<MobileBreadcrumb>` |
 
