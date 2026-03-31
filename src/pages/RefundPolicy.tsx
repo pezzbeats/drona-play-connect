@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <GlassCard className="p-5 mb-4">
