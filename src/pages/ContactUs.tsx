@@ -7,6 +7,7 @@ import {
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 const SupportCard: React.FC<{
   icon: React.ReactNode;
