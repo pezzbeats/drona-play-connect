@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import hotelLogo from '@/assets/hotel-logo.png';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 interface TicketData {
   id: string;
