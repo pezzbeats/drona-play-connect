@@ -9,6 +9,7 @@ import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
 import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X, Medal } from 'lucide-react';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 type Tab = 'score' | 'predict' | 'leaderboard';
 
@@ -414,6 +415,7 @@ function MatchPicker({
 
   return (
     <div className="min-h-screen relative">
+      <MobileBreadcrumb items={[{ label: 'Home', to: '/' }, { label: 'Live' }]} />
       <BackgroundOrbs />
       <div className="relative z-10 max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">

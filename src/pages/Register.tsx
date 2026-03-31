@@ -12,6 +12,7 @@ import {
   Phone, MapPin, Calendar, Lock, Trophy,
 } from 'lucide-react';
 import { CountdownTimer } from '@/components/ui/CountdownTimer';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 import cskLogo from '@/assets/ipl-teams/csk.png';
 import miLogo from '@/assets/ipl-teams/mi.png';
 import rcbLogo from '@/assets/ipl-teams/rcb.png';
@@ -195,11 +196,11 @@ export default function RegisterPage() {
     <div className="min-h-screen relative overflow-hidden">
       <BackgroundOrbs />
 
-      <div className="relative z-10 max-w-md mx-auto px-4 py-8">
-        {/* Back button */}
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
-          <ArrowLeft className="h-4 w-4" /> Back to matches
-        </Link>
+      <MobileBreadcrumb items={[
+        { label: 'Home', to: '/' },
+        { label: 'Register' },
+      ]} />
+      <div className="relative z-10 max-w-md mx-auto px-4 py-6">
 
         {/* Match header */}
         <GlassCard variant="elevated" className="p-5 mb-6" style={{ borderColor: 'hsl(355 80% 55% / 0.3)' } as React.CSSProperties}>
