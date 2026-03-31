@@ -1,51 +1,58 @@
 
 
-## Problem
+## Multi-Match Access & Admin Automation
 
-The match summary (winner, top scorer, top wicket-taker) doesn't show because the underlying data is missing:
+### Part 1: Users Access All Active Matches
 
-1. **No players** exist for RR or CSK in the `players` table (0 records)
-2. **`is_batting_first` is `false` for both roster entries** — the API sync never set it
-3. **No deliveries** recorded for this match (the sync was broken earlier)
-4. The guard `Object.keys(players).length === 0` prevents the summary function from running at all
+**Current behavior**: The `/live` page loads only ONE match. `verify-game-pin` returns a single `match_id`. Users who registered for past matches can't see new active ones.
 
-Since the API sync didn't record ball-by-ball data, we can't compute top scorer/wicket-taker from `deliveries`. However, we CAN still show the winner by comparing the innings scores already stored in `match_live_state`.
+**New behavior**: Users who have *any* `game_access` record can see all currently active/live matches and upcoming ones.
 
-## Solution
+#### Changes:
 
-**File: `src/components/live/Scoreboard.tsx`**
+**A. `supabase/functions/verify-game-pin/index.ts`**
+- After validating mobile+PIN against any `game_access` record, return `{ valid: true, mobile }` instead of a single `match_id`
+- Keep backward compatibility: still return `match_id` of the active match if one exists
+- Add a new field `has_any_access: true` so the client knows this user is a registered player
 
-1. **Remove the `players` guard** from the summary useEffect — don't require players to be loaded since they may not exist
-2. **Determine winner without `is_batting_first`**: Fall back to using team names from roster + side (`home`/`away`). If `is_batting_first` isn't set for either team, use a heuristic: the home team usually bats based on toss, but more reliably, just show "Team A" and "Team B" with scores and let the score differential speak
-3. **Better approach**: Query `match_roster` with `side` — assume `innings1` corresponds to the team marked `is_batting_first=true`, but if neither is marked, determine winner by comparing scores and show the team name from the roster side with the higher score
-4. **Gracefully handle missing deliveries** — skip top scorer/wicket-taker chips when no deliveries exist (already handled, just don't block the whole summary)
+**B. `src/pages/Live.tsx` — Multi-match support**
+- After session validation, fetch ALL matches where status is `live` or `registrations_open` (not just `is_active_for_registration`)
+- Also fetch any match the user has `game_access` for that is `ended` (to see results)
+- If multiple matches: show a match selector/list before entering LiveContent
+- If single match: go directly to LiveContent (current behavior)
+- Match list shows: match name, teams, status badge (Live/Upcoming/Ended), start time
 
-### Specific changes:
+**C. `src/pages/Index.tsx` — GameLoginCard**
+- After successful login, if multiple active matches exist, navigate to `/live` which will show the match picker
+- Store session without a fixed `match_id` — let Live page resolve it
 
-- **Line 205**: Change guard from requiring both `teams` AND `players` to only requiring `teams`:
-  ```ts
-  if (state?.phase !== 'ended' || Object.keys(teams).length === 0) return;
-  ```
+### Part 2: Admin Panel — Auto-Discovery & Realtime
 
-- **Lines 218-234**: Improve winner logic to handle case where neither team has `is_batting_first = true`. Fetch roster with `side` field and use a fallback: if no `is_batting_first` is set, determine by comparing scores — the team that scored more in 2nd innings won (chasing), or if inn1 > inn2, the other team won by runs. Use the roster `side` to map: query the `match_live_state` for `batting_team_id`/`bowling_team_id` as another fallback.
+**D. `supabase/functions/cricket-api-sync/index.ts` — Expand discovery window**
+- Change `doDiscover` to find matches within **next 48 hours** instead of just today
+- This auto-creates upcoming matches from the API before they start
+- Auto-set `is_active_for_registration = true` for matches starting within 24 hours
+- Auto-set status transitions: `registrations_open` → `live` → `ended` based on API status
 
-- **Simplified fallback winner logic**:
-  ```ts
-  // If is_batting_first not set, just show winner based on score comparison
-  if (!battingFirst && !battingSecond) {
-    if (inn1 > inn2) {
-      winMargin = `won by ${inn1 - inn2} runs`;
-      // Can't definitively name team, show both scores
-    } else if (inn2 > inn1) {
-      winMargin = `won by ${10 - state.innings2_wickets} wickets`;
-    }
-    // Try to identify winner from batting_team_id in live state
-  }
-  ```
+**E. `src/pages/admin/AdminMatches.tsx` — Realtime + better organization**
+- Add realtime subscription on `matches` table for INSERT/UPDATE events
+- Group matches into sections: "Live Now", "Upcoming", "Ended" with visual separation
+- Show next match prominently with countdown
+- Auto-refresh on realtime events instead of manual reload
 
-- Also fetch `batting_team_id` from `match_live_state` to identify which team was batting last (2nd innings) — if `inn2 >= inn1`, that team won.
+**F. `src/pages/admin/AdminDashboard.tsx` — Upcoming matches widget**
+- Add an "Upcoming Matches" section below quick actions
+- Show next 2-3 matches with start times and status
+- Realtime subscription already exists for orders; extend channel to include matches table
+
+### File Summary
 
 | File | Change |
 |---|---|
-| `src/components/live/Scoreboard.tsx` | Remove players guard; add fallback winner logic when `is_batting_first` not set; handle missing deliveries gracefully |
+| `supabase/functions/verify-game-pin/index.ts` | Return access for any registered user, not just active match |
+| `src/pages/Live.tsx` | Multi-match picker when multiple active matches; fetch all accessible matches |
+| `src/pages/Index.tsx` | Update GameLoginCard to work without fixed match_id |
+| `supabase/functions/cricket-api-sync/index.ts` | Expand discover window to 48 hours; auto-activate matches within 24 hours |
+| `src/pages/admin/AdminMatches.tsx` | Add realtime subscription; group by Live/Upcoming/Ended sections |
+| `src/pages/admin/AdminDashboard.tsx` | Add upcoming matches widget with countdown |
 
