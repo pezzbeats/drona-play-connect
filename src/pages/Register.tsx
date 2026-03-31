@@ -12,6 +12,7 @@ import {
   Phone, MapPin, Calendar, Lock, Trophy,
 } from 'lucide-react';
 import { CountdownTimer } from '@/components/ui/CountdownTimer';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 import cskLogo from '@/assets/ipl-teams/csk.png';
 import miLogo from '@/assets/ipl-teams/mi.png';
 import rcbLogo from '@/assets/ipl-teams/rcb.png';
