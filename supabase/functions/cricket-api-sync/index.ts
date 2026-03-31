@@ -222,13 +222,17 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
       status = "registrations_open";
     }
 
+    // Auto-activate registration for matches starting within 24 hours
+    const startsWithin24h = startTime ? (new Date(startTime).getTime() - now.getTime()) < 24 * 3600 * 1000 : false;
+    const shouldActivate = status === "live" || (startsWithin24h && status !== "ended");
+
     const { data: newMatch, error: matchErr } = await sb
       .from("matches")
       .insert({
         event_id: eventId, name: matchName, opponent, match_type: "group",
-        venue: m.venue?.name || "", start_time: startTime, status,
+        venue: m.venue?.name || "", start_time: startTime, status: status === "live" ? "live" : (startsWithin24h ? "registrations_open" : "draft"),
         external_match_id: extId, predictions_enabled: true, prediction_mode: "per_ball",
-        is_active_for_registration: true,
+        is_active_for_registration: shouldActivate,
       })
       .select("id").single();
 
