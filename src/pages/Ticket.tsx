@@ -801,6 +801,7 @@ export default function TicketPage() {
             <Link to="/register" className="text-primary underline underline-offset-2">Book Passes</Link>
           </p>
         </div>
+        </div>
       </div>
     );
   }
