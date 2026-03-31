@@ -337,9 +337,11 @@ export default function PlayPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative"
-      style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-    >
+    <div className="min-h-screen flex flex-col relative">
+      <MobileBreadcrumb items={[{ label: 'Home', to: '/' }, { label: 'Play' }]} />
+      <div className="flex-1 flex flex-col items-center justify-center p-4"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      >
       <BackgroundOrbs />
 
       <div className="disclaimer-bar w-full text-center text-xs py-2 px-4 z-10 rounded-lg mb-6">
@@ -347,12 +349,6 @@ export default function PlayPage() {
       </div>
 
       <div className="relative z-10 w-full max-w-sm">
-        {/* Back link */}
-        <div className="mb-6 text-center">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-            ← Back to Home
-          </Link>
-        </div>
 
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center mx-auto mb-4 shadow-glow-primary">
