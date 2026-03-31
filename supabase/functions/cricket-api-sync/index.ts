@@ -158,13 +158,15 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
   const istNow = new Date(now.getTime() + IST_OFFSET_MS);
   const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
   const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS);
-  const todayEndUTC = new Date(todayStartUTC.getTime() + 24 * 3600 * 1000 - 1);
+  // Expand window: 6h before today start → 48h ahead
+  const windowStart = new Date(todayStartUTC.getTime() - 6 * 3600 * 1000);
+  const windowEnd = new Date(now.getTime() + 48 * 3600 * 1000);
 
   const todayMatches = matches.filter((m: any) => {
     const startTime = m.start_at ? new Date(m.start_at * 1000) : null;
     if (!startTime) return false;
-    return startTime.getTime() >= (todayStartUTC.getTime() - 6 * 3600 * 1000) &&
-           startTime.getTime() <= todayEndUTC.getTime();
+    return startTime.getTime() >= windowStart.getTime() &&
+           startTime.getTime() <= windowEnd.getTime();
   });
 
   const created: string[] = [];
