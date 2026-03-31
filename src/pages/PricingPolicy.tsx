@@ -16,11 +16,8 @@ export default function PricingPolicyPage() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       <BackgroundOrbs />
-      <div className="relative z-10 max-w-2xl mx-auto px-4 py-8">
-
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-6">
-          <ArrowLeft className="h-4 w-4" /> Back to Home
-        </Link>
+      <MobileBreadcrumb items={[{ label: 'Home', to: '/' }, { label: 'About', to: '/about' }, { label: 'Pricing Policy' }]} />
+      <div className="relative z-10 max-w-2xl mx-auto px-4 py-6">
 
         <GlassCard variant="elevated" className="p-6 mb-6 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-secondary/15 mb-4">

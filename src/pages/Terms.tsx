@@ -89,14 +89,10 @@ export default function TermsPage() {
     <div className="min-h-screen relative">
       <BackgroundOrbs />
 
+      <MobileBreadcrumb items={[{ label: 'Home', to: '/' }, { label: 'About', to: '/about' }, { label: 'Terms' }]} />
       <div className="relative z-10 max-w-2xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">
-          <Link to="/register">
-            <GlassButton variant="ghost" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4" /> Back
-            </GlassButton>
-          </Link>
           <div className="text-center">
             <div className="text-4xl mb-2">📋</div>
             <h1 className="font-display text-3xl font-bold gradient-text">Terms & Conditions</h1>

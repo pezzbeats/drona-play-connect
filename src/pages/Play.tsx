@@ -12,6 +12,7 @@ import {
   Gamepad2, Lock, ShieldCheck, ChevronRight, AlertTriangle,
   Trophy, Gift, Heart, Star, Gavel, Eye
 } from 'lucide-react';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 // ─── Consent clauses ───────────────────────────────────────────────────────────
 

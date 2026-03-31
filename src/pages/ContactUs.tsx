@@ -29,11 +29,8 @@ export default function ContactUsPage() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       <BackgroundOrbs />
-      <div className="relative z-10 max-w-2xl mx-auto px-4 py-8">
-
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-6">
-          <ArrowLeft className="h-4 w-4" /> Back to Home
-        </Link>
+      <MobileBreadcrumb items={[{ label: 'Home', to: '/' }, { label: 'Contact Us' }]} />
+      <div className="relative z-10 max-w-2xl mx-auto px-4 py-6">
 
         {/* Hero */}
         <GlassCard variant="elevated" className="p-6 mb-6 text-center">

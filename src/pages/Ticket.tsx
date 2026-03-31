@@ -749,13 +749,12 @@ export default function TicketPage() {
   // ── INPUT PHASE ──────────────────────────────────────────────────────────
   if (phase === 'input') {
     return (
-      <div className="min-h-screen relative flex items-center justify-center p-4">
+      <div className="min-h-screen relative flex flex-col">
+        <MobileBreadcrumb items={[{ label: 'Home', to: '/' }, { label: 'My Tickets' }]} />
         <BackgroundOrbs />
+        <div className="flex-1 flex items-center justify-center p-4">
         <div className="relative z-10 w-full max-w-sm">
           <div className="text-center mb-6">
-            <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mb-4">
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to Home
-            </Link>
             <div className="text-5xl mb-3">🎫</div>
             <h1 className="font-display text-3xl font-bold gradient-text mb-1">View Your Passes</h1>
             <p className="text-muted-foreground text-sm">Enter your registered mobile number</p>
