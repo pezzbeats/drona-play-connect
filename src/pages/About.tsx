@@ -8,6 +8,7 @@ import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
+import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 const LEGAL_LINKS = [
   { to: '/privacy',      label: 'Privacy Policy',         icon: Shield },
