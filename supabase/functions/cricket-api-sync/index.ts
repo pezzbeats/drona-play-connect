@@ -952,6 +952,18 @@ Return ONLY valid JSON like: {"interval": 12, "reason": "powerplay active play"}
 // ── Score predictions for a resolved window ──────────────────────────
 async function scorePredictions(sb: any, matchId: string, windowId: string, correctKey: string) {
   try {
+    // Idempotency check: skip if already scored
+    const { data: windowRow } = await sb
+      .from("prediction_windows")
+      .select("scored_at")
+      .eq("id", windowId)
+      .single();
+
+    if (windowRow?.scored_at) {
+      log("info", "Window already scored, skipping", { window_id: windowId });
+      return;
+    }
+
     const { data: config } = await sb
       .from("match_scoring_config")
       .select("*")
@@ -965,8 +977,13 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
       .select("id, mobile, player_name, prediction")
       .eq("window_id", windowId);
 
-    if (!predictions || predictions.length === 0) return;
+    if (!predictions || predictions.length === 0) {
+      // Mark as scored even with no predictions
+      await sb.from("prediction_windows").update({ scored_at: new Date().toISOString() }).eq("id", windowId);
+      return;
+    }
 
+    // Single pass: score each prediction and update leaderboard atomically per player
     for (const pred of predictions) {
       const predKey = pred.prediction?.key || pred.prediction;
       const isCorrect = predKey === correctKey;
@@ -977,8 +994,7 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
         points_earned: points,
       }).eq("id", pred.id);
 
-      if (!isCorrect) continue;
-
+      // Upsert leaderboard: update both total_predictions AND correct_predictions in one pass
       const { data: existing } = await sb
         .from("leaderboard")
         .select("id, total_points, correct_predictions, total_predictions")
@@ -986,12 +1002,15 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
         .eq("mobile", pred.mobile)
         .maybeSingle();
 
+      const now = new Date().toISOString();
+
       if (existing) {
         await sb.from("leaderboard").update({
           total_points: (existing.total_points || 0) + points,
-          correct_predictions: (existing.correct_predictions || 0) + 1,
-          last_correct_at: new Date().toISOString(),
-          last_updated: new Date().toISOString(),
+          correct_predictions: (existing.correct_predictions || 0) + (isCorrect ? 1 : 0),
+          total_predictions: (existing.total_predictions || 0) + 1,
+          last_correct_at: isCorrect ? now : undefined,
+          last_updated: now,
         }).eq("id", existing.id);
       } else {
         await sb.from("leaderboard").insert({
@@ -999,36 +1018,15 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
           mobile: pred.mobile,
           player_name: pred.player_name,
           total_points: points,
-          correct_predictions: 1,
+          correct_predictions: isCorrect ? 1 : 0,
           total_predictions: 1,
-          last_correct_at: new Date().toISOString(),
+          last_correct_at: isCorrect ? now : null,
         });
       }
     }
 
-    // Update total_predictions for all participants
-    for (const pred of predictions) {
-      const { data: lb } = await sb
-        .from("leaderboard")
-        .select("id, total_predictions")
-        .eq("match_id", matchId)
-        .eq("mobile", pred.mobile)
-        .maybeSingle();
-
-      if (lb) {
-        await sb.from("leaderboard").update({
-          total_predictions: (lb.total_predictions || 0) + 1,
-          last_updated: new Date().toISOString(),
-        }).eq("id", lb.id);
-      } else {
-        await sb.from("leaderboard").insert({
-          match_id: matchId,
-          mobile: pred.mobile,
-          player_name: pred.player_name,
-          total_predictions: 1,
-        });
-      }
-    }
+    // Mark window as scored
+    await sb.from("prediction_windows").update({ scored_at: new Date().toISOString() }).eq("id", windowId);
 
     // Recompute ranks
     const { data: allEntries } = await sb

@@ -261,6 +261,9 @@ function LiveContent({
           {activeTab === 'leaderboard' && (
             <Leaderboard matchId={matchId} mobile={session.mobile} />
           )}
+          {activeTab === 'season' && (
+            <OverallLeaderboard mobile={session.mobile} />
+          )}
 
           {/* Bottom disclaimer */}
           <div className="mt-6 disclaimer-bar rounded-lg p-3 text-xs">

@@ -42,6 +42,7 @@ const navItems: NavItem[] = [
   { icon: FlaskConical,    label: 'Trial Game',     to: '/admin/trial-game',    minRole: 'operator' },
   { icon: Gift,            label: 'Victory Coupons',to: '/admin/coupons',       minRole: 'operator' },
   { icon: ScanLine,        label: 'Coupon Scan',    to: '/admin/coupon-scan',   minRole: 'operator' },
+  { icon: Crown,           label: 'Season Board',   to: '/admin/overall-leaderboard', minRole: 'operator' },
 ];
 
 interface AdminSidebarProps {
