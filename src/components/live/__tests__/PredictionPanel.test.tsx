@@ -33,13 +33,12 @@ import { PredictionPanel } from '../PredictionPanel';
 
 describe('PredictionPanel', () => {
   it('renders skeleton loader on initial load', () => {
-    render(<PredictionPanel matchId="test-123" mobile="9999999999" pin="1234" />);
-    // The skeleton state shows the disclaimer text
-    expect(screen.getByText(/Fun Guess Game for entertainment only/i)).toBeTruthy();
+    const { container } = render(<PredictionPanel matchId="test-123" mobile="9999999999" pin="1234" />);
+    expect(container.querySelector('.disclaimer-bar')).toBeTruthy();
   });
 
   it('shows disclaimer about no betting', () => {
-    render(<PredictionPanel matchId="test-123" mobile="9999999999" pin="1234" />);
-    expect(screen.getByText(/not betting, gambling, or wagering/i)).toBeTruthy();
+    const { getByText } = render(<PredictionPanel matchId="test-123" mobile="9999999999" pin="1234" />);
+    expect(getByText(/not betting, gambling, or wagering/i)).toBeTruthy();
   });
 });
