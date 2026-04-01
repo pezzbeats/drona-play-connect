@@ -47,6 +47,7 @@ import AdminEligibility from "./pages/admin/AdminEligibility";
 import AdminTrialGame from "./pages/admin/AdminTrialGame";
 import AdminCoupons from "./pages/admin/AdminCoupons";
 import AdminCouponScan from "./pages/admin/AdminCouponScan";
+import AdminOverallLeaderboard from "./pages/admin/AdminOverallLeaderboard";
 import AboutPage from "./pages/About";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import RefundPolicyPage from "./pages/RefundPolicy";
