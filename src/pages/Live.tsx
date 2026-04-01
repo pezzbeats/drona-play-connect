@@ -8,7 +8,8 @@ import { Scoreboard } from '@/components/live/Scoreboard';
 import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
-import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X, Medal } from 'lucide-react';
+import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X, Medal, Crown } from 'lucide-react';
+import { OverallLeaderboard } from '@/components/live/OverallLeaderboard';
 import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
 type Tab = 'score' | 'predict' | 'leaderboard' | 'season';
