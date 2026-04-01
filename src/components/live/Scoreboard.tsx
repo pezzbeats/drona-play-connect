@@ -340,9 +340,26 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
 
   if (!state) {
     return (
-      <GlassCard className="p-6 text-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2" />
-        <p className="text-muted-foreground text-sm">Loading scoreboard...</p>
+      <GlassCard className="p-4 relative overflow-hidden">
+        {/* Skeleton matching actual scoreboard layout */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="h-6 w-24 skeleton rounded-full" />
+          <div className="flex items-center gap-1.5">
+            <div className="h-3.5 w-3.5 skeleton rounded-full" />
+            <div className="h-3 w-10 skeleton rounded" />
+          </div>
+        </div>
+        <div className="text-center mb-4">
+          <div className="h-16 w-40 skeleton rounded-lg mx-auto mb-2" />
+          <div className="h-4 w-32 skeleton rounded mx-auto" />
+        </div>
+        <div className="h-px bg-border/40 mb-3" />
+        <div className="h-9 w-full skeleton rounded-xl mb-3" />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="h-12 skeleton rounded-xl" />
+          <div className="h-12 skeleton rounded-xl" />
+          <div className="h-12 skeleton rounded-xl" />
+        </div>
       </GlassCard>
     );
   }
