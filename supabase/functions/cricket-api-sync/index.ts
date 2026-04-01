@@ -809,6 +809,23 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           .update({ status: "locked", locks_at: new Date().toISOString() })
           .eq("match_id", matchId)
           .eq("status", "open");
+
+        // Trigger overall leaderboard aggregation
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          await fetch(`${supabaseUrl}/functions/v1/update-overall-leaderboard`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify({ match_id: matchId }),
+          });
+          log("info", "Triggered overall leaderboard update", { match_id: matchId });
+        } catch (e: any) {
+          log("error", "Failed to trigger overall leaderboard", { match_id: matchId, error: e.message });
+        }
       }
 
       await sb.from("api_sync_state").update({
