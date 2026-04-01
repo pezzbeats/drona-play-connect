@@ -159,6 +159,7 @@ function LiveContent({
     { key: 'score',       label: 'Live Score',  icon: <BarChart3 className="h-5 w-5" /> },
     ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: 'Guess', icon: <Gamepad2 className="h-5 w-5" /> }] : []),
     { key: 'leaderboard', label: 'Leaderboard', icon: <Trophy className="h-5 w-5" /> },
+    { key: 'season', label: 'Season', icon: <Crown className="h-5 w-5" /> },
   ];
 
   const showBanner = !connected || reconnecting;
