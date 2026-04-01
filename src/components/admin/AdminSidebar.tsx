@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Trophy, Users, ScanLine, ShoppingBag,
   BookOpen, LogOut, ChevronLeft, ChevronRight, Zap, Radio, Star,
   BarChart2, Activity, HeartPulse, ShieldCheck, FileText, CreditCard, ListChecks,
-  FlaskConical, Gift,
+  FlaskConical, Gift, Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -42,6 +42,7 @@ const navItems: NavItem[] = [
   { icon: FlaskConical,    label: 'Trial Game',     to: '/admin/trial-game',    minRole: 'operator' },
   { icon: Gift,            label: 'Victory Coupons',to: '/admin/coupons',       minRole: 'operator' },
   { icon: ScanLine,        label: 'Coupon Scan',    to: '/admin/coupon-scan',   minRole: 'operator' },
+  { icon: Crown,           label: 'Season Board',   to: '/admin/overall-leaderboard', minRole: 'operator' },
 ];
 
 interface AdminSidebarProps {

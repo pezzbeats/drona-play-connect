@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.cricket-api-sync]
 verify_jwt = false
+
+[functions.update-overall-leaderboard]
+verify_jwt = false

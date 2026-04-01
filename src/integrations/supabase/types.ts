@@ -472,6 +472,98 @@ export type Database = {
           },
         ]
       }
+      leaderboard_match_history: {
+        Row: {
+          accuracy_percentage: number
+          correct_predictions: number
+          final_points: number
+          final_rank: number | null
+          id: string
+          match_id: string
+          mobile: string
+          participated_at: string
+          player_name: string | null
+          total_predictions: number
+        }
+        Insert: {
+          accuracy_percentage?: number
+          correct_predictions?: number
+          final_points?: number
+          final_rank?: number | null
+          id?: string
+          match_id: string
+          mobile: string
+          participated_at?: string
+          player_name?: string | null
+          total_predictions?: number
+        }
+        Update: {
+          accuracy_percentage?: number
+          correct_predictions?: number
+          final_points?: number
+          final_rank?: number | null
+          id?: string
+          match_id?: string
+          mobile?: string
+          participated_at?: string
+          player_name?: string | null
+          total_predictions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leaderboard_match_history_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leaderboard_overall: {
+        Row: {
+          best_match_rank: number | null
+          correct_predictions_overall: number
+          created_at: string
+          id: string
+          last_updated: string
+          matches_participated: number
+          matches_won: number
+          mobile: string
+          player_name: string | null
+          rank_position_overall: number | null
+          total_points_overall: number
+          total_predictions_overall: number
+        }
+        Insert: {
+          best_match_rank?: number | null
+          correct_predictions_overall?: number
+          created_at?: string
+          id?: string
+          last_updated?: string
+          matches_participated?: number
+          matches_won?: number
+          mobile: string
+          player_name?: string | null
+          rank_position_overall?: number | null
+          total_points_overall?: number
+          total_predictions_overall?: number
+        }
+        Update: {
+          best_match_rank?: number | null
+          correct_predictions_overall?: number
+          created_at?: string
+          id?: string
+          last_updated?: string
+          matches_participated?: number
+          matches_won?: number
+          mobile?: string
+          player_name?: string | null
+          rank_position_overall?: number | null
+          total_points_overall?: number
+          total_predictions_overall?: number
+        }
+        Relationships: []
+      }
       match_assets: {
         Row: {
           asset_type: Database["public"]["Enums"]["asset_type_enum"]
@@ -1276,6 +1368,7 @@ export type Database = {
           options: Json
           over_id: string | null
           question: string | null
+          scored_at: string | null
           status: Database["public"]["Enums"]["window_status_enum"]
           window_type: Database["public"]["Enums"]["window_type_enum"]
         }
@@ -1289,6 +1382,7 @@ export type Database = {
           options?: Json
           over_id?: string | null
           question?: string | null
+          scored_at?: string | null
           status?: Database["public"]["Enums"]["window_status_enum"]
           window_type?: Database["public"]["Enums"]["window_type_enum"]
         }
@@ -1302,6 +1396,7 @@ export type Database = {
           options?: Json
           over_id?: string | null
           question?: string | null
+          scored_at?: string | null
           status?: Database["public"]["Enums"]["window_status_enum"]
           window_type?: Database["public"]["Enums"]["window_type_enum"]
         }

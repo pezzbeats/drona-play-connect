@@ -8,10 +8,11 @@ import { Scoreboard } from '@/components/live/Scoreboard';
 import { PredictionPanel } from '@/components/live/PredictionPanel';
 import { Leaderboard } from '@/components/live/Leaderboard';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
-import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X, Medal } from 'lucide-react';
+import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X, Medal, Crown } from 'lucide-react';
+import { OverallLeaderboard } from '@/components/live/OverallLeaderboard';
 import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
-type Tab = 'score' | 'predict' | 'leaderboard';
+type Tab = 'score' | 'predict' | 'leaderboard' | 'season';
 
 interface GameSession {
   mobile: string;
@@ -158,6 +159,7 @@ function LiveContent({
     { key: 'score',       label: 'Live Score',  icon: <BarChart3 className="h-5 w-5" /> },
     ...(predictionsEnabled ? [{ key: 'predict' as Tab, label: 'Guess', icon: <Gamepad2 className="h-5 w-5" /> }] : []),
     { key: 'leaderboard', label: 'Leaderboard', icon: <Trophy className="h-5 w-5" /> },
+    { key: 'season', label: 'Season', icon: <Crown className="h-5 w-5" /> },
   ];
 
   const showBanner = !connected || reconnecting;
@@ -258,6 +260,9 @@ function LiveContent({
           )}
           {activeTab === 'leaderboard' && (
             <Leaderboard matchId={matchId} mobile={session.mobile} />
+          )}
+          {activeTab === 'season' && (
+            <OverallLeaderboard mobile={session.mobile} />
           )}
 
           {/* Bottom disclaimer */}

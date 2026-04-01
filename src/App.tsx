@@ -47,6 +47,7 @@ import AdminEligibility from "./pages/admin/AdminEligibility";
 import AdminTrialGame from "./pages/admin/AdminTrialGame";
 import AdminCoupons from "./pages/admin/AdminCoupons";
 import AdminCouponScan from "./pages/admin/AdminCouponScan";
+import AdminOverallLeaderboard from "./pages/admin/AdminOverallLeaderboard";
 import AboutPage from "./pages/About";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import RefundPolicyPage from "./pages/RefundPolicy";
@@ -120,6 +121,7 @@ const App = () => (
               <Route path="trial-game" element={<ProtectedRoute requiredRole="operator"><AdminTrialGame /></ProtectedRoute>} />
               <Route path="coupons" element={<ProtectedRoute requiredRole="operator"><AdminCoupons /></ProtectedRoute>} />
               <Route path="coupon-scan" element={<ProtectedRoute requiredRole="operator"><AdminCouponScan /></ProtectedRoute>} />
+              <Route path="overall-leaderboard" element={<ProtectedRoute requiredRole="operator"><AdminOverallLeaderboard /></ProtectedRoute>} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
