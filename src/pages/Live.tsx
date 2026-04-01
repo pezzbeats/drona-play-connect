@@ -11,7 +11,7 @@ import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtim
 import { Loader2, Trophy, Gamepad2, BarChart3, WifiOff, LogOut, Zap, X, Medal } from 'lucide-react';
 import { MobileBreadcrumb } from '@/components/ui/MobileBreadcrumb';
 
-type Tab = 'score' | 'predict' | 'leaderboard';
+type Tab = 'score' | 'predict' | 'leaderboard' | 'season';
 
 interface GameSession {
   mobile: string;
