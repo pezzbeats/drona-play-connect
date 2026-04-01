@@ -10,13 +10,15 @@ export interface ChannelSubscription {
 }
 
 const BACKOFF_DELAYS = [2000, 4000, 8000, 16000, 30000];
-const INITIAL_FETCH_TIMEOUT = 3000; // fetch data if channel hasn't connected in 3s
+const INITIAL_FETCH_TIMEOUT = 3000;
+const DEBOUNCE_MS = 150; // Debounce rapid realtime events
 
 /**
  * Shared realtime channel hook with:
  * - Immediate data fetch on mount (not gated behind WebSocket)
  * - Auto-reconnect on CHANNEL_ERROR / TIMED_OUT with exponential backoff
  * - Missed-update replay via onReconnect callback
+ * - 150ms debounce on realtime-triggered refetches
  * - Connection state (connected, reconnecting)
  */
 export function useRealtimeChannel(
@@ -31,11 +33,19 @@ export function useRealtimeChannel(
   const backoffIndexRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const initialFetchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
   const hasFetchedRef = useRef(false);
   const onReconnectRef = useRef(onReconnect);
-  // Keep ref up-to-date without re-subscribing
   onReconnectRef.current = onReconnect;
+
+  // Debounced version of onReconnect for realtime events
+  const debouncedReconnect = useCallback(() => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) onReconnectRef.current();
+    }, DEBOUNCE_MS);
+  }, []);
 
   const removeChannel = useCallback(() => {
     if (channelRef.current) {
@@ -51,6 +61,7 @@ export function useRealtimeChannel(
     let ch = supabase.channel(channelName);
 
     for (const sub of subscriptions) {
+      const originalCallback = sub.callback;
       ch = ch.on(
         'postgres_changes' as any,
         {
@@ -59,7 +70,12 @@ export function useRealtimeChannel(
           table: sub.table,
           ...(sub.filter ? { filter: sub.filter } : {}),
         },
-        sub.callback,
+        (payload: any) => {
+          // Call the original callback immediately for optimistic inline updates
+          originalCallback(payload);
+          // Debounce the full refetch
+          debouncedReconnect();
+        },
       );
     }
 
@@ -70,7 +86,6 @@ export function useRealtimeChannel(
         setConnected(true);
         setReconnecting(false);
         backoffIndexRef.current = 0;
-        // Replay missed updates on every (re)connect
         onReconnectRef.current();
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         setConnected(false);
@@ -87,22 +102,20 @@ export function useRealtimeChannel(
     });
 
     channelRef.current = ch;
-  }, [channelName]); // eslint-disable-line react-hooks/exhaustive-deps
-  // subscriptions is intentionally excluded — callers should memoize or pass stable refs
+  }, [channelName, debouncedReconnect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     mountedRef.current = true;
     hasFetchedRef.current = false;
 
-    // Immediately fetch data on mount — don't wait for WebSocket
+    // Immediately fetch data on mount
     onReconnectRef.current();
     hasFetchedRef.current = true;
 
     // Start realtime subscription in parallel
     subscribe();
 
-    // Safety net: if channel hasn't connected in 3s, re-fetch to cover any
-    // events that arrived between mount-fetch and subscription
+    // Safety net
     initialFetchTimerRef.current = setTimeout(() => {
       if (mountedRef.current && !connected) {
         onReconnectRef.current();
@@ -113,6 +126,7 @@ export function useRealtimeChannel(
       mountedRef.current = false;
       clearTimeout(retryTimerRef.current);
       clearTimeout(initialFetchTimerRef.current);
+      clearTimeout(debounceTimerRef.current);
       removeChannel();
     };
   }, [subscribe, removeChannel]);

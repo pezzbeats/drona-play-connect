@@ -9,6 +9,47 @@ const corsHeaders = {
 const ROANUZ_BASE = "https://api.sports.roanuz.com/v5/cricket";
 const IPL_TOURNAMENT_KEY = "a-rz--cricket--bcci--iplt20--2026-ZGwl";
 
+// ── Structured logging ───────────────────────────────────────────────
+function log(level: "info" | "warn" | "error", message: string, ctx: Record<string, any> = {}) {
+  const entry = { level, message, timestamp: new Date().toISOString(), ...ctx };
+  if (level === "error") console.error(JSON.stringify(entry));
+  else if (level === "warn") console.warn(JSON.stringify(entry));
+  else console.log(JSON.stringify(entry));
+}
+
+// ── Fetch with exponential backoff & retry ───────────────────────────
+async function fetchWithRetry(
+  url: string,
+  opts: RequestInit = {},
+  maxRetries = 3,
+): Promise<Response> {
+  const delays = [1000, 3000, 9000];
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, opts);
+      if (res.ok || (res.status < 500 && res.status !== 429)) return res;
+      if (attempt === maxRetries) return res;
+      // Respect Retry-After header on 429
+      let delay = delays[Math.min(attempt, delays.length - 1)];
+      if (res.status === 429) {
+        const ra = res.headers.get("Retry-After");
+        if (ra) delay = Math.max(delay, parseInt(ra) * 1000 || delay);
+      }
+      log("warn", `Retrying fetch (attempt ${attempt + 1})`, { url, status: res.status, delay });
+      // Consume body to avoid leak
+      await res.text();
+      await new Promise((r) => setTimeout(r, delay));
+    } catch (e: any) {
+      if (attempt === maxRetries) throw e;
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      log("warn", `Fetch error, retrying (attempt ${attempt + 1})`, { url, error: e.message, delay });
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  // Shouldn't reach here
+  return fetch(url, opts);
+}
+
 const IPL_TEAM_MAP: Record<string, { code: string; color: string }> = {
   "chennai super kings": { code: "CSK", color: "#f9cd05" },
   "mumbai indians": { code: "MI", color: "#004BA0" },
@@ -61,7 +102,7 @@ Deno.serve(async (req) => {
 
   let accessToken: string;
   try {
-    const authRes = await fetch(
+    const authRes = await fetchWithRetry(
       `https://api.sports.roanuz.com/v5/core/${ROANUZ_PROJECT_KEY}/auth/`,
       {
         method: "POST",
@@ -71,12 +112,12 @@ Deno.serve(async (req) => {
     );
     const authBody = await authRes.json();
     if (!authBody.data?.token) {
-      console.error("Roanuz auth failed:", JSON.stringify(authBody));
+      log("error", "Roanuz auth failed", { detail: authBody });
       return json({ error: "Roanuz authentication failed", detail: authBody }, 500);
     }
     accessToken = authBody.data.token;
   } catch (e: any) {
-    console.error("Roanuz auth error:", e);
+    log("error", "Roanuz auth error", { error: e.message });
     return json({ error: "Failed to authenticate with Roanuz", detail: e.message }, 500);
   }
 
@@ -104,7 +145,7 @@ Deno.serve(async (req) => {
     }
     return json({ error: "Invalid action" }, 400);
   } catch (e: any) {
-    console.error("cricket-api-sync error:", e);
+    log("error", "cricket-api-sync top-level error", { error: e.message });
     return json({ error: e.message }, 500);
   }
 });
@@ -118,8 +159,9 @@ function json(data: any, status = 200) {
 
 function isApiStatusLive(statusStr: string): boolean {
   const s = (statusStr || "").toLowerCase().trim();
-  // Exclude completed/not_started explicitly
   if (s.includes("not_started") || s.includes("completed") || s.includes("result") || s === "not started") return false;
+  // Abandoned / no result / postponed are NOT live
+  if (s.includes("abandoned") || s.includes("no result") || s.includes("postponed")) return false;
   return (
     s.includes("live") ||
     s.includes("in progress") ||
@@ -134,9 +176,21 @@ function isApiStatusLive(statusStr: string): boolean {
   );
 }
 
+// Detect abandoned / no-result / postponed statuses
+function isAbandonedOrNoResult(statusStr: string): boolean {
+  const s = (statusStr || "").toLowerCase().trim();
+  return s.includes("abandoned") || s.includes("no result") || s.includes("postponed") || s.includes("no_result");
+}
+
+// Detect rain delay
+function isRainDelay(statusStr: string): boolean {
+  const s = (statusStr || "").toLowerCase().trim();
+  return s.includes("rain") || s.includes("delayed") || s.includes("weather");
+}
+
 // ── DISCOVER ─────────────────────────────────────────────────────────
 async function doDiscover(sb: any, projectKey: string, headers: any) {
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `${ROANUZ_BASE}/${projectKey}/tournament/${IPL_TOURNAMENT_KEY}/fixtures/`,
     { headers }
   );
@@ -158,7 +212,6 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
   const istNow = new Date(now.getTime() + IST_OFFSET_MS);
   const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
   const todayStartUTC = new Date(istMidnight.getTime() - IST_OFFSET_MS);
-  // Expand window: 6h before today start → 48h ahead
   const windowStart = new Date(todayStartUTC.getTime() - 6 * 3600 * 1000);
   const windowEnd = new Date(now.getTime() + 48 * 3600 * 1000);
 
@@ -209,12 +262,13 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
     const opponent = teamNames.length > 1 ? teamNames[1] : null;
     const startTime = m.start_at ? new Date(m.start_at * 1000).toISOString() : null;
 
-    // Auto-detect live status from API — check multiple fields
     const mStatusRaw = m.status_str || m.status || m.play_status || "";
     const mStatus = mStatusRaw.toLowerCase();
     const hasInningsData = m.innings && Object.keys(m.innings).length > 0;
     let status: string = "draft";
-    if (isApiStatusLive(mStatusRaw) || hasInningsData) {
+    if (isAbandonedOrNoResult(mStatusRaw)) {
+      status = "ended";
+    } else if (isApiStatusLive(mStatusRaw) || hasInningsData) {
       status = "live";
     } else if (mStatus.includes("completed") || mStatus.includes("result")) {
       status = "ended";
@@ -222,9 +276,17 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
       status = "registrations_open";
     }
 
-    // Auto-activate registration for matches starting within 24 hours
     const startsWithin24h = startTime ? (new Date(startTime).getTime() - now.getTime()) < 24 * 3600 * 1000 : false;
     const shouldActivate = status === "live" || (startsWithin24h && status !== "ended");
+
+    // Extract toss data if available
+    const tossInfo = m.toss;
+    let tossStr: string | null = null;
+    if (tossInfo) {
+      const tossWinner = tossInfo.winner?.name || tossInfo.winner_name || "";
+      const tossDecision = tossInfo.decision || tossInfo.elected || "";
+      if (tossWinner) tossStr = `Toss: ${tossWinner} elected to ${tossDecision}`;
+    }
 
     const { data: newMatch, error: matchErr } = await sb
       .from("matches")
@@ -236,19 +298,33 @@ async function doDiscover(sb: any, projectKey: string, headers: any) {
       })
       .select("id").single();
 
-    if (matchErr) { console.error("Failed to create match:", matchErr); continue; }
+    if (matchErr) { log("error", "Failed to create match", { error: matchErr, extId }); continue; }
     const matchId = newMatch.id;
+
+    // Determine batting first from toss
+    let battingFirstTeamIdx = -1;
+    if (tossInfo) {
+      const tossWinnerName = (tossInfo.winner?.name || tossInfo.winner_name || "").toLowerCase();
+      const tossDecision = (tossInfo.decision || tossInfo.elected || "").toLowerCase();
+      const tossWinnerIdx = teamNames.findIndex(n => n.toLowerCase().includes(tossWinnerName) || tossWinnerName.includes(n.toLowerCase().split(" ")[0]));
+      if (tossWinnerIdx >= 0) {
+        if (tossDecision.includes("bat")) battingFirstTeamIdx = tossWinnerIdx;
+        else if (tossDecision.includes("bowl") || tossDecision.includes("field")) battingFirstTeamIdx = tossWinnerIdx === 0 ? 1 : 0;
+      }
+    }
 
     if (teamIds.length >= 2) {
       await sb.from("match_roster").insert([
-        { match_id: matchId, team_id: teamIds[0], side: "home", is_batting_first: false },
-        { match_id: matchId, team_id: teamIds[1], side: "away", is_batting_first: false },
+        { match_id: matchId, team_id: teamIds[0], side: "home", is_batting_first: battingFirstTeamIdx === 0 },
+        { match_id: matchId, team_id: teamIds[1], side: "away", is_batting_first: battingFirstTeamIdx === 1 },
       ]);
     }
 
     await sb.from("match_live_state").insert({
       match_id: matchId, phase: status === "live" ? "innings1" : "pre",
-      batting_team_id: teamIds[0] || null, bowling_team_id: teamIds[1] || null,
+      batting_team_id: teamIds[battingFirstTeamIdx >= 0 ? battingFirstTeamIdx : 0] || null,
+      bowling_team_id: teamIds[battingFirstTeamIdx >= 0 ? (battingFirstTeamIdx === 0 ? 1 : 0) : 1] || null,
+      last_delivery_summary: tossStr,
     });
     await sb.from("match_scoring_config").insert({ match_id: matchId });
     await sb.from("match_flags").insert({ match_id: matchId });
@@ -284,7 +360,7 @@ async function doAutoLineup(sb: any, projectKey: string, headers: any) {
       await doLineup(sb, projectKey, headers, state.match_id);
       fetched++;
     } catch (e: any) {
-      console.error(`Lineup fetch error for ${state.match_id}:`, e.message);
+      log("error", "Lineup fetch error", { match_id: state.match_id, error: e.message });
     }
   }
   return { lineups_fetched: fetched };
@@ -300,14 +376,45 @@ async function doLineup(sb: any, projectKey: string, headers: any, matchId: stri
 
   if (!syncState) return { error: "Match not linked to API" };
 
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `${ROANUZ_BASE}/${projectKey}/match/${syncState.external_match_id}/`,
     { headers }
   );
   const body = await res.json();
   if (!body.data) return { error: "API error", detail: body };
 
-  const playingXI = body.data.play || {};
+  const matchData = body.data;
+
+  // Extract toss data and update roster if not already set
+  const tossInfo = matchData.toss;
+  if (tossInfo) {
+    const { data: roster } = await sb
+      .from("match_roster")
+      .select("team_id, side, is_batting_first, teams(name)")
+      .eq("match_id", matchId);
+
+    const hasBattingFirst = roster?.some((r: any) => r.is_batting_first);
+    if (!hasBattingFirst && roster && roster.length >= 2) {
+      const tossWinnerName = (tossInfo.winner?.name || tossInfo.winner_name || "").toLowerCase();
+      const tossDecision = (tossInfo.decision || tossInfo.elected || "").toLowerCase();
+
+      for (const r of roster) {
+        const teamName = (r.teams?.name || "").toLowerCase();
+        const isWinner = teamName.includes(tossWinnerName) || tossWinnerName.includes(teamName.split(" ")[0]);
+        let isBattingFirst = false;
+        if (isWinner && tossDecision.includes("bat")) isBattingFirst = true;
+        if (!isWinner && (tossDecision.includes("bowl") || tossDecision.includes("field"))) isBattingFirst = true;
+        if (isBattingFirst) {
+          await sb.from("match_roster").update({ is_batting_first: true }).eq("team_id", r.team_id).eq("match_id", matchId);
+          // Update live state toss info
+          const tossStr = `Toss: ${tossInfo.winner?.name || tossInfo.winner_name} elected to ${tossDecision}`;
+          await sb.from("match_live_state").update({ last_delivery_summary: tossStr }).eq("match_id", matchId).eq("phase", "pre");
+        }
+      }
+    }
+  }
+
+  const playingXI = matchData.play || {};
   let playersAdded = 0;
 
   const { data: roster } = await sb
@@ -368,7 +475,6 @@ async function doLineup(sb: any, projectKey: string, headers: any, matchId: stri
 
 // ── SYNC (scores + ball-by-ball + auto-activation + prediction lifecycle) ───
 async function doSync(sb: any, projectKey: string, headers: any) {
-  // Broaden: sync matches that are live OR registrations_open (to detect auto-activation)
   const { data: syncStates } = await sb
     .from("api_sync_state")
     .select("*, matches!inner(id, status, external_match_id, predictions_enabled, prediction_mode, start_time)")
@@ -378,14 +484,14 @@ async function doSync(sb: any, projectKey: string, headers: any) {
     return { synced: 0, message: "No matches to sync" };
 
   const results: any[] = [];
-  let recommendedInterval = 20; // default 20s
+  let recommendedInterval = 15; // default 15s (was 20s)
 
   for (const state of syncStates) {
     const matchId = state.match_id;
     const extId = state.external_match_id;
     const matchStatus = state.matches?.status;
 
-    // ── Auto-lock expired prediction windows (locks_at passed) ──
+    // Auto-lock expired prediction windows
     await sb
       .from("prediction_windows")
       .update({ status: "locked" })
@@ -394,14 +500,13 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       .not("locks_at", "is", null)
       .lte("locks_at", new Date().toISOString());
 
-    // Skip ended matches, but allow registrations_open and live
     if (matchStatus === "ended" || matchStatus === "draft") {
       results.push({ match_id: matchId, status: "skipped", reason: `status is ${matchStatus}` });
       continue;
     }
 
     try {
-      const matchRes = await fetch(
+      const matchRes = await fetchWithRetry(
         `${ROANUZ_BASE}/${projectKey}/match/${extId}/`, { headers }
       );
       const matchBody = await matchRes.json();
@@ -412,22 +517,47 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       const matchData = matchBody.data;
       const apiStatusStr = matchData.status_str || matchData.status || matchData.play_status || "";
-      // Check innings in multiple possible locations
       const inningsObj = matchData.innings || matchData.play?.innings || {};
       const hasInningsData = inningsObj && typeof inningsObj === "object" && Object.keys(inningsObj).length > 0;
-      console.log(`Match ${matchId} ext=${extId} API status: "${apiStatusStr}", hasInnings: ${hasInningsData}, raw keys: ${Object.keys(matchData).join(",")}`);
-      // hasInningsData alone doesn't mean live — completed matches also have innings
+      log("info", "Match sync status", { match_id: matchId, ext_id: extId, api_status: apiStatusStr, has_innings: hasInningsData });
+
       const statusLower = (apiStatusStr || "").toLowerCase();
       const isExplicitlyCompleted = statusLower.includes("completed") || statusLower.includes("result");
+
+      // Handle abandoned/no-result/postponed
+      if (isAbandonedOrNoResult(apiStatusStr)) {
+        await sb.from("match_live_state").update({
+          phase: "ended",
+          last_delivery_summary: apiStatusStr,
+          updated_at: new Date().toISOString(),
+        }).eq("match_id", matchId);
+        await sb.from("matches").update({ status: "ended" }).eq("id", matchId);
+        // Lock remaining windows
+        await sb.from("prediction_windows")
+          .update({ status: "locked", locks_at: new Date().toISOString() })
+          .eq("match_id", matchId).eq("status", "open");
+        results.push({ match_id: matchId, status: "ended_abandoned", reason: apiStatusStr });
+        continue;
+      }
+
+      // Handle rain delay
+      if (isRainDelay(apiStatusStr) && !isExplicitlyCompleted) {
+        await sb.from("match_live_state").update({
+          last_delivery_summary: `🌧 Rain Delay — ${apiStatusStr}`,
+          updated_at: new Date().toISOString(),
+        }).eq("match_id", matchId);
+        results.push({ match_id: matchId, status: "rain_delay", reason: apiStatusStr });
+        continue;
+      }
+
       const apiIsLive = isApiStatusLive(apiStatusStr) || (hasInningsData && !isExplicitlyCompleted);
 
-      // ── Auto-re-discover: if our DB says live but API says completed/not_started ──
-      // Only attempt for matches whose start_time has already passed
+      // Auto-re-discover
       const matchStartTime = state.matches?.start_time ? new Date(state.matches.start_time) : null;
       const startTimePassed = matchStartTime && matchStartTime.getTime() < Date.now();
       if ((matchStatus === "live") && !apiIsLive && startTimePassed) {
         if (isExplicitlyCompleted || statusLower.includes("not_started") || statusLower === "not started") {
-          console.warn(`Match ${matchId} appears mislinked (API="${apiStatusStr}"). Attempting re-discovery...`);
+          log("warn", "Match appears mislinked, attempting re-discovery", { match_id: matchId, api_status: apiStatusStr });
           const correctExtId = await rediscoverMatchId(sb, projectKey, headers, matchId);
           if (correctExtId && correctExtId !== extId) {
             await sb.from("api_sync_state").update({ external_match_id: correctExtId }).eq("match_id", matchId);
@@ -437,7 +567,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         }
       }
 
-      // ── Auto-activate: transition registrations_open → live when API says live ──
+      // Auto-activate: registrations_open → live
       if (matchStatus === "registrations_open" && apiIsLive) {
         await sb.from("matches").update({
           status: "live",
@@ -448,11 +578,23 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           phase: "innings1",
         }).eq("match_id", matchId);
 
-        console.log(`Auto-activated match ${matchId} to live`);
+        log("info", "Auto-activated match to live", { match_id: matchId });
       }
 
-      // If match is registrations_open but API is NOT live yet, skip score sync
       if (matchStatus === "registrations_open" && !apiIsLive) {
+        // Update toss info even if not live yet
+        const tossInfo = matchData.toss;
+        if (tossInfo) {
+          const tossWinner = tossInfo.winner?.name || tossInfo.winner_name || "";
+          const tossDecision = tossInfo.decision || tossInfo.elected || "";
+          if (tossWinner) {
+            const tossStr = `Toss: ${tossWinner} elected to ${tossDecision}`;
+            await sb.from("match_live_state").update({
+              last_delivery_summary: tossStr,
+              updated_at: new Date().toISOString(),
+            }).eq("match_id", matchId);
+          }
+        }
         results.push({ match_id: matchId, status: "skipped", reason: "not live yet per API" });
         continue;
       }
@@ -462,23 +604,18 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       let inn1Score = 0, inn1Wickets = 0, inn1Overs = 0;
       let inn2Score = 0, inn2Wickets = 0, inn2Overs = 0;
 
-      // Helper to extract numeric score from potentially nested objects
       const getNum = (val: any): number => {
         if (typeof val === "number") return val;
         if (typeof val === "object" && val !== null) return val.runs ?? val.value ?? val.score ?? 0;
         return parseInt(val) || 0;
       };
 
-      // Extract overs from balls count or array length
       const getOvers = (innings: any): number => {
-        // If overs is a number, use it directly
         if (typeof innings?.overs === "number") return innings.overs;
-        // Calculate from score.balls
         const balls = innings?.score?.balls;
         if (typeof balls === "number" && balls > 0) {
           return Math.floor(balls / 6) + (balls % 6) / 10;
         }
-        // If overs is an array, use its length
         if (Array.isArray(innings?.overs)) return innings.overs.length;
         return 0;
       };
@@ -486,14 +623,13 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       const getWickets = (innings: any): number => {
         if (typeof innings?.wickets === "number") return innings.wickets;
         if (Array.isArray(innings?.wickets)) return innings.wickets.length;
-        // Try wicket_order array
         if (Array.isArray(innings?.wicket_order)) return innings.wicket_order.length;
         return 0;
       };
 
       if (inningsKeys.length >= 1) {
         const i1 = innings[inningsKeys[0]];
-        console.log(`Match ${matchId} inn1 keys: ${i1 ? Object.keys(i1).join(",") : "null"}, score type: ${typeof i1?.score}, score raw: ${JSON.stringify(i1?.score)?.slice(0,100)}, wickets type: ${typeof i1?.wickets}, overs type: ${typeof i1?.overs}`);
+        log("info", "Innings 1 data", { match_id: matchId, score_type: typeof i1?.score, score_raw: JSON.stringify(i1?.score)?.slice(0, 100) });
         inn1Score = getNum(i1?.score) || getNum(i1?.runs) || 0;
         inn1Wickets = getWickets(i1);
         inn1Overs = getOvers(i1);
@@ -507,9 +643,17 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       const currentInnings = inn2Overs > 0 || inn2Score > 0 ? 2 : 1;
 
+      // DLS target adjustment
+      let dlsTarget: number | null = null;
+      const dlsData = matchData.dls || matchData.dl || matchData.revised_target;
+      if (dlsData) {
+        if (typeof dlsData === "number") dlsTarget = dlsData;
+        else if (typeof dlsData === "object") dlsTarget = dlsData.target || dlsData.par_score || dlsData.revised_target || null;
+      }
+
       // Fetch ball-by-ball and record deliveries
       let newDeliveries = 0;
-      const bbbRes = await fetch(
+      const bbbRes = await fetchWithRetry(
         `${ROANUZ_BASE}/${projectKey}/match/${extId}/ball-by-ball/`, { headers }
       );
       const bbbBody = await bbbRes.json();
@@ -551,7 +695,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           const isWicket = ball.wicket?.is_out || ball.is_wicket || false;
           const wicketType = ball.wicket?.type || ball.wicket_type || null;
 
-          // ── Auto-lock open prediction windows BEFORE inserting delivery ──
+          // Auto-lock open prediction windows BEFORE inserting delivery
           const { data: openWindows } = await sb
             .from("prediction_windows")
             .select("id")
@@ -565,7 +709,6 @@ async function doSync(sb: any, projectKey: string, headers: any) {
               .update({ status: "locked", locks_at: new Date().toISOString() })
               .in("id", windowIds);
 
-            // ── Auto-resolve: set correct answer and score predictions ──
             const outcomeKey = deliveryToOutcomeKey(runsOffBat, isWicket, extrasType);
             const correctAnswer = { key: outcomeKey };
 
@@ -575,12 +718,10 @@ async function doSync(sb: any, projectKey: string, headers: any) {
                 .update({ status: "resolved", correct_answer: correctAnswer })
                 .eq("id", wId);
 
-              // Score predictions for this window
               await scorePredictions(sb, matchId, wId, outcomeKey);
             }
           }
 
-          // Insert the delivery
           let { data: overCtrl } = await sb
             .from("over_control").select("id")
             .eq("match_id", matchId).eq("innings_no", currentInnings).eq("over_no", overNo)
@@ -605,7 +746,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           newDeliveries++;
         }
 
-        // ── Auto-open next prediction window with 12s auto-lock timer ──
+        // Auto-open next prediction window
         const predictionsEnabled = state.matches?.predictions_enabled;
         const predictionMode = state.matches?.prediction_mode;
         if (predictionsEnabled && predictionMode !== "off" && newDeliveries > 0) {
@@ -618,7 +759,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
           if (!existingOpen) {
             const now = new Date();
-            const locksAt = new Date(now.getTime() + 12_000); // 12 seconds
+            const locksAt = new Date(now.getTime() + 12_000);
             await sb.from("prediction_windows").insert({
               match_id: matchId,
               window_type: "ball",
@@ -649,17 +790,21 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       if (mStatus.includes("completed") || mStatus.includes("result")) phase = "ended";
       if (mStatus.includes("break") || mStatus.includes("innings break")) phase = "break";
 
+      // Compute target — use DLS if available, otherwise innings1 + 1
+      const targetRuns = currentInnings === 2
+        ? (dlsTarget || inn1Score + 1)
+        : null;
+
       await sb.from("match_live_state").update({
         innings1_score: inn1Score, innings1_wickets: inn1Wickets, innings1_overs: inn1Overs,
         innings2_score: inn2Score, innings2_wickets: inn2Wickets, innings2_overs: inn2Overs,
         current_innings: currentInnings, phase,
-        target_runs: currentInnings === 2 ? inn1Score + 1 : null,
+        target_runs: targetRuns,
         updated_at: new Date().toISOString(),
       }).eq("match_id", matchId);
 
       if (phase === "ended") {
         await sb.from("matches").update({ status: "ended" }).eq("id", matchId);
-        // Lock any remaining open windows when match ends
         await sb.from("prediction_windows")
           .update({ status: "locked", locks_at: new Date().toISOString() })
           .eq("match_id", matchId)
@@ -679,33 +824,31 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         score: `${inn1Score}/${inn1Wickets} (${inn1Overs}ov)${currentInnings === 2 ? ` | ${inn2Score}/${inn2Wickets} (${inn2Overs}ov)` : ""}`,
       });
     } catch (e: any) {
-      console.error(`Sync error for ${matchId}:`, e);
+      log("error", "Sync error", { match_id: matchId, error: e.message });
       results.push({ match_id: matchId, status: "error", reason: e.message });
     }
   }
 
-  // ── AI-adaptive polling interval ──
+  // AI-adaptive polling interval with 2s timeout
   try {
     recommendedInterval = await analyzeGamePace(sb, results);
   } catch (e: any) {
-    console.warn("AI pace analysis failed, using default 20s:", e.message);
+    log("warn", "AI pace analysis failed, using default 15s", { error: e.message });
   }
 
   return { synced: results.length, results, recommended_interval: recommendedInterval };
 }
 
-// ── Analyze game pace with Gemini to determine optimal polling interval ──
+// ── Analyze game pace with Gemini (2s timeout) ──────────────────────
 async function analyzeGamePace(sb: any, syncResults: any[]): Promise<number> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-  if (!GEMINI_API_KEY) return 20;
+  if (!GEMINI_API_KEY) return 15;
 
-  // Gather context from the most recently synced match
   const activeSyncs = syncResults.filter((r: any) => r.status === "synced");
-  if (activeSyncs.length === 0) return 20;
+  if (activeSyncs.length === 0) return 15;
 
   const matchId = activeSyncs[0].match_id;
 
-  // Get recent deliveries to measure pace
   const twoMinAgo = new Date(Date.now() - 2 * 60_000).toISOString();
   const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
 
@@ -717,15 +860,15 @@ async function analyzeGamePace(sb: any, syncResults: any[]): Promise<number> {
     sb.from("match_live_state").select("*").eq("match_id", matchId).single(),
   ]);
 
-  const state = liveState.data;
-  if (!state) return 20;
+  const stateData = liveState.data;
+  if (!stateData) return 15;
 
-  const currentInnings = state.current_innings || 1;
-  const score = currentInnings === 1 ? state.innings1_score : state.innings2_score;
-  const wickets = currentInnings === 1 ? state.innings1_wickets : state.innings2_wickets;
-  const overs = currentInnings === 1 ? state.innings1_overs : state.innings2_overs;
-  const target = state.target_runs;
-  const phase = state.phase;
+  const currentInnings = stateData.current_innings || 1;
+  const score = currentInnings === 1 ? stateData.innings1_score : stateData.innings2_score;
+  const wickets = currentInnings === 1 ? stateData.innings1_wickets : stateData.innings2_wickets;
+  const overs = currentInnings === 1 ? stateData.innings1_overs : stateData.innings2_overs;
+  const target = stateData.target_runs;
+  const phase = stateData.phase;
 
   const prompt = `You are a cricket match pace analyzer. Given the current match state, return ONLY a JSON object with "interval" (integer 10-20) and "reason" (short string).
 
@@ -747,41 +890,51 @@ Rules:
 Return ONLY valid JSON like: {"interval": 12, "reason": "powerplay active play"}`;
 
   try {
+    // 2-second timeout for Gemini
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
     const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 100 },
       }),
     });
 
+    clearTimeout(timeoutId);
+
     if (!res.ok) {
-      console.warn("Gemini API error:", res.status);
-      return 20;
+      log("warn", "Gemini API error", { status: res.status });
+      await res.text(); // consume body
+      return 15;
     }
 
     const body = await res.json();
     const text = body.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    // Extract JSON from response
     const jsonMatch = text.match(/\{[^}]+\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      const interval = Math.min(20, Math.max(10, parseInt(parsed.interval) || 20));
-      console.log(`AI pace: ${interval}s - ${parsed.reason}`);
+      const interval = Math.min(20, Math.max(10, parseInt(parsed.interval) || 15));
+      log("info", "AI pace recommendation", { interval, reason: parsed.reason });
       return interval;
     }
   } catch (e: any) {
-    console.warn("Gemini parse error:", e.message);
+    if (e.name === "AbortError") {
+      log("warn", "Gemini timed out (2s), using default 15s");
+    } else {
+      log("warn", "Gemini parse error", { error: e.message });
+    }
   }
 
-  return 20;
+  return 15;
 }
 
 // ── Score predictions for a resolved window ──────────────────────────
 async function scorePredictions(sb: any, matchId: string, windowId: string, correctKey: string) {
   try {
-    // Get scoring config
     const { data: config } = await sb
       .from("match_scoring_config")
       .select("*")
@@ -790,7 +943,6 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
 
     const pointsPerCorrect = config?.points_per_correct || 10;
 
-    // Get all predictions for this window
     const { data: predictions } = await sb
       .from("predictions")
       .select("id, mobile, player_name, prediction")
@@ -803,7 +955,6 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
       const isCorrect = predKey === correctKey;
       const points = isCorrect ? pointsPerCorrect : 0;
 
-      // Update prediction result
       await sb.from("predictions").update({
         is_correct: isCorrect,
         points_earned: points,
@@ -811,7 +962,6 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
 
       if (!isCorrect) continue;
 
-      // Update leaderboard
       const { data: existing } = await sb
         .from("leaderboard")
         .select("id, total_points, correct_predictions, total_predictions")
@@ -878,29 +1028,26 @@ async function scorePredictions(sb: any, matchId: string, windowId: string, corr
       }
     }
   } catch (e: any) {
-    console.error(`scorePredictions error for window ${windowId}:`, e.message);
+    log("error", "scorePredictions error", { window_id: windowId, error: e.message });
   }
 }
 
-// ── RE-DISCOVER: find correct external match ID by team names ────────
+// ── RE-DISCOVER ─────────────────────────────────────────────────────
 async function rediscoverMatchId(sb: any, projectKey: string, headers: any, matchId: string): Promise<string | null> {
   try {
-    // Get our match name to extract team names
     const { data: match } = await sb.from("matches").select("name").eq("id", matchId).single();
     if (!match?.name) return null;
 
     const matchNameLower = match.name.toLowerCase();
-    console.log(`Re-discovering match for: "${match.name}"`);
+    log("info", "Re-discovering match", { match_name: match.name });
 
-    // Fetch tournament fixtures
-    const res = await fetch(
+    const res = await fetchWithRetry(
       `${ROANUZ_BASE}/${projectKey}/tournament/${IPL_TOURNAMENT_KEY}/fixtures/`,
       { headers }
     );
     const body = await res.json();
     const fixtures = body.data?.matches || [];
 
-    // Find today's matches
     const now = new Date();
     const IST_OFFSET_MS = 5.5 * 3600 * 1000;
     const istNow = new Date(now.getTime() + IST_OFFSET_MS);
@@ -913,12 +1060,10 @@ async function rediscoverMatchId(sb: any, projectKey: string, headers: any, matc
       if (!startTime) continue;
       if (startTime.getTime() < todayStartUTC.getTime() - 6 * 3600 * 1000 || startTime.getTime() > todayEndUTC.getTime()) continue;
 
-      // Check if team names match
       const teams = m.teams || {};
       const teamNames = Object.values(teams).map((t: any) => (t.name || "").toLowerCase());
       const fixtureNameLower = (m.name || "").toLowerCase();
 
-      // Match by checking if both team codes or names appear in our match name
       const matchesByName = teamNames.some((tn: string) => {
         const words = tn.split(" ");
         return words.some((w: string) => w.length > 3 && matchNameLower.includes(w));
@@ -928,21 +1073,19 @@ async function rediscoverMatchId(sb: any, projectKey: string, headers: any, matc
         fixtureNameLower.split("vs").some((part: string) => matchNameLower.includes(part.trim().split(" ")[0]));
 
       if (matchesByName || matchesByFixtureName) {
-        // Check the API status of this fixture
         const statusStr = m.status_str || m.status || "";
         const sLower = statusStr.toLowerCase();
-        // Only pick non-completed matches
         if (!sLower.includes("completed") && !sLower.includes("result")) {
-          console.log(`Re-discovered: ${m.key} (status: ${statusStr}) for match "${match.name}"`);
+          log("info", "Re-discovered match", { ext_id: m.key, status: statusStr, match_name: match.name });
           return m.key;
         }
       }
     }
 
-    console.log(`Re-discovery found no better match for "${match.name}"`);
+    log("info", "Re-discovery found no better match", { match_name: match.name });
     return null;
   } catch (e: any) {
-    console.error("rediscoverMatchId error:", e.message);
+    log("error", "rediscoverMatchId error", { error: e.message });
     return null;
   }
 }

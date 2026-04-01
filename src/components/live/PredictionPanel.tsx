@@ -369,7 +369,10 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       return;
     }
 
+    // Optimistic update — immediately show as submitted
+    setSubmittedWindows(prev => ({ ...prev, [windowId]: optKey }));
     setSubmittingKey({ windowId, optKey });
+
     try {
       const { data, error } = await supabase.functions.invoke('submit-prediction', {
         body: { mobile, pin, window_id: windowId, prediction: { key: optKey } },
@@ -378,17 +381,28 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       if (error || data?.error) {
         const code = data?.code;
         if (code === 'ALREADY_SUBMITTED') {
-          setSubmittedWindows(prev => ({ ...prev, [windowId]: optKey }));
+          // Keep the optimistic state — it's correct
           toast({ title: '🎯 Guess already locked in!' });
         } else {
+          // Revert optimistic update on real errors
+          setSubmittedWindows(prev => {
+            const next = { ...prev };
+            delete next[windowId];
+            return next;
+          });
           toast({ variant: 'destructive', title: data?.error || 'Failed to submit' });
         }
       } else {
-        setSubmittedWindows(prev => ({ ...prev, [windowId]: optKey }));
         toast({ title: '🎯 Guess locked in!' });
       }
     } catch {
-      toast({ variant: 'destructive', title: 'Submission failed' });
+      // Revert optimistic update on network failure
+      setSubmittedWindows(prev => {
+        const next = { ...prev };
+        delete next[windowId];
+        return next;
+      });
+      toast({ variant: 'destructive', title: 'Submission failed — try again' });
     }
     setSubmittingKey(null);
   };
