@@ -507,33 +507,27 @@ export default function IndexPage() {
 
       console.log('[Index] Today IST window:', todayStartUTC.toISOString(), '→', todayEndUTC.toISOString());
 
-      // Query 1: today's active/live matches (IST)
+      // Query 1: today's active/live matches + any with is_active_for_registration
+      const next48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
       const todayRes = await supabase
         .from('matches')
         .select('id, name, opponent, venue, start_time, status, match_type')
-        .gte('start_time', todayStartUTC.toISOString())
-        .lte('start_time', todayEndUTC.toISOString())
-        .in('status', ['registrations_open', 'live'])
+        .or(`and(start_time.gte.${todayStartUTC.toISOString()},start_time.lte.${todayEndUTC.toISOString()},status.in.("registrations_open","live")),is_active_for_registration.eq.true,and(start_time.gte.${todayEndUTC.toISOString()},start_time.lte.${next48h.toISOString()},status.in.("registrations_open"))`)
+        .neq('status', 'ended')
+        .neq('status', 'draft')
         .order('start_time', { ascending: true });
 
       if (todayRes.error) throw todayRes.error;
       setFetchError(false);
 
-      let uniqueMatches = todayRes.data || [];
-      console.log('[Index] Today matches:', uniqueMatches.length, uniqueMatches.map(m => m.name));
-
-      // Fallback: if nothing active today, show next upcoming match only
-      if (uniqueMatches.length === 0) {
-        const nextRes = await supabase
-          .from('matches')
-          .select('id, name, opponent, venue, start_time, status, match_type')
-          .gte('start_time', todayEndUTC.toISOString())
-          .in('status', ['registrations_open'])
-          .order('start_time', { ascending: true })
-          .limit(1);
-        uniqueMatches = nextRes.data || [];
-        console.log('[Index] Fallback next match:', uniqueMatches.map(m => m.name));
-      }
+      // Deduplicate by id
+      const seen = new Set<string>();
+      let uniqueMatches = (todayRes.data || []).filter(m => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
+      console.log('[Index] Matches found:', uniqueMatches.length, uniqueMatches.map(m => m.name));
 
       setMatches(uniqueMatches);
 

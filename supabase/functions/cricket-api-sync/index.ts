@@ -827,7 +827,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       }).eq("match_id", matchId);
 
       if (phase === "ended") {
-        await sb.from("matches").update({ status: "ended" }).eq("id", matchId);
+        await sb.from("matches").update({ status: "ended", is_active_for_registration: false }).eq("id", matchId);
         await sb.from("prediction_windows")
           .update({ status: "locked", locks_at: new Date().toISOString() })
           .eq("match_id", matchId)
