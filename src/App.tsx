@@ -57,7 +57,15 @@ import ContactUsPage from "./pages/ContactUs";
 import PricingPolicyPage from "./pages/PricingPolicy";
 import ShippingPolicyPage from "./pages/ShippingPolicy";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
