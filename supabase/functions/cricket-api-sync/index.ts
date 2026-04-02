@@ -475,6 +475,12 @@ async function doLineup(sb: any, projectKey: string, headers: any, matchId: stri
 
 // ── SYNC (scores + ball-by-ball + auto-activation + prediction lifecycle) ───
 async function doSync(sb: any, projectKey: string, headers: any) {
+  // Bulk cleanup: deactivate registration for any ended matches still flagged active
+  await sb.from("matches")
+    .update({ is_active_for_registration: false })
+    .eq("status", "ended")
+    .eq("is_active_for_registration", true);
+
   const { data: syncStates } = await sb
     .from("api_sync_state")
     .select("*, matches!inner(id, status, external_match_id, predictions_enabled, prediction_mode, start_time)")
