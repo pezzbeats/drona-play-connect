@@ -422,10 +422,15 @@ export default function IndexPage() {
     fetchData(0).then((count) => {
       clearTimeout(timeout);
       if (count === 0) {
-        supabase.functions.invoke('cricket-api-sync', {
-          body: null,
-          method: 'GET',
-        }).then(() => fetchData(0)).catch(() => {});
+        const SYNC_KEY = 'drona_last_api_sync';
+        const lastSync = parseInt(localStorage.getItem(SYNC_KEY) || '0', 10);
+        if (Date.now() - lastSync > 5 * 60 * 1000) {
+          localStorage.setItem(SYNC_KEY, String(Date.now()));
+          supabase.functions.invoke('cricket-api-sync', {
+            body: null,
+            method: 'GET',
+          }).then(() => fetchData(0)).catch(() => {});
+        }
       }
     });
   }, []);

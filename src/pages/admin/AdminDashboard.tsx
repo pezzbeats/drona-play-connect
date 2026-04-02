@@ -36,9 +36,14 @@ export default function AdminDashboard() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [matchRes, ordersRes, upcomingRes] = await Promise.all([
-        supabase.from('matches').select('*').eq('is_active_for_registration', true).single(),
-        supabase.from('orders').select('id, payment_status, seats_count, created_at, advance_paid, total_amount'),
+      const matchRes = await supabase.from('matches').select('*').eq('is_active_for_registration', true).single();
+      setActiveMatch(matchRes.data || null);
+      const activeMatchId = matchRes.data?.id;
+
+      const [ordersRes, upcomingRes] = await Promise.all([
+        activeMatchId
+          ? supabase.from('orders').select('id, payment_status, seats_count, created_at, advance_paid, total_amount').eq('match_id', activeMatchId)
+          : supabase.from('orders').select('id, payment_status, seats_count, created_at, advance_paid, total_amount').limit(500),
         supabase.from('matches').select('id, name, status, start_time, opponent')
           .in('status', ['draft', 'registrations_open', 'registrations_closed', 'live'])
           .gte('start_time', new Date().toISOString())
@@ -46,7 +51,6 @@ export default function AdminDashboard() {
           .limit(5),
       ]);
 
-      setActiveMatch(matchRes.data || null);
       setUpcomingMatches(upcomingRes.data || []);
 
       const orders = ordersRes.data || [];
@@ -73,7 +77,8 @@ export default function AdminDashboard() {
         balanceDueCount: notPaidOrders.length,
         balanceDueTotal: notPaidOrders.reduce((sum, o) => sum + Math.max(0, (o.total_amount ?? 0) - (o.advance_paid ?? 0)), 0),
       });
-    } catch {
+    } catch (err) {
+      console.error('[AdminDashboard] fetch error:', err);
     } finally {
       setLoading(false);
     }
