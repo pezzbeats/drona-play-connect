@@ -500,9 +500,26 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       .not("locks_at", "is", null)
       .lte("locks_at", new Date().toISOString());
 
-    if (matchStatus === "ended" || matchStatus === "draft") {
-      results.push({ match_id: matchId, status: "skipped", reason: `status is ${matchStatus}` });
+    if (matchStatus === "ended") {
+      results.push({ match_id: matchId, status: "skipped", reason: `status is ended` });
       continue;
+    }
+
+    // Auto-promote draft → registrations_open if start_time within 24h
+    if (matchStatus === "draft") {
+      const matchStartTime = state.matches?.start_time ? new Date(state.matches.start_time) : null;
+      const hoursUntilStart = matchStartTime ? (matchStartTime.getTime() - Date.now()) / (3600 * 1000) : Infinity;
+      if (hoursUntilStart <= 24) {
+        await sb.from("matches").update({
+          status: "registrations_open",
+          is_active_for_registration: true,
+        }).eq("id", matchId);
+        log("info", "Auto-promoted draft → registrations_open", { match_id: matchId, hours_until_start: hoursUntilStart.toFixed(1) });
+        // Continue to sync (don't skip)
+      } else {
+        results.push({ match_id: matchId, status: "skipped", reason: `draft, starts in ${hoursUntilStart.toFixed(0)}h` });
+        continue;
+      }
     }
 
     try {
