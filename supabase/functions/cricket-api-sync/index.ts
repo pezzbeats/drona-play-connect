@@ -554,7 +554,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           last_delivery_summary: apiStatusStr,
           updated_at: new Date().toISOString(),
         }).eq("match_id", matchId);
-        await sb.from("matches").update({ status: "ended" }).eq("id", matchId);
+        await sb.from("matches").update({ status: "ended", is_active_for_registration: false }).eq("id", matchId);
         // Lock remaining windows
         await sb.from("prediction_windows")
           .update({ status: "locked", locks_at: new Date().toISOString() })
