@@ -1,113 +1,84 @@
 
 
-## Production Overhaul: Dual Leaderboard + Scoring Fixes + Overall Stats
+## Remaining Enhancements & Fixes
 
-This is a large but focused overhaul. Many items in the request are **already implemented** (retry logic, Gemini timeout, DLS, toss, rain delay, abandoned handling, optimistic UI, debouncing, skeleton loaders, error boundaries, structured logging). The plan covers only what's **genuinely new or broken**.
-
----
-
-### What Already Exists (No Changes Needed)
-
-- `fetchWithRetry` with exponential backoff (already in cricket-api-sync)
-- Gemini 2s timeout + 15s fallback (already implemented)
-- DLS target parsing, toss extraction, rain delay, abandoned match handling (all present)
-- Optimistic prediction submission in PredictionPanel (already done)
-- 150ms debounce in useRealtimeChannel (already done)
-- Global unhandledrejection handler in main.tsx (already done)
-- ErrorBoundary with structured logging (already done)
-- game_access RLS tightened (already migrated)
-- Unit tests for deliveryToOutcomeKey (already exist)
+After reviewing the full codebase, here are the most impactful improvements still available — grouped by priority.
 
 ---
 
-### Phase 1: Database — New Tables + Indexes
+### HIGH PRIORITY
 
-**Migration: Create `leaderboard_match_history` and `leaderboard_overall` tables**
+**1. PWA / Add-to-Home-Screen Support**
+The app has zero PWA support — no `manifest.json`, no service worker, no offline caching. For a mobile-first live cricket app used at a hotel venue, this is a big miss. Users should be able to "Add to Home Screen" for an app-like experience.
+- Add `public/manifest.json` with app name, icons, theme colors, `display: standalone`
+- Add a service worker with Workbox for caching static assets and API responses
+- Add install prompt banner on the landing page
 
-```text
-leaderboard_match_history
-  id, match_id, mobile, player_name, final_rank, final_points,
-  correct_predictions, total_predictions, accuracy_percentage, participated_at
+**2. OG Image is a Signed URL That Will Expire**
+The `og:image` in `index.html` (line 15) uses a Google Cloud signed URL with `Expires=1772784656` (~2026-03-03). This has likely **already expired**, meaning social sharing previews show a broken image. Replace with a permanent public URL from your `match-assets` storage bucket.
 
-leaderboard_overall
-  id, mobile, player_name, total_points_overall, correct_predictions_overall,
-  total_predictions_overall, matches_participated, matches_won, best_match_rank,
-  rank_position_overall, last_updated, created_at
+**3. SEO & Meta Improvements**
+- Missing `<link rel="canonical">` tag
+- Missing favicon / apple-touch-icon references in `index.html`
+- The `<title>` still says "Cricket Fan Night" — should match the app's actual branding "Drona Play Connect"
+- No structured data (JSON-LD) for the event
+
+**4. QueryClient is Unconfigured**
+`QueryClient` on line 60 of `App.tsx` is instantiated with zero config — no `staleTime`, no `retry`, no `gcTime`. Since the app uses React Query in `package.json`, configure sensible defaults:
+```
+staleTime: 30_000, retry: 2, refetchOnWindowFocus: false
 ```
 
-- RLS: Both tables readable by all, writable by authenticated
-- Enable realtime on `leaderboard_overall`
-- Add indexes on ranking/points columns
-- Add `scored_at` timestamp column to `prediction_windows` for idempotent scoring
+---
 
-### Phase 2: Edge Function — `update-overall-leaderboard`
+### MEDIUM PRIORITY
 
-**New file: `supabase/functions/update-overall-leaderboard/index.ts`**
+**5. IPL Team Logo Imports Are Bundled Statically**
+Both `Index.tsx` and `Register.tsx` import ~10 team logo PNGs at the top level — these are bundled into the main JS chunk even if unused. Move these to `public/` or use dynamic imports to reduce initial bundle size.
 
-Triggered when a match ends. Logic:
-1. Fetch all entries from `leaderboard` for that match_id
-2. For each player: insert into `leaderboard_match_history` with final stats
-3. For each player: query ALL their `leaderboard_match_history` records, aggregate totals
-4. Upsert into `leaderboard_overall` with aggregated stats
-5. Recompute `rank_position_overall` for all players
+**6. Landing Page Calls `cricket-api-sync` Edge Function on Every Load**
+Lines 425-428 of `Index.tsx`: if no matches found, it fires the sync function then refetches. Plus a 60s background polling loop. This is wasteful and could hit rate limits. Add a localStorage timestamp to prevent firing more than once per 5 minutes.
 
-### Phase 3: Auto-Trigger Overall Leaderboard on Match End
+**7. Admin Dashboard Fetches ALL Orders Without Match Filter**
+`AdminDashboard.tsx` line 41 fetches ALL orders in the database with no match filter. As the platform grows, this will become slow. Filter by active match or add pagination.
 
-**Update `cricket-api-sync`**: When `phase === "ended"` is set, call `update-overall-leaderboard` via internal fetch.
+**8. Ticket Page is 963 Lines**
+`Ticket.tsx` is a massive monolith. Extract into sub-components (TicketCard, TicketSearch, TicketActions) for maintainability.
 
-**Update `resolve-prediction-window`**: No changes needed — it already scores correctly.
-
-### Phase 4: Fix Scoring Bug in `scorePredictions`
-
-The current `scorePredictions` in cricket-api-sync has a bug: it updates `total_predictions` separately from `correct_predictions`, causing double-counting. Fix by doing a single pass that updates both correct and total counts atomically per player. Also add `scored_at` idempotency check.
-
-### Phase 5: Frontend — Overall Leaderboard Component
-
-**New file: `src/components/live/OverallLeaderboard.tsx`**
-
-- Fetches from `leaderboard_overall` ordered by `rank_position_overall`
-- Shows top 50 players with: total points, matches played, matches won, best rank, accuracy
-- Realtime subscription on `leaderboard_overall`
-- "You" badge for current user
-- Rank improvement animations (reuse pattern from existing Leaderboard)
-
-### Phase 6: Integrate Overall Leaderboard into Live Page
-
-**Update `src/pages/Live.tsx`**: Add a 4th tab "Season" that shows `OverallLeaderboard`.
-
-### Phase 7: Admin Overall Leaderboard Page
-
-**New file: `src/pages/admin/AdminOverallLeaderboard.tsx`**
-
-- View all players' overall stats with search
-- CSV export
-- Manual point adjustments
-- View player match history
-
-**Update `src/App.tsx`**: Add route `/admin/overall-leaderboard`.
-**Update `src/components/admin/AdminSidebar.tsx`**: Add nav item.
-
-### Phase 8: Tests
-
-**New file: `src/test/leaderboard-overall.test.ts`**
-- Test aggregation logic
-- Test rank computation
-- Test idempotent scoring (scored_at check)
+**9. No Loading/Error States on Several Admin Pages**
+Some admin pages silently fail with empty `catch {}` blocks (e.g., AdminDashboard line 76). Add proper error toasts.
 
 ---
 
-### File Summary
+### LOW PRIORITY / POLISH
 
-| File | Change |
-|---|---|
-| **Migration SQL** | Create `leaderboard_match_history`, `leaderboard_overall` tables; add `scored_at` to `prediction_windows`; indexes |
-| `supabase/functions/update-overall-leaderboard/index.ts` | **New** — aggregates match results into overall leaderboard |
-| `supabase/functions/cricket-api-sync/index.ts` | Fix `scorePredictions` double-counting bug; add `scored_at` idempotency; call `update-overall-leaderboard` on match end |
-| `supabase/config.toml` | Add `[functions.update-overall-leaderboard]` with `verify_jwt = false` |
-| `src/components/live/OverallLeaderboard.tsx` | **New** — season leaderboard component |
-| `src/pages/Live.tsx` | Add "Season" tab |
-| `src/pages/admin/AdminOverallLeaderboard.tsx` | **New** — admin overall leaderboard management |
-| `src/App.tsx` | Add admin route |
-| `src/components/admin/AdminSidebar.tsx` | Add nav item |
-| `src/test/leaderboard-overall.test.ts` | **New** — tests for aggregation logic |
+**10. Accessibility Improvements**
+- Many interactive elements use `<div>` or `<span>` with `onClick` but no `role="button"` or keyboard handlers
+- Color contrast on `text-muted-foreground` against dark backgrounds may not meet WCAG AA
+- Missing `aria-label` on icon-only buttons throughout admin panel
+
+**11. WhatsApp / Share Integration**
+The Ticket page mentions share functionality. Add proper Web Share API integration with WhatsApp deeplink fallback for sharing tickets and match invites.
+
+**12. Rate Limiting Feedback on Registration**
+If `create-order` returns `RATE_LIMITED`, the user gets a generic error. Surface the specific "too many attempts" message clearly.
+
+---
+
+### Recommended Implementation Order
+
+| # | Item | Effort | Impact |
+|---|------|--------|--------|
+| 1 | Fix expired OG image URL | Small | High (social sharing broken) |
+| 2 | Configure QueryClient defaults | Small | Medium (prevents stale data issues) |
+| 3 | Add PWA manifest + install prompt | Medium | High (app-like experience) |
+| 4 | Throttle landing page sync calls | Small | Medium (prevents rate limits) |
+| 5 | Filter admin dashboard by active match | Small | Medium (performance) |
+| 6 | Lazy-load team logos | Small | Medium (bundle size) |
+| 7 | SEO fixes (canonical, favicon, title) | Small | Medium |
+| 8 | Accessibility audit fixes | Medium | Medium |
+| 9 | Refactor Ticket.tsx | Medium | Low (maintainability) |
+| 10 | Web Share API for tickets | Small | Low (nice-to-have) |
+
+Would you like me to implement all of these, or pick specific items?
 
