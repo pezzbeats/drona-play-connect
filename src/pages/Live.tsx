@@ -50,7 +50,7 @@ function LiveContent({
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // ── Page-level sync: keeps cricket-api-sync polling on ALL tabs ──
-  const syncState = useLiveMatchSync(matchPhase);
+  const syncState = useLiveMatchSync(matchId, matchPhase);
 
   // Fetch initial phase
   useEffect(() => {
@@ -280,9 +280,9 @@ function LiveContent({
       {/* Scrollable content */}
       <div className="flex-1 relative z-10 overflow-y-auto">
         <div className="max-w-lg mx-auto px-4 py-4">
-          {activeTab === 'score' && <Scoreboard matchId={matchId} />}
+          {activeTab === 'score' && <Scoreboard matchId={matchId} syncHealth={syncState} />}
           {activeTab === 'predict' && (
-            <PredictionPanel matchId={matchId} mobile={session.mobile} pin={session.pin} />
+            <PredictionPanel matchId={matchId} mobile={session.mobile} pin={session.pin} syncHealth={syncState} />
           )}
           {activeTab === 'leaderboard' && (
             <Leaderboard matchId={matchId} mobile={session.mobile} />

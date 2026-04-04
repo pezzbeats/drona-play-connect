@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-interface SyncState {
+export interface LiveMatchSyncState {
   syncing: boolean;
   lastSyncAt: number | null;
   lastSyncError: string | null;
+  degraded: boolean;
+  degradedReason: string | null;
   recommendedInterval: number;
   isStale: boolean;
 }
@@ -20,10 +22,14 @@ const STALE_THRESHOLD_MS = 45_000; // consider stale after 45s without successfu
  * Mount this once in Live.tsx — it never unmounts while the page is open.
  */
 export function useLiveMatchSync(matchPhase: string | null | undefined): SyncState {
+export function useLiveMatchSync(matchId: string | null | undefined, matchPhase: string | null | undefined): LiveMatchSyncState {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState(false);
+  const [degradedReason, setDegradedReason] = useState<string | null>(null);
   const [recommendedInterval, setRecommendedInterval] = useState(DEFAULT_LIVE_INTERVAL);
+  const [now, setNow] = useState(() => Date.now());
 
   const mountedRef = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -33,27 +39,42 @@ export function useLiveMatchSync(matchPhase: string | null | undefined): SyncSta
 
   const poll = useCallback(async () => {
     if (!mountedRef.current) return;
+    clearTimeout(timeoutRef.current);
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('cricket-api-sync', {
         body: null,
         headers: {},
       });
+
+      const syncPayload = data?.sync ?? data;
+      const matchResult = Array.isArray(syncPayload?.results) && matchId
+        ? syncPayload.results.find((result: any) => result?.match_id === matchId) ?? null
+        : null;
+
       if (mountedRef.current) {
-        if (error) {
-          setLastSyncError(error.message || 'Sync failed');
+        if (error || matchResult?.status === 'error') {
+          setLastSyncError(error?.message || matchResult?.reason || 'Sync failed');
+          setDegraded(false);
+          setDegradedReason(null);
         } else {
           setLastSyncError(null);
           setLastSyncAt(Date.now());
-          if (data?.recommended_interval && typeof data.recommended_interval === 'number') {
-            intervalRef.current = data.recommended_interval;
-            setRecommendedInterval(data.recommended_interval);
+          const nextInterval = syncPayload?.recommended_interval;
+          if (typeof nextInterval === 'number') {
+            intervalRef.current = nextInterval;
+            setRecommendedInterval(nextInterval);
           }
+
+          setDegraded(Boolean(matchResult?.degraded));
+          setDegradedReason(matchResult?.degraded ? (matchResult?.reason || 'Live feed delayed') : null);
         }
       }
     } catch (e: any) {
       if (mountedRef.current) {
         setLastSyncError(e?.message || 'Sync failed');
+        setDegraded(false);
+        setDegradedReason(null);
       }
     } finally {
       if (mountedRef.current) {
@@ -64,7 +85,17 @@ export function useLiveMatchSync(matchPhase: string | null | undefined): SyncSta
         }
       }
     }
-  }, [isActive]);
+  }, [isActive, matchId]);
+
+  useEffect(() => {
+    if (!isActive && lastSyncAt === null) return;
+
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isActive, lastSyncAt]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -90,8 +121,16 @@ export function useLiveMatchSync(matchPhase: string | null | undefined): SyncSta
   }, [isActive, matchPhase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isStale = lastSyncAt !== null
-    ? (Date.now() - lastSyncAt) > STALE_THRESHOLD_MS
+    ? (now - lastSyncAt) > STALE_THRESHOLD_MS
     : false;
 
-  return { syncing, lastSyncAt, lastSyncError, recommendedInterval, isStale };
+  return {
+    syncing,
+    lastSyncAt,
+    lastSyncError,
+    degraded,
+    degradedReason,
+    recommendedInterval,
+    isStale,
+  };
 }

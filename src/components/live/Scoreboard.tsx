@@ -4,6 +4,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Loader2, Wifi, WifiOff, ChevronDown, ChevronUp, Trophy, Target, Flame } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
+import type { LiveMatchSyncState } from '@/hooks/useLiveMatchSync';
 
 interface LiveState {
   phase: string;
@@ -32,6 +33,7 @@ interface LiveState {
 interface ScoreboardProps {
   matchId: string;
   initialState?: LiveState | null;
+  syncHealth?: Pick<LiveMatchSyncState, 'syncing' | 'lastSyncError' | 'isStale' | 'degraded' | 'degradedReason'>;
 }
 
 const phaseLabel: Record<string, string> = {
@@ -50,7 +52,7 @@ interface MatchSummary {
   topWicketTaker: { name: string; wickets: number } | null;
 }
 
-export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
+export function Scoreboard({ matchId, initialState, syncHealth }: ScoreboardProps) {
   const [state, setState] = useState<LiveState | null>(initialState || null);
   const [teams, setTeams] = useState<Record<string, any>>({});
   const [players, setPlayers] = useState<Record<string, any>>({});
@@ -295,6 +297,22 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
 
   const latestRound = superOverRounds.length > 0 ? superOverRounds[superOverRounds.length - 1] : null;
   const hasDecidedViaSuperOver = state?.phase === 'ended' && superOverRounds.length > 0;
+  const feedDelayed = Boolean(syncHealth?.degraded || syncHealth?.isStale);
+  const feedErrored = Boolean(syncHealth?.lastSyncError);
+  const feedLabel = feedErrored
+    ? 'Feed error'
+    : feedDelayed
+      ? 'Feed delayed'
+      : syncHealth?.syncing
+        ? 'Syncing feed…'
+        : 'Feed healthy';
+  const feedTone = feedErrored
+    ? 'text-destructive'
+    : feedDelayed
+      ? 'text-warning'
+      : syncHealth?.syncing
+        ? 'text-primary'
+        : 'text-success';
 
   if (!state) {
     return (
@@ -343,23 +361,28 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
               <span className="ml-1">· Round {latestRound.round_number}</span>
             )}
           </span>
-          <div className="flex items-center gap-1.5">
-            {reconnecting ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 text-warning animate-spin" />
-                <span className="text-xs text-warning">Reconnecting…</span>
-              </>
-            ) : connected ? (
-              <>
-                <Wifi className="h-3.5 w-3.5 text-success" />
-                <span className="text-xs text-muted-foreground">Live</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Connecting…</span>
-              </>
-            )}
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5">
+              {reconnecting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 text-warning animate-spin" />
+                  <span className="text-xs text-warning">Reconnecting…</span>
+                </>
+              ) : connected ? (
+                <>
+                  <Wifi className="h-3.5 w-3.5 text-success" />
+                  <span className="text-xs text-muted-foreground">Live</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Connecting…</span>
+                </>
+              )}
+            </div>
+            <span className={`text-[10px] font-semibold ${feedTone}`}>
+              {feedLabel}
+            </span>
           </div>
         </div>
 
