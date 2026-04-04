@@ -664,7 +664,26 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         inn2Overs = getOvers(i2);
       }
 
-      const currentInnings = inn2Overs > 0 || inn2Score > 0 ? 2 : 1;
+      // ── Safe innings resolver ─────────────────────────────────────────
+      // Only consider innings 2 active if it has real ball-level evidence
+      // AND innings 1 has a meaningful score (not just structural shells)
+      const inn2HasRealActivity = (inn2Overs > 0 && inn2Score > 0) || inn2Wickets > 0;
+      const inn1HasMinimalScore = inn1Score > 0 || inn1Overs >= 1;
+      const apiStatusHint = (apiStatusStr || "").toLowerCase();
+      const apiSaysInnings2 = apiStatusHint.includes("2nd") || apiStatusHint.includes("innings 2") || apiStatusHint.includes("second");
+      
+      let currentInnings = 1;
+      if (apiSaysInnings2 && inn1HasMinimalScore) {
+        currentInnings = 2;
+      } else if (inn2HasRealActivity && inn1HasMinimalScore) {
+        currentInnings = 2;
+      }
+      log("info", "Innings resolved", {
+        match_id: matchId, currentInnings,
+        inn1: `${inn1Score}/${inn1Wickets} (${inn1Overs})`,
+        inn2: `${inn2Score}/${inn2Wickets} (${inn2Overs})`,
+        inn2HasRealActivity, apiSaysInnings2,
+      });
 
       // DLS target adjustment
       let dlsTarget: number | null = null;
@@ -674,7 +693,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         else if (typeof dlsData === "object") dlsTarget = dlsData.target || dlsData.par_score || dlsData.revised_target || null;
       }
 
-      // Fetch ball-by-ball and record deliveries
+      // ── Fetch ball-by-ball and record deliveries ────────────────────
       let newDeliveries = 0;
       const bbbRes = await fetchWithRetry(
         `${ROANUZ_BASE}/${projectKey}/match/${extId}/ball-by-ball/`, { headers }
@@ -682,91 +701,162 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       const bbbBody = await bbbRes.json();
 
       if (bbbBody.data) {
-        const overs = bbbBody.data.overs || bbbBody.data.over_groups || {};
+        // ── Ball-by-ball normalizer: handle multiple API shapes ──────
+        // Shape 1: data.overs / data.over_groups (flat)
+        // Shape 2: data.innings.{key}.overs (innings-grouped)
+        // Shape 3: data.innings as array with overs inside
+        let oversForInnings: Record<number, any> = {};
 
-        const { count: existingCount } = await sb
-          .from("deliveries")
-          .select("id", { count: "exact", head: true })
-          .eq("match_id", matchId)
-          .eq("innings_no", currentInnings);
+        const flatOvers = bbbBody.data.overs || bbbBody.data.over_groups;
+        if (flatOvers && typeof flatOvers === "object" && Object.keys(flatOvers).length > 0) {
+          // Flat structure: assume current innings
+          oversForInnings[currentInnings] = flatOvers;
+        }
 
-        const allBalls: any[] = [];
-        for (const overKey of Object.keys(overs)) {
-          const overData = overs[overKey];
-          const balls = overData?.balls || overData?.deliveries || [];
-          const overNo = overData?.over_number ?? parseInt(overKey) + 1;
-          for (const ball of balls) {
-            allBalls.push({ ...ball, _overNo: overNo });
+        // Also check innings-grouped structures
+        const bbbInnings = bbbBody.data.innings || {};
+        const bbbInningsKeys = Object.keys(bbbInnings);
+        if (bbbInningsKeys.length > 0) {
+          for (let idx = 0; idx < bbbInningsKeys.length; idx++) {
+            const innData = bbbInnings[bbbInningsKeys[idx]];
+            const innOvers = innData?.overs || innData?.over_groups || innData;
+            if (innOvers && typeof innOvers === "object") {
+              // If the innings data IS the overs array/object directly
+              if (innOvers.balls || innOvers.deliveries) {
+                // Single over object, wrap it
+                oversForInnings[idx + 1] = { "0": innOvers };
+              } else {
+                oversForInnings[idx + 1] = innOvers;
+              }
+            }
           }
         }
 
-        const newBalls = allBalls.slice(existingCount || 0);
+        // Also check if data itself is an array of overs
+        if (Array.isArray(bbbBody.data)) {
+          oversForInnings[currentInnings] = {};
+          for (let i = 0; i < bbbBody.data.length; i++) {
+            oversForInnings[currentInnings][String(i)] = bbbBody.data[i];
+          }
+        }
 
-        for (const ball of newBalls) {
-          const overNo = ball._overNo;
-          const ballNo = ball.ball_number || ball.ball || 1;
+        log("info", "BBB payload shape", {
+          match_id: matchId,
+          has_flat_overs: !!flatOvers,
+          innings_keys: bbbInningsKeys.length,
+          innings_mapped: Object.keys(oversForInnings),
+        });
 
-          const runsOffBat = ball.runs?.batting || ball.batsman_runs || ball.runs || 0;
-          const extrasRuns = ball.runs?.extras || ball.extras_runs || 0;
-          let extrasType = "none";
-          const ballExtras = ball.extras || {};
-          if (ballExtras.wide || ball.is_wide) extrasType = "wide";
-          else if (ballExtras.no_ball || ball.is_no_ball) extrasType = "no_ball";
-          else if (ballExtras.bye || ball.is_bye) extrasType = "bye";
-          else if (ballExtras.leg_bye || ball.is_leg_bye) extrasType = "leg_bye";
+        // Process each innings we found
+        for (const [innNoStr, overs] of Object.entries(oversForInnings)) {
+          const innNo = parseInt(innNoStr);
+          if (isNaN(innNo)) continue;
 
-          const isWicket = ball.wicket?.is_out || ball.is_wicket || false;
-          const wicketType = ball.wicket?.type || ball.wicket_type || null;
-
-          // Auto-lock open prediction windows BEFORE inserting delivery
-          const { data: openWindows } = await sb
-            .from("prediction_windows")
-            .select("id")
+          // Get existing deliveries for this innings
+          const { data: existingDeliveries } = await sb
+            .from("deliveries")
+            .select("innings_no, over_no, ball_no")
             .eq("match_id", matchId)
-            .eq("status", "open");
+            .eq("innings_no", innNo);
 
-          if (openWindows && openWindows.length > 0) {
-            const windowIds = openWindows.map((w: any) => w.id);
-            await sb
-              .from("prediction_windows")
-              .update({ status: "locked", locks_at: new Date().toISOString() })
-              .in("id", windowIds);
+          const existingSet = new Set(
+            (existingDeliveries || []).map((d: any) => `${d.innings_no}-${d.over_no}-${d.ball_no}`)
+          );
 
-            const outcomeKey = deliveryToOutcomeKey(runsOffBat, isWicket, extrasType);
-            const correctAnswer = { key: outcomeKey };
-
-            for (const wId of windowIds) {
-              await sb
-                .from("prediction_windows")
-                .update({ status: "resolved", correct_answer: correctAnswer })
-                .eq("id", wId);
-
-              await scorePredictions(sb, matchId, wId, outcomeKey);
+          const allBalls: any[] = [];
+          for (const overKey of Object.keys(overs)) {
+            const overData = overs[overKey];
+            if (!overData || typeof overData !== "object") continue;
+            const balls = overData?.balls || overData?.deliveries || (Array.isArray(overData) ? overData : []);
+            const overNo = overData?.over_number ?? parseInt(overKey) + 1;
+            for (const ball of balls) {
+              allBalls.push({ ...ball, _overNo: overNo, _innNo: innNo });
             }
           }
 
-          let { data: overCtrl } = await sb
-            .from("over_control").select("id")
-            .eq("match_id", matchId).eq("innings_no", currentInnings).eq("over_no", overNo)
-            .maybeSingle();
+          // Deduplicate using stable identity (innings, over, ball)
+          for (const ball of allBalls) {
+            const overNo = ball._overNo;
+            const ballNo = ball.ball_number || ball.ball || 1;
+            const dedupeKey = `${innNo}-${overNo}-${ballNo}`;
 
-          if (!overCtrl) {
-            const { data: newOver } = await sb
-              .from("over_control")
-              .insert({ match_id: matchId, over_no: overNo, innings_no: currentInnings, status: "active" })
-              .select("id").single();
-            overCtrl = newOver;
+            if (existingSet.has(dedupeKey)) continue;
+            existingSet.add(dedupeKey);
+
+            const runsOffBat = ball.runs?.batting || ball.batsman_runs || ball.runs || 0;
+            const extrasRuns = ball.runs?.extras || ball.extras_runs || 0;
+            let extrasType = "none";
+            const ballExtras = ball.extras || {};
+            if (ballExtras.wide || ball.is_wide) extrasType = "wide";
+            else if (ballExtras.no_ball || ball.is_no_ball) extrasType = "no_ball";
+            else if (ballExtras.bye || ball.is_bye) extrasType = "bye";
+            else if (ballExtras.leg_bye || ball.is_leg_bye) extrasType = "leg_bye";
+
+            const isWicket = ball.wicket?.is_out || ball.is_wicket || false;
+            const wicketType = ball.wicket?.type || ball.wicket_type || null;
+
+            // Auto-lock open prediction windows BEFORE inserting delivery
+            const { data: openWindows } = await sb
+              .from("prediction_windows")
+              .select("id")
+              .eq("match_id", matchId)
+              .eq("status", "open");
+
+            if (openWindows && openWindows.length > 0) {
+              const windowIds = openWindows.map((w: any) => w.id);
+              await sb
+                .from("prediction_windows")
+                .update({ status: "locked", locks_at: new Date().toISOString() })
+                .in("id", windowIds);
+
+              const outcomeKey = deliveryToOutcomeKey(runsOffBat, isWicket, extrasType);
+              const correctAnswer = { key: outcomeKey };
+
+              for (const wId of windowIds) {
+                await sb
+                  .from("prediction_windows")
+                  .update({ status: "resolved", correct_answer: correctAnswer })
+                  .eq("id", wId);
+
+                await scorePredictions(sb, matchId, wId, outcomeKey);
+              }
+            }
+
+            let { data: overCtrl } = await sb
+              .from("over_control").select("id")
+              .eq("match_id", matchId).eq("innings_no", innNo).eq("over_no", overNo)
+              .maybeSingle();
+
+            if (!overCtrl) {
+              const { data: newOver } = await sb
+                .from("over_control")
+                .insert({ match_id: matchId, over_no: overNo, innings_no: innNo, status: "active" })
+                .select("id").single();
+              overCtrl = newOver;
+            }
+            if (!overCtrl) continue;
+
+            await sb.from("deliveries").insert({
+              match_id: matchId, over_id: overCtrl.id, over_no: overNo,
+              innings_no: innNo, ball_no: ballNo, delivery_no: ballNo,
+              runs_off_bat: runsOffBat, extras_type: extrasType, extras_runs: extrasRuns,
+              is_wicket: isWicket, wicket_type: wicketType,
+            });
+
+            newDeliveries++;
           }
-          if (!overCtrl) continue;
+        }
 
-          await sb.from("deliveries").insert({
-            match_id: matchId, over_id: overCtrl.id, over_no: overNo,
-            innings_no: currentInnings, ball_no: ballNo, delivery_no: ballNo,
-            runs_off_bat: runsOffBat, extras_type: extrasType, extras_runs: extrasRuns,
-            is_wicket: isWicket, wicket_type: wicketType,
+        // No-silent-failure guard: if score advanced but we parsed zero balls, log warning
+        const scoreAdvanced = (inn1Score > (state.last_innings1_score || 0)) || (inn2Score > (state.last_innings2_score || 0));
+        if (scoreAdvanced && newDeliveries === 0) {
+          log("warn", "Score advanced but zero deliveries parsed — BBB payload may have unknown shape", {
+            match_id: matchId,
+            inn1Score, inn2Score,
+            last_inn1: state.last_innings1_score,
+            last_inn2: state.last_innings2_score,
+            bbb_keys: Object.keys(bbbBody.data || {}).join(","),
           });
-
-          newDeliveries++;
         }
 
         // Auto-open next prediction window
@@ -805,8 +895,6 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           }
         }
       }
-
-      // Determine phase
       let phase = "innings1";
       const mStatus = (apiStatusStr || "").toLowerCase();
       if (currentInnings === 2) phase = "innings2";

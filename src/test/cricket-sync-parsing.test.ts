@@ -128,3 +128,47 @@ describe('isAbandonedOrNoResult', () => {
     expect(isAbandonedOrNoResult("completed")).toBe(false);
   });
 });
+
+// ── Innings resolver logic (mirrors cricket-api-sync safe resolver) ──
+function resolveCurrentInnings(
+  inn1Score: number, inn1Overs: number,
+  inn2Score: number, inn2Overs: number, inn2Wickets: number,
+  apiStatusStr: string
+): number {
+  const inn2HasRealActivity = (inn2Overs > 0 && inn2Score > 0) || inn2Wickets > 0;
+  const inn1HasMinimalScore = inn1Score > 0 || inn1Overs >= 1;
+  const apiStatusHint = (apiStatusStr || "").toLowerCase();
+  const apiSaysInnings2 = apiStatusHint.includes("2nd") || apiStatusHint.includes("innings 2") || apiStatusHint.includes("second");
+
+  if (apiSaysInnings2 && inn1HasMinimalScore) return 2;
+  if (inn2HasRealActivity && inn1HasMinimalScore) return 2;
+  return 1;
+}
+
+describe('resolveCurrentInnings', () => {
+  it('returns 1 when only innings 1 has data', () => {
+    expect(resolveCurrentInnings(85, 10, 0, 0, 0, "Live - In Progress")).toBe(1);
+  });
+
+  it('returns 1 when innings 2 has structural shell but no real activity', () => {
+    // This is the key bug fix: inn2 exists in payload but has 0/0/0
+    expect(resolveCurrentInnings(180, 20, 0, 0, 0, "Live")).toBe(1);
+  });
+
+  it('returns 2 when innings 2 has real ball activity', () => {
+    expect(resolveCurrentInnings(180, 20, 45, 5, 1, "Live")).toBe(2);
+  });
+
+  it('returns 2 when API status says 2nd innings', () => {
+    expect(resolveCurrentInnings(180, 20, 0, 0, 0, "2nd Innings - In Progress")).toBe(2);
+  });
+
+  it('returns 1 when API says 2nd but innings 1 has no score', () => {
+    // Edge case: API is ahead of our data
+    expect(resolveCurrentInnings(0, 0, 0, 0, 0, "2nd Innings")).toBe(1);
+  });
+
+  it('returns 2 when inn2 has wickets but no score', () => {
+    expect(resolveCurrentInnings(150, 20, 0, 0, 1, "Live")).toBe(2);
+  });
+});
