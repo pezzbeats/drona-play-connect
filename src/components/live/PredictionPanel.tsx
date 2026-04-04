@@ -359,7 +359,23 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
     await Promise.all([fetchWindows(), fetchMyScore()]);
   }, [fetchWindows, fetchMyScore]);
 
-  useRealtimeChannel(`predictions-panel-${matchId}`, subscriptions, fetchAll);
+  const { connected, reconnecting } = useRealtimeChannel(`predictions-panel-${matchId}`, subscriptions, fetchAll);
+
+  // ── Fallback polling: self-heal when realtime is degraded or no open windows ──
+  useEffect(() => {
+    // Poll every 5s when disconnected/reconnecting, or every 8s when connected but no open window
+    const hasOpenWindow = windows.some(w => w.status === 'open');
+    const needsPoll = !connected || reconnecting || (!hasOpenWindow && windows.length >= 0);
+    if (!needsPoll) return;
+
+    const interval = (!connected || reconnecting) ? 5000 : 8000;
+    const timer = setInterval(() => {
+      fetchWindows();
+      fetchMyScore();
+    }, interval);
+
+    return () => clearInterval(timer);
+  }, [connected, reconnecting, windows, fetchWindows, fetchMyScore]);
 
   const handleOptionTap = async (windowId: string, optKey: string) => {
     if (submittedWindows[windowId]) return;
