@@ -149,6 +149,17 @@ function LiveContent({
         }
       },
     },
+    {
+      event: '*',
+      schema: 'public',
+      table: 'match_live_state',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new?.phase) {
+          setMatchPhase((payload.new as any).phase);
+        }
+      },
+    },
   ], [matchId, session.mobile, onMatchEnded]);
 
   const refetchMatch = useCallback(async () => {
