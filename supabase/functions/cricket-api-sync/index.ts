@@ -715,6 +715,9 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       // ── Fetch ball-by-ball and record deliveries ────────────────────
       let newDeliveries = 0;
+      let isDegraded = false;
+      let degradedMessage: string | undefined = undefined;
+
       const bbbRes = await fetchWithRetry(
         `${ROANUZ_BASE}/${projectKey}/match/${extId}/ball-by-ball/`, { headers }
       );
