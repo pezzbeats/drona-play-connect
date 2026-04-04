@@ -27,6 +27,7 @@ export function useLiveMatchSync(
 ): LiveMatchSyncState {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [lastAttemptAt, setLastAttemptAt] = useState<number | null>(null);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [degraded, setDegraded] = useState(false);
   const [degradedReason, setDegradedReason] = useState<string | null>(null);
