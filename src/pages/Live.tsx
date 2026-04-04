@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useLiveMatchSync } from '@/hooks/useLiveMatchSync';
 import { BackgroundOrbs } from '@/components/ui/BackgroundOrbs';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -45,7 +46,21 @@ function LiveContent({
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [guessNudge, setGuessNudge] = useState(false);
+  const [matchPhase, setMatchPhase] = useState<string | null>(null);
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // ── Page-level sync: keeps cricket-api-sync polling on ALL tabs ──
+  const syncState = useLiveMatchSync(matchPhase);
+
+  // Fetch initial phase
+  useEffect(() => {
+    supabase
+      .from('match_live_state')
+      .select('phase')
+      .eq('match_id', matchId)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setMatchPhase(data.phase); });
+  }, [matchId]);
 
   // Personal rank chip state
   const [myRank, setMyRank] = useState<{ rank_position: number | null; total_points: number } | null>(null);
@@ -131,6 +146,17 @@ function LiveContent({
       callback: (payload) => {
         if (payload.new?.mobile === session.mobile) {
           setMyRank({ rank_position: payload.new.rank_position, total_points: payload.new.total_points });
+        }
+      },
+    },
+    {
+      event: '*',
+      schema: 'public',
+      table: 'match_live_state',
+      filter: `match_id=eq.${matchId}`,
+      callback: (payload) => {
+        if (payload.new?.phase) {
+          setMatchPhase((payload.new as any).phase);
         }
       },
     },
