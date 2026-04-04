@@ -1,151 +1,120 @@
 
-## Fix Plan: Real-Time Guess Flow Is Breaking in Two Places
+## Fix plan: Guess screen is stuck because sync is owned by the wrong component
 
 ### What I found
-- The live match is present and updating in the backend:
-  - `matches`: GT vs RR is `live`
-  - `game_access`: the current user has access to that match
-  - `match_live_state`: scores are changing
-- But the core gameplay pipeline is broken:
-  - `deliveries`: no rows for the live match
-  - `prediction_windows`: no rows for the live match
-- That means the app is not actually “stuck” in the UI first. The backend is not producing ball-by-ball events/windows reliably.
-- There is also a frontend resilience gap:
-  - the Guess screen depends mostly on realtime updates after initial load
-  - when websocket state is reconnecting, users can remain on “No Active Fun Guess” even if data appears later
-- I also found a likely parsing bug:
-  - `match_live_state.current_innings` is showing `2` while innings 1 score is still moving
-  - so the innings detection in `cricket-api-sync` is too naive for the current API payload
+- The biggest bug is architectural: `cricket-api-sync` is polled from `Scoreboard.tsx`.
+- In `Live.tsx`, only the active tab is mounted:
+  - `score` mounts `Scoreboard`
+  - `predict` mounts `PredictionPanel`
+- So when a user is on the Guess tab, `Scoreboard` unmounts and the backend sync loop stops.
+- `PredictionPanel` only polls database tables (`prediction_windows`, `match_flags`, leaderboard). It does not keep the live match sync running.
+- Result: the UI can sit forever on “Waiting for Next Ball” because no new windows are being produced while the user is on the Guess tab.
+- Edge logs also show score updates and innings resolution, but no clear evidence that ball-by-ball parsing is consistently producing deliveries/windows. So there is a second reliability gap in `cricket-api-sync`.
 
-### Root causes to fix
-1. **`cricket-api-sync` ball-by-ball parser is too narrow**
-   - it assumes `bbbBody.data.overs || bbbBody.data.over_groups`
-   - if the provider returns a different live shape, no deliveries are produced and no windows open
+## Implementation
+### 1) Move match sync to a page-level hook that never unmounts
+Create a shared hook, e.g. `src/hooks/useLiveMatchSync.ts`, and use it from `src/pages/Live.tsx`.
 
-2. **Current innings detection is incorrect**
-   - it switches to innings 2 based on weak heuristics
-   - this can misclassify live state and break delivery handling
+This hook will:
+- invoke `cricket-api-sync` immediately on page load
+- keep polling using the returned `recommended_interval`
+- stay active regardless of which tab is open
+- stop or slow down when the match is ended
+- expose:
+  - `syncing`
+  - `lastSyncAt`
+  - `lastSyncError`
+  - `recommendedInterval`
+  - `isStale`
 
-3. **Guess UI lacks a strong fallback when realtime is degraded**
-   - it shows a reconnecting banner, but does not aggressively self-heal the Guess data feed
+This is the permanent fix for “works on Score tab, freezes on Guess tab”.
 
-4. **The empty-state copy is misleading**
-   - it says “Admin will open the next guess window shortly”
-   - but this match flow is automated, so the message should reflect sync status instead
+### 2) Make `Scoreboard` display data only, not own the sync engine
+Refactor `src/components/live/Scoreboard.tsx` to:
+- remove the direct `cricket-api-sync` polling responsibility
+- keep realtime + data fetch logic for rendering only
+- optionally receive sync freshness from `Live.tsx` to show:
+  - “Live feed syncing”
+  - “Live feed delayed”
 
----
+This separates rendering from orchestration.
 
-## Implementation plan
-
-### 1) Harden the sync engine
-**File:** `supabase/functions/cricket-api-sync/index.ts`
-
-I’ll refactor the live sync logic so it can reliably extract deliveries from multiple API shapes and stop silently doing nothing.
+### 3) Upgrade `PredictionPanel` so it can self-heal
+Update `src/components/live/PredictionPanel.tsx` to consume page-level sync state and improve fallback behavior.
 
 Changes:
-- Add a **ball-by-ball normalizer** that can read:
-  - `data.overs`
-  - `data.over_groups`
-  - innings-grouped structures if present
-  - array or object variants
-- Add a **safe innings resolver** that prefers explicit innings metadata from the API, then falls back to score/balls evidence instead of the current overs-only shortcut
-- Add stronger logging:
-  - raw payload shape summary
+- if realtime is reconnecting or feed is stale, show a stronger syncing state
+- if there is no open window for too long during a live phase, trigger a guarded refresh path
+- distinguish these states:
+  - `Syncing live feed…`
+  - `Waiting for next ball…`
+  - `Live feed delayed — retrying`
+  - `Guesses paused by admin`
+
+Also keep the current optimistic submission flow.
+
+### 4) Harden `cricket-api-sync` where windows are created
+Update `supabase/functions/cricket-api-sync/index.ts` to make delivery/window creation more observable and reliable.
+
+Changes:
+- extract the ball-by-ball normalization into a pure helper
+- log:
   - parsed innings count
+  - parsed over count
   - parsed ball count
-  - delivery insert count
-  - window open/resolve actions
-- Add a **no-silent-failure guard**:
-  - if score/balls advance but parsed balls are zero, log a warning and keep retrying instead of pretending sync succeeded
-- Keep the existing automation:
-  - auto-lock open window before delivery
-  - score predictions
-  - auto-open next window
-  - match lifecycle handling
+  - inserted delivery count
+  - opened/resolved window count
+- if score changes but zero new deliveries are parsed:
+  - mark the sync result as degraded
+  - keep retrying on next cycle
+  - return enough metadata for the UI/admin tools to detect the issue
+- ensure duplicate retries do not open duplicate windows
 
-### 2) Make delivery ingestion idempotent and safer
-**Files:** `supabase/functions/cricket-api-sync/index.ts` + migration if needed
+### 5) Reduce non-essential sync noise
+Edge logs show repeated `Gemini API error 404` warnings.
+That should not block gameplay, but it should be isolated so live sync stays clean.
 
-Changes:
-- Stop relying only on `existingCount` + `slice(...)` as the main dedupe strategy
-- Match balls using stable delivery identity where possible:
-  - innings number
-  - over number
-  - ball number
-- If needed, add a DB uniqueness guard on deliveries for production safety:
+Plan:
+- keep fallback interval logic
+- make AI pacing fully non-blocking
+- suppress or downgrade repeated 404 noise so it does not mask real sync problems
+
+### 6) Add targeted tests for the actual failure mode
+Add or extend tests to cover:
+- tab switching does not stop live sync
+- `PredictionPanel` recovers when realtime is degraded
+- score changes with zero parsed deliveries enter degraded state
+- delivery normalization from multiple payload shapes
+- next-ball windows open exactly once for new deliveries
+
+## Files likely affected
+- `src/pages/Live.tsx`
+- `src/components/live/Scoreboard.tsx`
+- `src/components/live/PredictionPanel.tsx`
+- `src/hooks/useLiveMatchSync.ts` (new)
+- `supabase/functions/cricket-api-sync/index.ts`
+- `src/test/cricket-sync-parsing.test.ts`
+- `src/test/live-sync-tab-persistence.test.tsx` (new)
+
+## Technical details
 ```text
-(match_id, innings_no, over_no, ball_no)
+Current problem:
+Live page
+ ├─ Score tab -> Scoreboard mounted -> sync runs
+ ├─ Guess tab -> Scoreboard unmounted -> sync stops
+ └─ PredictionPanel only reads DB -> waits forever
+
+Target design:
+Live page
+ ├─ useLiveMatchSync() always mounted
+ ├─ Scoreboard reads live state
+ ├─ PredictionPanel reads windows + sync freshness
+ └─ tab switches do not affect backend sync
 ```
-This prevents duplicate inserts during retries/reconnects.
-
-### 3) Fix the Guess screen so it self-recovers even if realtime is shaky
-**File:** `src/components/live/PredictionPanel.tsx`
-
-Changes:
-- Capture `connected` / `reconnecting` from `useRealtimeChannel`
-- Add a **fallback polling loop** while:
-  - realtime is disconnected/reconnecting, or
-  - the match is live but there is no open window yet
-- Poll lightweight reads for:
-  - latest `prediction_windows`
-  - `match_flags`
-  - the user’s own prediction/score state
-- Replace the current empty-state behavior with smarter states:
-  - “Syncing live guesses…”
-  - “Waiting for next ball…”
-  - “Guesses paused by admin”
-- Keep optimistic submission behavior unchanged
-
-### 4) Improve live match shell feedback
-**Files:** `src/pages/Live.tsx`, possibly `src/hooks/useRealtimeChannel.ts`
-
-Changes:
-- Keep the banner, but make the app less dependent on websocket health for correctness
-- Optionally extend the shared realtime hook to support a built-in fallback refetch cadence while reconnecting
-- Ensure the live experience remains usable even when realtime briefly drops
-
-### 5) Align the Scoreboard with the fixed sync model
-**File:** `src/components/live/Scoreboard.tsx`
-
-Changes:
-- Use the corrected innings detection coming from backend updates
-- Keep polling `cricket-api-sync`, but avoid presenting a misleading innings state if API data is partial
-- Surface a clearer “syncing live feed” state if the backend has not yet produced deliveries for the current phase
-
-### 6) Add tests for the exact failure mode
-**Files:** `src/test/cricket-sync-parsing.test.ts` and new targeted tests if needed
-
-Add tests for:
-- ball-by-ball payload variants
-- innings-shell payload where innings 2 exists structurally but is not actually active
-- delivery normalization
-- dedupe/idempotent insert logic
-- “score advancing but zero parsed balls” guard
-- prediction window auto-open after a parsed delivery
-- frontend Guess fallback behavior when realtime is disconnected
-
----
 
 ## Expected outcome
 After this fix:
-- live matches will continue syncing even if the provider payload shape changes slightly
-- innings state will stay correct
-- deliveries will be written reliably
-- prediction windows will open/lock/resolve automatically again
-- users will still see fresh Guess data even during websocket reconnects
-- the app will no longer sit on a false “No Active Fun Guess” state while the match is live
-
-## Files likely affected
-- `supabase/functions/cricket-api-sync/index.ts`
-- `src/components/live/PredictionPanel.tsx`
-- `src/components/live/Scoreboard.tsx`
-- `src/hooks/useRealtimeChannel.ts` (optional resilience upgrade)
-- `src/pages/Live.tsx`
-- `src/test/cricket-sync-parsing.test.ts`
-- migration file only if I add a deliveries uniqueness/index hardening step
-
-## Technical notes
-- No auth flow change is needed
-- No role/policy redesign is needed for this fix
-- The main issue is sync correctness + frontend fallback resilience
-- I will preserve the existing admin manual command-center workflow while fixing the automated live-match flow
+- the live match keeps syncing on every tab, not just Score
+- the Guess tab refreshes without requiring the user to switch pages
+- users no longer get stuck indefinitely on “Waiting for next ball”
+- if the external feed degrades, the app shows a clear retry state instead of silently freezing
