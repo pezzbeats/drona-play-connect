@@ -509,8 +509,20 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
       {windows.length === 0 && (
         <GlassCard className="p-5 text-center">
           <Clock className="h-8 w-8 text-primary/30 mx-auto mb-2" />
-          <p className="text-foreground font-bold">No Active Fun Guess</p>
-          <p className="text-muted-foreground text-sm">Admin will open the next guess window shortly — stay tuned!</p>
+          <p className="text-foreground font-bold">
+            {reconnecting ? 'Reconnecting…' : 'Waiting for Next Ball'}
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {reconnecting
+              ? 'Syncing live guesses — your data is safe'
+              : 'The next guess window will open automatically when the ball is bowled'}
+          </p>
+          {(!connected || reconnecting) && (
+            <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-warning">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Polling for updates…
+            </div>
+          )}
         </GlassCard>
       )}
 
