@@ -1,120 +1,247 @@
 
-## Fix plan: Guess screen is stuck because sync is owned by the wrong component
+## What’s actually still broken
 
-### What I found
-- The biggest bug is architectural: `cricket-api-sync` is polled from `Scoreboard.tsx`.
-- In `Live.tsx`, only the active tab is mounted:
-  - `score` mounts `Scoreboard`
-  - `predict` mounts `PredictionPanel`
-- So when a user is on the Guess tab, `Scoreboard` unmounts and the backend sync loop stops.
-- `PredictionPanel` only polls database tables (`prediction_windows`, `match_flags`, leaderboard). It does not keep the live match sync running.
-- Result: the UI can sit forever on “Waiting for Next Ball” because no new windows are being produced while the user is on the Guess tab.
-- Edge logs also show score updates and innings resolution, but no clear evidence that ball-by-ball parsing is consistently producing deliveries/windows. So there is a second reliability gap in `cricket-api-sync`.
+The tab-level polling fix is already in place, so this is no longer a “Guess tab unmounts the sync engine” problem.
 
-## Implementation
-### 1) Move match sync to a page-level hook that never unmounts
-Create a shared hook, e.g. `src/hooks/useLiveMatchSync.ts`, and use it from `src/pages/Live.tsx`.
+The new evidence shows the real blocker is deeper:
 
-This hook will:
-- invoke `cricket-api-sync` immediately on page load
-- keep polling using the returned `recommended_interval`
-- stay active regardless of which tab is open
-- stop or slow down when the match is ended
-- expose:
-  - `syncing`
-  - `lastSyncAt`
-  - `lastSyncError`
-  - `recommendedInterval`
-  - `isStale`
+- `cricket-api-sync` is being called repeatedly and successfully
+- match score is advancing in backend responses:
+  - `134/2 (12.5)`
+  - `135/2 (13.1)`
+  - `135/3 (13.2)`
+  - `136/3 (13.3)`
+- but every sync still returns:
+  - `new_deliveries: 0`
+- so no fresh `deliveries` are inserted
+- which means no `prediction_windows` get opened
+- so the UI stays stuck on “Waiting for Next Ball”
 
-This is the permanent fix for “works on Score tab, freezes on Guess tab”.
+In short: realtime polling is alive now, but the ball-by-ball ingestion is still failing.
 
-### 2) Make `Scoreboard` display data only, not own the sync engine
-Refactor `src/components/live/Scoreboard.tsx` to:
-- remove the direct `cricket-api-sync` polling responsibility
-- keep realtime + data fetch logic for rendering only
-- optionally receive sync freshness from `Live.tsx` to show:
-  - “Live feed syncing”
-  - “Live feed delayed”
+## Root cause likely causing the permanent freeze
 
-This separates rendering from orchestration.
+### 1) The parser is still too narrow for the current provider payload
+In `cricket-api-sync`, the normalizer currently assumes balls come from:
+- `data.overs`
+- `data.over_groups`
+- `data.innings[*].overs`
+- `data.innings[*].over_groups`
 
-### 3) Upgrade `PredictionPanel` so it can self-heal
-Update `src/components/live/PredictionPanel.tsx` to consume page-level sync state and improve fallback behavior.
+But the logs show score changes with zero deliveries parsed, which strongly suggests the provider’s live payload shape for this match does not match the current extraction logic closely enough.
 
-Changes:
-- if realtime is reconnecting or feed is stale, show a stronger syncing state
-- if there is no open window for too long during a live phase, trigger a guarded refresh path
-- distinguish these states:
-  - `Syncing live feed…`
-  - `Waiting for next ball…`
-  - `Live feed delayed — retrying`
-  - `Guesses paused by admin`
+### 2) Ball identity is probably being derived incorrectly
+Current dedupe depends on:
 
-Also keep the current optimistic submission flow.
+```text
+ballNo = ball.ball_number || ball.ball || 1
+dedupeKey = innings-over-ball
+```
 
-### 4) Harden `cricket-api-sync` where windows are created
-Update `supabase/functions/cricket-api-sync/index.ts` to make delivery/window creation more observable and reliable.
+If the provider uses a different field such as:
+- `number`
+- `index`
+- `delivery_number`
+- nested `ball.number`
+- string keys from an object map
 
-Changes:
-- extract the ball-by-ball normalization into a pure helper
-- log:
-  - parsed innings count
-  - parsed over count
-  - parsed ball count
-  - inserted delivery count
-  - opened/resolved window count
-- if score changes but zero new deliveries are parsed:
-  - mark the sync result as degraded
-  - keep retrying on next cycle
-  - return enough metadata for the UI/admin tools to detect the issue
-- ensure duplicate retries do not open duplicate windows
+then multiple real deliveries can collapse to the same fallback key and be skipped.
 
-### 5) Reduce non-essential sync noise
-Edge logs show repeated `Gemini API error 404` warnings.
-That should not block gameplay, but it should be isolated so live sync stays clean.
+### 3) The frontend still has no real “degraded sync” state
+`Live.tsx` creates `syncState`, but it is not actually passed into:
+- `PredictionPanel`
+- `Scoreboard`
+
+So the app knows whether sync is stale, but the Guess screen does not use that information to explain the failure or trigger stronger recovery behavior.
+
+## Permanent fix plan
+
+### 1) Harden `cricket-api-sync` around real payload shapes, not just current assumptions
+Refactor the ball-by-ball section into explicit helpers inside `supabase/functions/cricket-api-sync/index.ts`:
+
+- `extractInningsCollections(bbbBody, currentInnings)`
+- `extractOversFromInnings(inningsNode)`
+- `extractBallsFromOver(overNode)`
+- `resolveBallIdentity(ball, overNo, fallbackIndex)`
+- `normalizeDelivery(ball, innNo, overNo, ballNo)`
+
+This should support:
+- arrays and objects
+- overs keyed by strings
+- balls keyed by strings
+- nested delivery objects
+- alternate numbering fields
+
+### 2) Stop defaulting every unknown ball to `1`
+This is the most dangerous current behavior.
+
+Change ball numbering logic so it:
+- tries all known candidate fields first
+- falls back to iteration index within the over
+- never silently reuses `1` for all unknown balls
+
+Example target behavior:
+
+```text
+ballNo candidates:
+ball.ball_number
+ball.ball
+ball.number
+ball.delivery_number
+ball.sequence
+loop index + 1
+```
+
+That alone can fix false dedupe and unlock delivery creation.
+
+### 3) Add observability for parsed overs and parsed balls
+Right now logs confirm score movement, but not enough about parser output.
+
+Add structured logs for each sync:
+- innings discovered
+- overs discovered per innings
+- balls discovered per innings
+- normalized deliveries produced
+- deliveries skipped due to dedupe
+- windows opened / resolved
+
+Also log a compact sample of the first parsed ball shape when zero deliveries are produced during a score change.
+
+That will make future feed-shape regressions diagnosable instead of invisible.
+
+### 4) Add a degraded fallback when score/balls advance but parsed deliveries stay zero
+When score advances but no delivery is inserted:
+- mark sync result as degraded
+- return metadata such as:
+  - `degraded: true`
+  - `reason: "score_advanced_without_deliveries"`
+  - `score_changed: true`
+
+Optionally, if innings balls increased but parser still fails:
+- create/update `match_live_state.last_delivery_summary` with a sync warning for operators
+- avoid opening fake windows unless there is enough delivery identity to resolve them correctly
+
+Important: do not fabricate prediction windows without a trustworthy delivery boundary.
+
+### 5) Use sync health in the UI
+`Live.tsx` already has `syncState`, but it is unused.
+
+Pass sync health props down to:
+- `Scoreboard`
+- `PredictionPanel`
+
+New prop shape can be minimal:
+
+```text
+{
+  syncing,
+  lastSyncAt,
+  lastSyncError,
+  isStale
+}
+```
+
+Then update the Guess screen states:
+- `Syncing live feed…`
+- `Waiting for next ball…`
+- `Live feed delayed — retrying`
+- `Live feed error — reconnecting`
+
+Rule:
+- if there are no open windows and `syncState.isStale === true`, do not show normal waiting copy
+- show delayed/degraded copy instead
+
+### 6) Strengthen `PredictionPanel` fallback polling behavior
+Current fallback polling exists, but it only refetches tables. That won’t help if backend ingestion is broken.
 
 Plan:
-- keep fallback interval logic
-- make AI pacing fully non-blocking
-- suppress or downgrade repeated 404 noise so it does not mask real sync problems
+- keep DB polling
+- if no open window and sync is stale, surface stronger retry messaging
+- optionally trigger a guarded lightweight refresh indicator based on page-level sync freshness rather than websocket state alone
 
-### 6) Add targeted tests for the actual failure mode
-Add or extend tests to cover:
-- tab switching does not stop live sync
-- `PredictionPanel` recovers when realtime is degraded
-- score changes with zero parsed deliveries enter degraded state
-- delivery normalization from multiple payload shapes
-- next-ball windows open exactly once for new deliveries
+This prevents the user from seeing a misleading “next window will open automatically” message when the feed is actually degraded.
 
-## Files likely affected
-- `src/pages/Live.tsx`
-- `src/components/live/Scoreboard.tsx`
-- `src/components/live/PredictionPanel.tsx`
-- `src/hooks/useLiveMatchSync.ts` (new)
+### 7) Surface sync health on the Score tab too
+`Scoreboard` should show a small status badge:
+- Live feed healthy
+- Syncing…
+- Feed delayed
+
+That gives admins/users immediate visibility that the issue is backend ingestion, not just “no ball yet”.
+
+### 8) Add targeted tests for this exact regression
+Add tests for:
+
+#### `src/test/cricket-sync-parsing.test.ts`
+- parses overs when stored as object maps
+- parses balls when stored as object maps
+- resolves `ballNo` from alternate field names
+- falls back to loop index when numbering is missing
+- does not collapse multiple balls to `ballNo = 1`
+- flags degraded state when score advances but normalized deliveries are zero
+
+#### new UI test
+`src/components/live/__tests__/PredictionPanel.test.tsx`
+- shows “Live feed delayed” when there are no windows and sync is stale
+- shows normal waiting state only when feed is healthy
+
+#### new integration test
+`src/test/live-sync-tab-persistence.test.tsx`
+- tab switching keeps sync hook mounted
+- stale sync state reaches PredictionPanel
+
+## Files to update
+
 - `supabase/functions/cricket-api-sync/index.ts`
+- `src/pages/Live.tsx`
+- `src/components/live/PredictionPanel.tsx`
+- `src/components/live/Scoreboard.tsx`
+- `src/components/live/__tests__/PredictionPanel.test.tsx`
 - `src/test/cricket-sync-parsing.test.ts`
-- `src/test/live-sync-tab-persistence.test.tsx` (new)
+- `src/test/live-sync-tab-persistence.test.tsx`
 
 ## Technical details
-```text
-Current problem:
-Live page
- ├─ Score tab -> Scoreboard mounted -> sync runs
- ├─ Guess tab -> Scoreboard unmounted -> sync stops
- └─ PredictionPanel only reads DB -> waits forever
 
-Target design:
-Live page
- ├─ useLiveMatchSync() always mounted
- ├─ Scoreboard reads live state
- ├─ PredictionPanel reads windows + sync freshness
- └─ tab switches do not affect backend sync
+```text
+Current state
+Live page polling works
+        |
+        v
+cricket-api-sync runs every ~15s
+        |
+        v
+score updates from match API
+        |
+        v
+ball-by-ball parser yields 0 deliveries
+        |
+        v
+no prediction windows created
+        |
+        v
+Guess screen waits forever
+
+Target state
+Live page polling works
+        |
+        v
+cricket-api-sync parses live BBB payload robustly
+        |
+        v
+new deliveries inserted with stable identities
+        |
+        v
+old window resolved + next window opened
+        |
+        v
+Guess screen updates automatically
 ```
 
 ## Expected outcome
+
 After this fix:
-- the live match keeps syncing on every tab, not just Score
-- the Guess tab refreshes without requiring the user to switch pages
-- users no longer get stuck indefinitely on “Waiting for next ball”
-- if the external feed degrades, the app shows a clear retry state instead of silently freezing
+- the app will stop getting stuck at “Waiting for Next Ball” during live score movement
+- new deliveries will be created reliably from current provider payloads
+- prediction windows will resume opening automatically
+- the UI will clearly distinguish a true pause between balls from a degraded sync condition
+- future payload-shape changes will be much easier to detect and debug
