@@ -898,8 +898,9 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
         // No-silent-failure guard: if score advanced but we parsed zero balls, flag degraded
         const scoreAdvanced = (inn1Score > (state.last_innings1_score || 0)) || (inn2Score > (state.last_innings2_score || 0));
-        const isDegraded = scoreAdvanced && newDeliveries === 0;
+        isDegraded = scoreAdvanced && newDeliveries === 0;
         if (isDegraded) {
+          degradedMessage = "Score changed without new deliveries. Retrying automatically.";
           log("warn", "Score advanced but zero deliveries parsed — BBB payload may have unknown shape", {
             match_id: matchId,
             inn1Score, inn2Score,
