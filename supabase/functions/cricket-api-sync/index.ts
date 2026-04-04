@@ -72,6 +72,26 @@ function getIplTeamInfo(name: string): { code: string; color: string } | null {
   return null;
 }
 
+// Resolve ball number from multiple candidate fields; never default all to 1
+function resolveBallNo(ball: any, loopIndex: number): number {
+  const candidates = [
+    ball?.ball_number,
+    ball?.ball,
+    ball?.number,
+    ball?.delivery_number,
+    ball?.sequence,
+    ball?.index,
+    ball?.delivery?.number,
+    ball?._keyHint,
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  // Fallback: use loop index + 1 (unique within this over)
+  return loopIndex + 1;
+}
+
 // Map delivery data to prediction outcome key
 function deliveryToOutcomeKey(runsOffBat: number, isWicket: boolean, extrasType: string): string {
   if (isWicket) return "wicket";
