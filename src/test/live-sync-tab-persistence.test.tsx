@@ -14,9 +14,9 @@ vi.mock('@/integrations/supabase/client', () => ({
 
 import { useLiveMatchSync } from '@/hooks/useLiveMatchSync';
 
-function Harness() {
+function Harness({ phase }: { phase?: string | null }) {
   const [tab, setTab] = useState<'score' | 'predict'>('score');
-  const sync = useLiveMatchSync('match-1', 'innings1');
+  const sync = useLiveMatchSync('match-1', phase ?? 'innings1');
 
   return (
     <div>
@@ -26,6 +26,7 @@ function Harness() {
       <span data-testid="tab">{tab}</span>
       <span data-testid="health">{sync.degraded ? 'degraded' : 'healthy'}</span>
       <span data-testid="interval">{sync.recommendedInterval}</span>
+      <span data-testid="syncing">{sync.syncing ? 'yes' : 'no'}</span>
     </div>
   );
 }
@@ -77,5 +78,21 @@ describe('useLiveMatchSync tab persistence', () => {
 
     expect(invokeMock).toHaveBeenCalledTimes(2);
     expect(getByTestId('health').textContent).toBe('degraded');
+  });
+
+  it('starts polling even when matchPhase is null', async () => {
+    const { getByTestId } = render(<Harness phase={null} />);
+
+    // Wait for first poll — should fire even with null phase
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    // Advance timer to trigger second poll
+    await act(async () => {
+      vi.advanceTimersByTime(15_000);
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 });
