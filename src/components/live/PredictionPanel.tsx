@@ -5,6 +5,7 @@ import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/use-toast';
 import { Lock, CheckCircle2, Clock, AlertTriangle, PauseCircle, Loader2, Target } from 'lucide-react';
 import { useRealtimeChannel, type ChannelSubscription } from '@/hooks/useRealtimeChannel';
+import type { LiveMatchSyncState } from '@/hooks/useLiveMatchSync';
 
 // ── Standardised ball outcome set (mirrors AdminControl.BALL_OUTCOMES) ────────
 const BALL_OUTCOMES = [
@@ -60,6 +61,7 @@ interface PredictionPanelProps {
   matchId: string;
   mobile: string;
   pin: string;
+  syncHealth?: Pick<LiveMatchSyncState, 'syncing' | 'lastSyncAt' | 'lastSyncError' | 'isStale' | 'degraded' | 'degradedReason'>;
 }
 
 // ── Countdown hook for locks_at ──────────────────────────────────────
@@ -202,7 +204,7 @@ function OpenWindowCard({
   );
 }
 
-export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) {
+export function PredictionPanel({ matchId, mobile, pin, syncHealth }: PredictionPanelProps) {
   const [windows, setWindows] = useState<PredictionWindow[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchFlags, setMatchFlags] = useState<MatchFlags | null>(null);
@@ -361,21 +363,26 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
 
   const { connected, reconnecting } = useRealtimeChannel(`predictions-panel-${matchId}`, subscriptions, fetchAll);
 
+  useEffect(() => {
+    if (!syncHealth?.lastSyncAt) return;
+    fetchAll();
+  }, [syncHealth?.lastSyncAt, fetchAll]);
+
   // ── Fallback polling: self-heal when realtime is degraded or no open windows ──
   useEffect(() => {
-    // Poll every 5s when disconnected/reconnecting, or every 8s when connected but no open window
     const hasOpenWindow = windows.some(w => w.status === 'open');
-    const needsPoll = !connected || reconnecting || (!hasOpenWindow && windows.length >= 0);
+    const feedDelayed = Boolean(syncHealth?.isStale || syncHealth?.degraded || syncHealth?.lastSyncError);
+    const needsPoll = !connected || reconnecting || !hasOpenWindow || feedDelayed;
     if (!needsPoll) return;
 
-    const interval = (!connected || reconnecting) ? 5000 : 8000;
+    const interval = (!connected || reconnecting || feedDelayed) ? 5000 : 8000;
     const timer = setInterval(() => {
       fetchWindows();
       fetchMyScore();
     }, interval);
 
     return () => clearInterval(timer);
-  }, [connected, reconnecting, windows, fetchWindows, fetchMyScore]);
+  }, [connected, reconnecting, windows, fetchWindows, fetchMyScore, syncHealth?.isStale, syncHealth?.degraded, syncHealth?.lastSyncError]);
 
   const handleOptionTap = async (windowId: string, optKey: string) => {
     if (submittedWindows[windowId]) return;
@@ -426,6 +433,24 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
   const frozen = matchFlags?.predictions_frozen === true;
   const openWindows = windows.filter(w => w.status === 'open');
   const closedWindows = windows.filter(w => w.status !== 'open');
+  const hasOpenWindow = openWindows.length > 0;
+  const syncDelayed = Boolean(syncHealth?.degraded || syncHealth?.isStale);
+  const syncErrored = Boolean(syncHealth?.lastSyncError);
+  const syncRecovering = Boolean(syncHealth?.syncing || reconnecting || (!connected && !syncErrored));
+  const waitingTitle = syncErrored
+    ? 'Live feed error — reconnecting'
+    : syncDelayed
+      ? 'Live feed delayed — retrying'
+      : syncRecovering
+        ? 'Syncing live feed…'
+        : 'Waiting for Next Ball';
+  const waitingBody = syncErrored
+    ? (syncHealth?.lastSyncError || 'Reconnecting to the live feed now.')
+    : syncDelayed
+      ? (syncHealth?.degradedReason || 'We are retrying automatically so the next guess window can open.')
+      : syncRecovering
+        ? 'Refreshing the latest ball data and guess windows…'
+        : 'The next guess window will open automatically when the ball is bowled';
 
   if (loading) {
     return (
@@ -506,18 +531,22 @@ export function PredictionPanel({ matchId, mobile, pin }: PredictionPanelProps) 
         </div>
       )}
 
-      {windows.length === 0 && (
+      {!hasOpenWindow && (
         <GlassCard className="p-5 text-center">
-          <Clock className="h-8 w-8 text-primary/30 mx-auto mb-2" />
+          {syncErrored || syncDelayed ? (
+            <AlertTriangle className="h-8 w-8 text-warning mx-auto mb-2" />
+          ) : syncRecovering ? (
+            <Loader2 className="h-8 w-8 text-primary mx-auto mb-2 animate-spin" />
+          ) : (
+            <Clock className="h-8 w-8 text-primary/30 mx-auto mb-2" />
+          )}
           <p className="text-foreground font-bold">
-            {reconnecting ? 'Reconnecting…' : 'Waiting for Next Ball'}
+            {waitingTitle}
           </p>
           <p className="text-muted-foreground text-sm">
-            {reconnecting
-              ? 'Syncing live guesses — your data is safe'
-              : 'The next guess window will open automatically when the ball is bowled'}
+            {waitingBody}
           </p>
-          {(!connected || reconnecting) && (
+          {(!connected || reconnecting || syncHealth?.syncing || syncDelayed || syncErrored) && (
             <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-warning">
               <Loader2 className="h-3 w-3 animate-spin" />
               Polling for updates…

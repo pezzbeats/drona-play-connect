@@ -1,37 +1,76 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi, waitFor } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import React from 'react';
 
-// Mock supabase client
+const mockState = vi.hoisted(() => ({
+  windows: [] as any[],
+  flags: { predictions_frozen: false, freeze_reason: null as string | null },
+  predictions: [] as any[],
+  leaderboard: null as any,
+  invoke: vi.fn(async () => ({ data: {} })),
+}));
+
+const createQuery = (table: string) => {
+  const responseForTable = () => {
+    switch (table) {
+      case 'prediction_windows':
+        return { data: mockState.windows };
+      case 'match_flags':
+        return { data: mockState.flags };
+      case 'predictions':
+        return { data: mockState.predictions };
+      case 'leaderboard':
+        return { data: mockState.leaderboard };
+      default:
+        return { data: [] };
+    }
+  };
+
+  const query: any = {
+    select: () => query,
+    eq: () => query,
+    in: () => query,
+    order: () => query,
+    limit: () => query,
+    maybeSingle: () => Promise.resolve(responseForTable()),
+    single: () => Promise.resolve(responseForTable()),
+    then: (resolve: (value: any) => any, reject?: (reason: unknown) => any) =>
+      Promise.resolve(responseForTable()).then(resolve, reject),
+  };
+
+  return query;
+};
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          in: () => ({
-            order: () => ({
-              limit: () => Promise.resolve({ data: [] }),
-            }),
-          }),
-          maybeSingle: () => Promise.resolve({ data: null }),
-        }),
-      }),
-    }),
+    from: (table: string) => createQuery(table),
     channel: () => ({
       on: function() { return this; },
       subscribe: () => {},
     }),
     removeChannel: () => {},
     functions: {
-      invoke: () => Promise.resolve({ data: {} }),
+      invoke: mockState.invoke,
     },
   },
+}));
+
+vi.mock('@/hooks/useRealtimeChannel', () => ({
+  useRealtimeChannel: () => ({ connected: true, reconnecting: false }),
 }));
 
 // Must import after mock
 import { PredictionPanel } from '../PredictionPanel';
 
 describe('PredictionPanel', () => {
+  beforeEach(() => {
+    mockState.windows = [];
+    mockState.flags = { predictions_frozen: false, freeze_reason: null };
+    mockState.predictions = [];
+    mockState.leaderboard = null;
+    mockState.invoke.mockClear();
+  });
+
   it('renders skeleton loader on initial load', () => {
     const { container } = render(<PredictionPanel matchId="test-123" mobile="9999999999" pin="1234" />);
     expect(container.querySelector('.disclaimer-bar')).toBeTruthy();
@@ -40,5 +79,53 @@ describe('PredictionPanel', () => {
   it('shows disclaimer about no betting', () => {
     const { getByText } = render(<PredictionPanel matchId="test-123" mobile="9999999999" pin="1234" />);
     expect(getByText(/not betting, gambling, or wagering/i)).toBeTruthy();
+  });
+
+  it('shows delayed feed messaging when sync is stale and no window is open', async () => {
+    render(
+      <PredictionPanel
+        matchId="test-123"
+        mobile="9999999999"
+        pin="1234"
+        syncHealth={{
+          syncing: false,
+          lastSyncAt: Date.now() - 60_000,
+          lastSyncError: null,
+          degraded: true,
+          degradedReason: 'Score changed without new deliveries. Retrying automatically.',
+          recommendedInterval: 15,
+          isStale: true,
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/live feed delayed — retrying/i)).toBeTruthy();
+    });
+    expect(screen.getByText(/retrying automatically/i)).toBeTruthy();
+  });
+
+  it('shows normal waiting state when sync is healthy', async () => {
+    render(
+      <PredictionPanel
+        matchId="test-123"
+        mobile="9999999999"
+        pin="1234"
+        syncHealth={{
+          syncing: false,
+          lastSyncAt: Date.now(),
+          lastSyncError: null,
+          degraded: false,
+          degradedReason: null,
+          recommendedInterval: 15,
+          isStale: false,
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/waiting for next ball/i)).toBeTruthy();
+    });
+    expect(screen.queryByText(/live feed delayed — retrying/i)).toBeNull();
   });
 });
