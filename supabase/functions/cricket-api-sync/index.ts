@@ -783,71 +783,80 @@ async function doSync(sb: any, projectKey: string, headers: any) {
             if (existingSet.has(dedupeKey)) continue;
             existingSet.add(dedupeKey);
 
-        for (const ball of newBalls) {
-          const overNo = ball._overNo;
-          const ballNo = ball.ball_number || ball.ball || 1;
+            const runsOffBat = ball.runs?.batting || ball.batsman_runs || ball.runs || 0;
+            const extrasRuns = ball.runs?.extras || ball.extras_runs || 0;
+            let extrasType = "none";
+            const ballExtras = ball.extras || {};
+            if (ballExtras.wide || ball.is_wide) extrasType = "wide";
+            else if (ballExtras.no_ball || ball.is_no_ball) extrasType = "no_ball";
+            else if (ballExtras.bye || ball.is_bye) extrasType = "bye";
+            else if (ballExtras.leg_bye || ball.is_leg_bye) extrasType = "leg_bye";
 
-          const runsOffBat = ball.runs?.batting || ball.batsman_runs || ball.runs || 0;
-          const extrasRuns = ball.runs?.extras || ball.extras_runs || 0;
-          let extrasType = "none";
-          const ballExtras = ball.extras || {};
-          if (ballExtras.wide || ball.is_wide) extrasType = "wide";
-          else if (ballExtras.no_ball || ball.is_no_ball) extrasType = "no_ball";
-          else if (ballExtras.bye || ball.is_bye) extrasType = "bye";
-          else if (ballExtras.leg_bye || ball.is_leg_bye) extrasType = "leg_bye";
+            const isWicket = ball.wicket?.is_out || ball.is_wicket || false;
+            const wicketType = ball.wicket?.type || ball.wicket_type || null;
 
-          const isWicket = ball.wicket?.is_out || ball.is_wicket || false;
-          const wicketType = ball.wicket?.type || ball.wicket_type || null;
-
-          // Auto-lock open prediction windows BEFORE inserting delivery
-          const { data: openWindows } = await sb
-            .from("prediction_windows")
-            .select("id")
-            .eq("match_id", matchId)
-            .eq("status", "open");
-
-          if (openWindows && openWindows.length > 0) {
-            const windowIds = openWindows.map((w: any) => w.id);
-            await sb
+            // Auto-lock open prediction windows BEFORE inserting delivery
+            const { data: openWindows } = await sb
               .from("prediction_windows")
-              .update({ status: "locked", locks_at: new Date().toISOString() })
-              .in("id", windowIds);
+              .select("id")
+              .eq("match_id", matchId)
+              .eq("status", "open");
 
-            const outcomeKey = deliveryToOutcomeKey(runsOffBat, isWicket, extrasType);
-            const correctAnswer = { key: outcomeKey };
-
-            for (const wId of windowIds) {
+            if (openWindows && openWindows.length > 0) {
+              const windowIds = openWindows.map((w: any) => w.id);
               await sb
                 .from("prediction_windows")
-                .update({ status: "resolved", correct_answer: correctAnswer })
-                .eq("id", wId);
+                .update({ status: "locked", locks_at: new Date().toISOString() })
+                .in("id", windowIds);
 
-              await scorePredictions(sb, matchId, wId, outcomeKey);
+              const outcomeKey = deliveryToOutcomeKey(runsOffBat, isWicket, extrasType);
+              const correctAnswer = { key: outcomeKey };
+
+              for (const wId of windowIds) {
+                await sb
+                  .from("prediction_windows")
+                  .update({ status: "resolved", correct_answer: correctAnswer })
+                  .eq("id", wId);
+
+                await scorePredictions(sb, matchId, wId, outcomeKey);
+              }
             }
+
+            let { data: overCtrl } = await sb
+              .from("over_control").select("id")
+              .eq("match_id", matchId).eq("innings_no", innNo).eq("over_no", overNo)
+              .maybeSingle();
+
+            if (!overCtrl) {
+              const { data: newOver } = await sb
+                .from("over_control")
+                .insert({ match_id: matchId, over_no: overNo, innings_no: innNo, status: "active" })
+                .select("id").single();
+              overCtrl = newOver;
+            }
+            if (!overCtrl) continue;
+
+            await sb.from("deliveries").insert({
+              match_id: matchId, over_id: overCtrl.id, over_no: overNo,
+              innings_no: innNo, ball_no: ballNo, delivery_no: ballNo,
+              runs_off_bat: runsOffBat, extras_type: extrasType, extras_runs: extrasRuns,
+              is_wicket: isWicket, wicket_type: wicketType,
+            });
+
+            newDeliveries++;
           }
+        }
 
-          let { data: overCtrl } = await sb
-            .from("over_control").select("id")
-            .eq("match_id", matchId).eq("innings_no", currentInnings).eq("over_no", overNo)
-            .maybeSingle();
-
-          if (!overCtrl) {
-            const { data: newOver } = await sb
-              .from("over_control")
-              .insert({ match_id: matchId, over_no: overNo, innings_no: currentInnings, status: "active" })
-              .select("id").single();
-            overCtrl = newOver;
-          }
-          if (!overCtrl) continue;
-
-          await sb.from("deliveries").insert({
-            match_id: matchId, over_id: overCtrl.id, over_no: overNo,
-            innings_no: currentInnings, ball_no: ballNo, delivery_no: ballNo,
-            runs_off_bat: runsOffBat, extras_type: extrasType, extras_runs: extrasRuns,
-            is_wicket: isWicket, wicket_type: wicketType,
+        // No-silent-failure guard: if score advanced but we parsed zero balls, log warning
+        const scoreAdvanced = (inn1Score > (state.last_innings1_score || 0)) || (inn2Score > (state.last_innings2_score || 0));
+        if (scoreAdvanced && newDeliveries === 0) {
+          log("warn", "Score advanced but zero deliveries parsed — BBB payload may have unknown shape", {
+            match_id: matchId,
+            inn1Score, inn2Score,
+            last_inn1: state.last_innings1_score,
+            last_inn2: state.last_innings2_score,
+            bbb_keys: Object.keys(bbbBody.data || {}).join(","),
           });
-
-          newDeliveries++;
         }
 
         // Auto-open next prediction window
@@ -886,8 +895,6 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           }
         }
       }
-
-      // Determine phase
       let phase = "innings1";
       const mStatus = (apiStatusStr || "").toLowerCase();
       if (currentInnings === 2) phase = "innings2";
