@@ -46,6 +46,21 @@ function LiveContent({
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [guessNudge, setGuessNudge] = useState(false);
+  const [matchPhase, setMatchPhase] = useState<string | null>(null);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // ── Page-level sync: keeps cricket-api-sync polling on ALL tabs ──
+  const syncState = useLiveMatchSync(matchPhase);
+
+  // Fetch initial phase
+  useEffect(() => {
+    supabase
+      .from('match_live_state')
+      .select('phase')
+      .eq('match_id', matchId)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setMatchPhase(data.phase); });
+  }, [matchId]);
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Personal rank chip state
