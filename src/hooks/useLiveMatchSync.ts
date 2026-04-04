@@ -15,13 +15,6 @@ const DEFAULT_LIVE_INTERVAL = 15;
 const DEFAULT_PRE_INTERVAL = 60;
 const STALE_THRESHOLD_MS = 45_000; // consider stale after 45s without successful sync
 
-/**
- * Page-level hook that keeps `cricket-api-sync` polling alive
- * regardless of which tab is active (Score, Guess, Leaderboard).
- *
- * Mount this once in Live.tsx — it never unmounts while the page is open.
- */
-export function useLiveMatchSync(matchPhase: string | null | undefined): SyncState {
 export function useLiveMatchSync(matchId: string | null | undefined, matchPhase: string | null | undefined): LiveMatchSyncState {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
@@ -118,7 +111,7 @@ export function useLiveMatchSync(matchId: string | null | undefined, matchPhase:
       mountedRef.current = false;
       clearTimeout(timeoutRef.current);
     };
-  }, [isActive, matchPhase]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, matchId, matchPhase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isStale = lastSyncAt !== null
     ? (now - lastSyncAt) > STALE_THRESHOLD_MS

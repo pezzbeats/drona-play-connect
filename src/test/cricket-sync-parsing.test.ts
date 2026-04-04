@@ -39,6 +39,51 @@ function isAbandonedOrNoResult(statusStr: string): boolean {
   return s.includes("abandoned") || s.includes("no result") || s.includes("postponed") || s.includes("no_result");
 }
 
+function sortCollectionEntries(node: unknown): Array<[string, any]> {
+  if (Array.isArray(node)) return node.map((value, index) => [String(index), value]);
+  if (!node || typeof node !== 'object') return [];
+
+  return Object.entries(node as Record<string, any>).sort(([a], [b]) => {
+    const numA = Number(a);
+    const numB = Number(b);
+    if (Number.isFinite(numA) && Number.isFinite(numB)) return numA - numB;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+}
+
+function extractOversFromInningsForTest(inningsNode: any): Array<{ overNo: number; balls: any[] }> {
+  const oversNode = inningsNode?.overs ?? inningsNode;
+
+  return sortCollectionEntries(oversNode).map(([key, over], index) => ({
+    overNo: over?.over_number ?? over?.number ?? Number(key) ?? index + 1,
+    balls: sortCollectionEntries(over?.balls ?? over?.deliveries).map(([, ball]) => ball),
+  }));
+}
+
+function resolveBallIdentityForTest(ball: any, fallbackIndex: number, keyHint?: string): number {
+  const candidates = [
+    ball?.ball_number,
+    ball?.ball,
+    ball?.number,
+    ball?.delivery_number,
+    ball?.sequence,
+    ball?.index,
+    ball?.delivery?.number,
+    keyHint,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+
+  return fallbackIndex + 1;
+}
+
+function detectDegradedSync(progressAdvanced: boolean, normalizedDeliveries: number) {
+  return progressAdvanced && normalizedDeliveries === 0;
+}
+
 describe('deliveryToOutcomeKey', () => {
   it('returns dot_ball for 0 runs, no wicket, no extras', () => {
     expect(deliveryToOutcomeKey(0, false, "none")).toBe("dot_ball");
@@ -126,6 +171,60 @@ describe('isAbandonedOrNoResult', () => {
   it('returns false for normal statuses', () => {
     expect(isAbandonedOrNoResult("started")).toBe(false);
     expect(isAbandonedOrNoResult("completed")).toBe(false);
+  });
+});
+
+describe('ball-by-ball parser hardening', () => {
+  it('parses overs when they are stored as object maps', () => {
+    const overs = extractOversFromInningsForTest({
+      overs: {
+        '12': { over_number: 13, balls: { '0': { number: 1 }, '1': { number: 2 } } },
+      },
+    });
+
+    expect(overs).toHaveLength(1);
+    expect(overs[0].overNo).toBe(13);
+    expect(overs[0].balls).toHaveLength(2);
+  });
+
+  it('parses balls when they are stored as object maps', () => {
+    const overs = extractOversFromInningsForTest({
+      overs: {
+        '0': {
+          over_number: 1,
+          balls: {
+            a: { delivery_number: 1 },
+            b: { delivery_number: 2 },
+            c: { delivery_number: 3 },
+          },
+        },
+      },
+    });
+
+    expect(overs[0].balls).toHaveLength(3);
+  });
+
+  it('resolves ball number from alternate field names', () => {
+    expect(resolveBallIdentityForTest({ number: 4 }, 0)).toBe(4);
+    expect(resolveBallIdentityForTest({ delivery_number: 5 }, 0)).toBe(5);
+    expect(resolveBallIdentityForTest({ sequence: 6 }, 0)).toBe(6);
+    expect(resolveBallIdentityForTest({ delivery: { number: 2 } }, 0)).toBe(2);
+  });
+
+  it('falls back to loop index instead of collapsing every ball to 1', () => {
+    const identities = [
+      resolveBallIdentityForTest({}, 0),
+      resolveBallIdentityForTest({}, 1),
+      resolveBallIdentityForTest({}, 2),
+    ];
+
+    expect(identities).toEqual([1, 2, 3]);
+  });
+
+  it('flags degraded sync when score advances without normalized deliveries', () => {
+    expect(detectDegradedSync(true, 0)).toBe(true);
+    expect(detectDegradedSync(true, 2)).toBe(false);
+    expect(detectDegradedSync(false, 0)).toBe(false);
   });
 });
 
