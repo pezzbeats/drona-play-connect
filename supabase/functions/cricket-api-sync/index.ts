@@ -664,7 +664,26 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         inn2Overs = getOvers(i2);
       }
 
-      const currentInnings = inn2Overs > 0 || inn2Score > 0 ? 2 : 1;
+      // ── Safe innings resolver ─────────────────────────────────────────
+      // Only consider innings 2 active if it has real ball-level evidence
+      // AND innings 1 has a meaningful score (not just structural shells)
+      const inn2HasRealActivity = (inn2Overs > 0 && inn2Score > 0) || inn2Wickets > 0;
+      const inn1HasMinimalScore = inn1Score > 0 || inn1Overs >= 1;
+      const apiStatusHint = (apiStatusStr || "").toLowerCase();
+      const apiSaysInnings2 = apiStatusHint.includes("2nd") || apiStatusHint.includes("innings 2") || apiStatusHint.includes("second");
+      
+      let currentInnings = 1;
+      if (apiSaysInnings2 && inn1HasMinimalScore) {
+        currentInnings = 2;
+      } else if (inn2HasRealActivity && inn1HasMinimalScore) {
+        currentInnings = 2;
+      }
+      log("info", "Innings resolved", {
+        match_id: matchId, currentInnings,
+        inn1: `${inn1Score}/${inn1Wickets} (${inn1Overs})`,
+        inn2: `${inn2Score}/${inn2Wickets} (${inn2Overs})`,
+        inn2HasRealActivity, apiSaysInnings2,
+      });
 
       // DLS target adjustment
       let dlsTarget: number | null = null;
@@ -674,7 +693,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         else if (typeof dlsData === "object") dlsTarget = dlsData.target || dlsData.par_score || dlsData.revised_target || null;
       }
 
-      // Fetch ball-by-ball and record deliveries
+      // ── Fetch ball-by-ball and record deliveries ────────────────────
       let newDeliveries = 0;
       const bbbRes = await fetchWithRetry(
         `${ROANUZ_BASE}/${projectKey}/match/${extId}/ball-by-ball/`, { headers }
@@ -682,25 +701,87 @@ async function doSync(sb: any, projectKey: string, headers: any) {
       const bbbBody = await bbbRes.json();
 
       if (bbbBody.data) {
-        const overs = bbbBody.data.overs || bbbBody.data.over_groups || {};
+        // ── Ball-by-ball normalizer: handle multiple API shapes ──────
+        // Shape 1: data.overs / data.over_groups (flat)
+        // Shape 2: data.innings.{key}.overs (innings-grouped)
+        // Shape 3: data.innings as array with overs inside
+        let oversForInnings: Record<number, any> = {};
 
-        const { count: existingCount } = await sb
-          .from("deliveries")
-          .select("id", { count: "exact", head: true })
-          .eq("match_id", matchId)
-          .eq("innings_no", currentInnings);
+        const flatOvers = bbbBody.data.overs || bbbBody.data.over_groups;
+        if (flatOvers && typeof flatOvers === "object" && Object.keys(flatOvers).length > 0) {
+          // Flat structure: assume current innings
+          oversForInnings[currentInnings] = flatOvers;
+        }
 
-        const allBalls: any[] = [];
-        for (const overKey of Object.keys(overs)) {
-          const overData = overs[overKey];
-          const balls = overData?.balls || overData?.deliveries || [];
-          const overNo = overData?.over_number ?? parseInt(overKey) + 1;
-          for (const ball of balls) {
-            allBalls.push({ ...ball, _overNo: overNo });
+        // Also check innings-grouped structures
+        const bbbInnings = bbbBody.data.innings || {};
+        const bbbInningsKeys = Object.keys(bbbInnings);
+        if (bbbInningsKeys.length > 0) {
+          for (let idx = 0; idx < bbbInningsKeys.length; idx++) {
+            const innData = bbbInnings[bbbInningsKeys[idx]];
+            const innOvers = innData?.overs || innData?.over_groups || innData;
+            if (innOvers && typeof innOvers === "object") {
+              // If the innings data IS the overs array/object directly
+              if (innOvers.balls || innOvers.deliveries) {
+                // Single over object, wrap it
+                oversForInnings[idx + 1] = { "0": innOvers };
+              } else {
+                oversForInnings[idx + 1] = innOvers;
+              }
+            }
           }
         }
 
-        const newBalls = allBalls.slice(existingCount || 0);
+        // Also check if data itself is an array of overs
+        if (Array.isArray(bbbBody.data)) {
+          oversForInnings[currentInnings] = {};
+          for (let i = 0; i < bbbBody.data.length; i++) {
+            oversForInnings[currentInnings][String(i)] = bbbBody.data[i];
+          }
+        }
+
+        log("info", "BBB payload shape", {
+          match_id: matchId,
+          has_flat_overs: !!flatOvers,
+          innings_keys: bbbInningsKeys.length,
+          innings_mapped: Object.keys(oversForInnings),
+        });
+
+        // Process each innings we found
+        for (const [innNoStr, overs] of Object.entries(oversForInnings)) {
+          const innNo = parseInt(innNoStr);
+          if (isNaN(innNo)) continue;
+
+          // Get existing deliveries for this innings
+          const { data: existingDeliveries } = await sb
+            .from("deliveries")
+            .select("innings_no, over_no, ball_no")
+            .eq("match_id", matchId)
+            .eq("innings_no", innNo);
+
+          const existingSet = new Set(
+            (existingDeliveries || []).map((d: any) => `${d.innings_no}-${d.over_no}-${d.ball_no}`)
+          );
+
+          const allBalls: any[] = [];
+          for (const overKey of Object.keys(overs)) {
+            const overData = overs[overKey];
+            if (!overData || typeof overData !== "object") continue;
+            const balls = overData?.balls || overData?.deliveries || (Array.isArray(overData) ? overData : []);
+            const overNo = overData?.over_number ?? parseInt(overKey) + 1;
+            for (const ball of balls) {
+              allBalls.push({ ...ball, _overNo: overNo, _innNo: innNo });
+            }
+          }
+
+          // Deduplicate using stable identity (innings, over, ball)
+          for (const ball of allBalls) {
+            const overNo = ball._overNo;
+            const ballNo = ball.ball_number || ball.ball || 1;
+            const dedupeKey = `${innNo}-${overNo}-${ballNo}`;
+
+            if (existingSet.has(dedupeKey)) continue;
+            existingSet.add(dedupeKey);
 
         for (const ball of newBalls) {
           const overNo = ball._overNo;
