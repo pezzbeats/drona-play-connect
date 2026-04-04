@@ -72,6 +72,26 @@ function getIplTeamInfo(name: string): { code: string; color: string } | null {
   return null;
 }
 
+// Resolve ball number from multiple candidate fields; never default all to 1
+function resolveBallNo(ball: any, loopIndex: number): number {
+  const candidates = [
+    ball?.ball_number,
+    ball?.ball,
+    ball?.number,
+    ball?.delivery_number,
+    ball?.sequence,
+    ball?.index,
+    ball?.delivery?.number,
+    ball?._keyHint,
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  // Fallback: use loop index + 1 (unique within this over)
+  return loopIndex + 1;
+}
+
 // Map delivery data to prediction outcome key
 function deliveryToOutcomeKey(runsOffBat: number, isWicket: boolean, extrasType: string): string {
   if (isWicket) return "wicket";
@@ -763,21 +783,47 @@ async function doSync(sb: any, projectKey: string, headers: any) {
             (existingDeliveries || []).map((d: any) => `${d.innings_no}-${d.over_no}-${d.ball_no}`)
           );
 
-          const allBalls: any[] = [];
-          for (const overKey of Object.keys(overs)) {
+        const allBalls: any[] = [];
+          // Sort over keys numerically to iterate in order
+          const sortedOverKeys = Object.keys(overs).sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+            return a.localeCompare(b, undefined, { numeric: true });
+          });
+
+          for (const overKey of sortedOverKeys) {
             const overData = overs[overKey];
             if (!overData || typeof overData !== "object") continue;
-            const balls = overData?.balls || overData?.deliveries || (Array.isArray(overData) ? overData : []);
-            const overNo = overData?.over_number ?? parseInt(overKey) + 1;
-            for (const ball of balls) {
-              allBalls.push({ ...ball, _overNo: overNo, _innNo: innNo });
+
+            // Extract balls: handle arrays, objects, or the over itself being an array
+            let ballsRaw: any[] = [];
+            const ballsNode = overData?.balls ?? overData?.deliveries;
+            if (Array.isArray(ballsNode)) {
+              ballsRaw = ballsNode;
+            } else if (ballsNode && typeof ballsNode === "object") {
+              // Object map of balls — sort keys numerically
+              const ballKeys = Object.keys(ballsNode).sort((a, b) => {
+                const na = Number(a), nb = Number(b);
+                if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+                return a.localeCompare(b, undefined, { numeric: true });
+              });
+              ballsRaw = ballKeys.map(k => ({ ...ballsNode[k], _keyHint: k }));
+            } else if (Array.isArray(overData)) {
+              ballsRaw = overData;
+            }
+
+            const overNo = overData?.over_number ?? overData?.number ?? parseInt(overKey) + 1;
+            for (let bIdx = 0; bIdx < ballsRaw.length; bIdx++) {
+              const ball = ballsRaw[bIdx];
+              allBalls.push({ ...ball, _overNo: overNo, _innNo: innNo, _loopIdx: bIdx });
             }
           }
 
           // Deduplicate using stable identity (innings, over, ball)
           for (const ball of allBalls) {
             const overNo = ball._overNo;
-            const ballNo = ball.ball_number || ball.ball || 1;
+            // Resolve ball number: try multiple candidate fields, fallback to loop index
+            const ballNo = resolveBallNo(ball, ball._loopIdx);
             const dedupeKey = `${innNo}-${overNo}-${ballNo}`;
 
             if (existingSet.has(dedupeKey)) continue;
@@ -847,15 +893,17 @@ async function doSync(sb: any, projectKey: string, headers: any) {
           }
         }
 
-        // No-silent-failure guard: if score advanced but we parsed zero balls, log warning
+        // No-silent-failure guard: if score advanced but we parsed zero balls, flag degraded
         const scoreAdvanced = (inn1Score > (state.last_innings1_score || 0)) || (inn2Score > (state.last_innings2_score || 0));
-        if (scoreAdvanced && newDeliveries === 0) {
+        const isDegraded = scoreAdvanced && newDeliveries === 0;
+        if (isDegraded) {
           log("warn", "Score advanced but zero deliveries parsed — BBB payload may have unknown shape", {
             match_id: matchId,
             inn1Score, inn2Score,
             last_inn1: state.last_innings1_score,
             last_inn2: state.last_innings2_score,
             bbb_keys: Object.keys(bbbBody.data || {}).join(","),
+            bbb_sample: JSON.stringify(bbbBody.data)?.slice(0, 300),
           });
         }
 
@@ -950,6 +998,8 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         match_id: matchId, status: "synced", new_deliveries: newDeliveries,
         auto_activated: matchStatus === "registrations_open" && apiIsLive,
         score: `${inn1Score}/${inn1Wickets} (${inn1Overs}ov)${currentInnings === 2 ? ` | ${inn2Score}/${inn2Wickets} (${inn2Overs}ov)` : ""}`,
+        degraded: isDegraded,
+        degraded_message: isDegraded ? "Score changed without new deliveries. Retrying automatically." : undefined,
       });
     } catch (e: any) {
       log("error", "Sync error", { match_id: matchId, error: e.message });
