@@ -155,50 +155,8 @@ export function Scoreboard({ matchId, initialState }: ScoreboardProps) {
     fetchData,
   );
 
-  // Auto-poll cricket API sync with AI-adaptive interval while match is live
-  const pollIntervalRef = useRef<number>(20);
-
-  // Immediate sync on mount to catch any phase transitions (e.g. pre → innings1)
-  useEffect(() => {
-    supabase.functions.invoke('cricket-api-sync', { body: null, headers: {} }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const isActivePhase = state?.phase === 'pre' || state?.phase === 'innings1' || state?.phase === 'innings2' || state?.phase === 'break' || state?.phase === 'super_over';
-    if (!isActivePhase) return;
-
-    // Use longer interval for pre-match, adaptive for live phases
-    const baseInterval = state?.phase === 'pre' ? 60 : 20;
-    pollIntervalRef.current = baseInterval;
-
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let cancelled = false;
-
-    const poll = async () => {
-      if (cancelled) return;
-      try {
-        const { data } = await supabase.functions.invoke('cricket-api-sync', {
-          body: null,
-          headers: {},
-        });
-        if (data?.recommended_interval) {
-          pollIntervalRef.current = data.recommended_interval;
-        }
-      } catch (e) {
-        console.warn('API sync poll failed:', e);
-      }
-      if (!cancelled) {
-        timeoutId = setTimeout(poll, pollIntervalRef.current * 1000);
-      }
-    };
-
-    // Poll immediately, then schedule dynamically
-    poll();
-    return () => {
-      cancelled = true;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [state?.phase]);
+  // API sync polling is now handled by useLiveMatchSync at the page level (Live.tsx).
+  // This component only displays data.
 
   // Fetch match summary when phase is ended
   useEffect(() => {
