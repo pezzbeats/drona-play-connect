@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -23,9 +23,9 @@ function Harness() {
       <button onClick={() => setTab((current) => current === 'score' ? 'predict' : 'score')}>
         toggle-tab
       </button>
-      <span>{tab}</span>
-      <span>{sync.degraded ? 'degraded' : 'healthy'}</span>
-      <span>{sync.recommendedInterval}</span>
+      <span data-testid="tab">{tab}</span>
+      <span data-testid="health">{sync.degraded ? 'degraded' : 'healthy'}</span>
+      <span data-testid="interval">{sync.recommendedInterval}</span>
     </div>
   );
 }
@@ -56,23 +56,26 @@ describe('useLiveMatchSync tab persistence', () => {
   });
 
   it('keeps polling after tab switches and exposes degraded state', async () => {
-    render(<Harness />);
+    const { getByTestId, getByText } = render(<Harness />);
 
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledTimes(1);
+    // Wait for first poll
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('toggle-tab'));
-    expect(screen.getByText('predict')).toBeTruthy();
+    // Switch tab
+    act(() => {
+      getByText('toggle-tab').click();
+    });
+    expect(getByTestId('tab').textContent).toBe('predict');
 
+    // Advance timer to trigger second poll
     await act(async () => {
       vi.advanceTimersByTime(15_000);
     });
 
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledTimes(2);
-    });
-
-    expect(screen.getByText('degraded')).toBeTruthy();
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+    expect(getByTestId('health').textContent).toBe('degraded');
   });
 });

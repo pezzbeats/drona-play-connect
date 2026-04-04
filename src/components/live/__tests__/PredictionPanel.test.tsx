@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi, waitFor } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render } from '@testing-library/react';
 import React from 'react';
 
 const mockState = vi.hoisted(() => ({
@@ -82,7 +82,7 @@ describe('PredictionPanel', () => {
   });
 
   it('shows delayed feed messaging when sync is stale and no window is open', async () => {
-    render(
+    const { getByText } = render(
       <PredictionPanel
         matchId="test-123"
         mobile="9999999999"
@@ -93,20 +93,19 @@ describe('PredictionPanel', () => {
           lastSyncError: null,
           degraded: true,
           degradedReason: 'Score changed without new deliveries. Retrying automatically.',
-          recommendedInterval: 15,
           isStale: true,
         }}
       />,
     );
 
-    await waitFor(() => {
-      expect(screen.getByText(/live feed delayed — retrying/i)).toBeTruthy();
-    });
-    expect(screen.getByText(/retrying automatically/i)).toBeTruthy();
+    // Use a small timeout to let async effects settle
+    await new Promise(r => setTimeout(r, 50));
+    expect(getByText(/live feed delayed — retrying/i)).toBeTruthy();
+    expect(getByText(/retrying automatically/i)).toBeTruthy();
   });
 
   it('shows normal waiting state when sync is healthy', async () => {
-    render(
+    const { getByText, queryByText } = render(
       <PredictionPanel
         matchId="test-123"
         mobile="9999999999"
@@ -117,15 +116,13 @@ describe('PredictionPanel', () => {
           lastSyncError: null,
           degraded: false,
           degradedReason: null,
-          recommendedInterval: 15,
           isStale: false,
         }}
       />,
     );
 
-    await waitFor(() => {
-      expect(screen.getByText(/waiting for next ball/i)).toBeTruthy();
-    });
-    expect(screen.queryByText(/live feed delayed — retrying/i)).toBeNull();
+    await new Promise(r => setTimeout(r, 50));
+    expect(getByText(/waiting for next ball/i)).toBeTruthy();
+    expect(queryByText(/live feed delayed — retrying/i)).toBeNull();
   });
 });
