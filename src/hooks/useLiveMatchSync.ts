@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface LiveMatchSyncState {
   syncing: boolean;
   lastSyncAt: number | null;
+  lastAttemptAt: number | null;
   lastSyncError: string | null;
   degraded: boolean;
   degradedReason: string | null;
@@ -26,6 +27,7 @@ export function useLiveMatchSync(
 ): LiveMatchSyncState {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [lastAttemptAt, setLastAttemptAt] = useState<number | null>(null);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [degraded, setDegraded] = useState(false);
   const [degradedReason, setDegradedReason] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export function useLiveMatchSync(
     inFlightRef.current = true;
     clearTimeout(timeoutRef.current);
     setSyncing(true);
+    setLastAttemptAt(Date.now());
 
     try {
       const { data, error } = await supabase.functions.invoke('cricket-api-sync', {
@@ -141,6 +144,7 @@ export function useLiveMatchSync(
   return {
     syncing,
     lastSyncAt,
+    lastAttemptAt,
     lastSyncError,
     degraded,
     degradedReason,

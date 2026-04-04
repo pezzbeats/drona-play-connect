@@ -715,6 +715,9 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
       // ── Fetch ball-by-ball and record deliveries ────────────────────
       let newDeliveries = 0;
+      let isDegraded = false;
+      let degradedMessage: string | undefined = undefined;
+
       const bbbRes = await fetchWithRetry(
         `${ROANUZ_BASE}/${projectKey}/match/${extId}/ball-by-ball/`, { headers }
       );
@@ -895,8 +898,9 @@ async function doSync(sb: any, projectKey: string, headers: any) {
 
         // No-silent-failure guard: if score advanced but we parsed zero balls, flag degraded
         const scoreAdvanced = (inn1Score > (state.last_innings1_score || 0)) || (inn2Score > (state.last_innings2_score || 0));
-        const isDegraded = scoreAdvanced && newDeliveries === 0;
+        isDegraded = scoreAdvanced && newDeliveries === 0;
         if (isDegraded) {
+          degradedMessage = "Score changed without new deliveries. Retrying automatically.";
           log("warn", "Score advanced but zero deliveries parsed — BBB payload may have unknown shape", {
             match_id: matchId,
             inn1Score, inn2Score,
@@ -941,6 +945,14 @@ async function doSync(sb: any, projectKey: string, headers: any) {
               locks_at: locksAt.toISOString(),
             });
           }
+        }
+      } else {
+        // No BBB data at all — check if score is moving without it
+        const scoreAdvanced = (inn1Score > (state.last_innings1_score || 0)) || (inn2Score > (state.last_innings2_score || 0));
+        if (scoreAdvanced) {
+          isDegraded = true;
+          degradedMessage = "Ball-by-ball data unavailable. Score is updating but deliveries cannot be parsed.";
+          log("warn", "No BBB data from API", { match_id: matchId, bbb_keys: Object.keys(bbbBody || {}).join(",") });
         }
       }
       let phase = "innings1";
@@ -999,7 +1011,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         auto_activated: matchStatus === "registrations_open" && apiIsLive,
         score: `${inn1Score}/${inn1Wickets} (${inn1Overs}ov)${currentInnings === 2 ? ` | ${inn2Score}/${inn2Wickets} (${inn2Overs}ov)` : ""}`,
         degraded: isDegraded,
-        degraded_message: isDegraded ? "Score changed without new deliveries. Retrying automatically." : undefined,
+        degraded_message: degradedMessage,
       });
     } catch (e: any) {
       log("error", "Sync error", { match_id: matchId, error: e.message });
