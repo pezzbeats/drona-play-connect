@@ -763,21 +763,47 @@ async function doSync(sb: any, projectKey: string, headers: any) {
             (existingDeliveries || []).map((d: any) => `${d.innings_no}-${d.over_no}-${d.ball_no}`)
           );
 
-          const allBalls: any[] = [];
-          for (const overKey of Object.keys(overs)) {
+        const allBalls: any[] = [];
+          // Sort over keys numerically to iterate in order
+          const sortedOverKeys = Object.keys(overs).sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+            return a.localeCompare(b, undefined, { numeric: true });
+          });
+
+          for (const overKey of sortedOverKeys) {
             const overData = overs[overKey];
             if (!overData || typeof overData !== "object") continue;
-            const balls = overData?.balls || overData?.deliveries || (Array.isArray(overData) ? overData : []);
-            const overNo = overData?.over_number ?? parseInt(overKey) + 1;
-            for (const ball of balls) {
-              allBalls.push({ ...ball, _overNo: overNo, _innNo: innNo });
+
+            // Extract balls: handle arrays, objects, or the over itself being an array
+            let ballsRaw: any[] = [];
+            const ballsNode = overData?.balls ?? overData?.deliveries;
+            if (Array.isArray(ballsNode)) {
+              ballsRaw = ballsNode;
+            } else if (ballsNode && typeof ballsNode === "object") {
+              // Object map of balls — sort keys numerically
+              const ballKeys = Object.keys(ballsNode).sort((a, b) => {
+                const na = Number(a), nb = Number(b);
+                if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+                return a.localeCompare(b, undefined, { numeric: true });
+              });
+              ballsRaw = ballKeys.map(k => ({ ...ballsNode[k], _keyHint: k }));
+            } else if (Array.isArray(overData)) {
+              ballsRaw = overData;
+            }
+
+            const overNo = overData?.over_number ?? overData?.number ?? parseInt(overKey) + 1;
+            for (let bIdx = 0; bIdx < ballsRaw.length; bIdx++) {
+              const ball = ballsRaw[bIdx];
+              allBalls.push({ ...ball, _overNo: overNo, _innNo: innNo, _loopIdx: bIdx });
             }
           }
 
           // Deduplicate using stable identity (innings, over, ball)
           for (const ball of allBalls) {
             const overNo = ball._overNo;
-            const ballNo = ball.ball_number || ball.ball || 1;
+            // Resolve ball number: try multiple candidate fields, fallback to loop index
+            const ballNo = resolveBallNo(ball, ball._loopIdx);
             const dedupeKey = `${innNo}-${overNo}-${ballNo}`;
 
             if (existingSet.has(dedupeKey)) continue;
