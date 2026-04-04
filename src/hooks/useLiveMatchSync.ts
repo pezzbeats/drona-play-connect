@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface LiveMatchSyncState {
   syncing: boolean;
   lastSyncAt: number | null;
+  lastAttemptAt: number | null;
   lastSyncError: string | null;
   degraded: boolean;
   degradedReason: string | null;
