@@ -61,7 +61,6 @@ function LiveContent({
       .maybeSingle()
       .then(({ data }) => { if (data) setMatchPhase(data.phase); });
   }, [matchId]);
-  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Personal rank chip state
   const [myRank, setMyRank] = useState<{ rank_position: number | null; total_points: number } | null>(null);
