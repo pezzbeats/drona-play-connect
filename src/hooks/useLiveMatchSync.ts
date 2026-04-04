@@ -47,6 +47,7 @@ export function useLiveMatchSync(
     inFlightRef.current = true;
     clearTimeout(timeoutRef.current);
     setSyncing(true);
+    setLastAttemptAt(Date.now());
 
     try {
       const { data, error } = await supabase.functions.invoke('cricket-api-sync', {
