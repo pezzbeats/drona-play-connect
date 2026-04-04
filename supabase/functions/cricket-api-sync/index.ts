@@ -1011,7 +1011,7 @@ async function doSync(sb: any, projectKey: string, headers: any) {
         auto_activated: matchStatus === "registrations_open" && apiIsLive,
         score: `${inn1Score}/${inn1Wickets} (${inn1Overs}ov)${currentInnings === 2 ? ` | ${inn2Score}/${inn2Wickets} (${inn2Overs}ov)` : ""}`,
         degraded: isDegraded,
-        degraded_message: isDegraded ? "Score changed without new deliveries. Retrying automatically." : undefined,
+        degraded_message: degradedMessage,
       });
     } catch (e: any) {
       log("error", "Sync error", { match_id: matchId, error: e.message });

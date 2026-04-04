@@ -144,6 +144,7 @@ export function useLiveMatchSync(
   return {
     syncing,
     lastSyncAt,
+    lastAttemptAt,
     lastSyncError,
     degraded,
     degradedReason,
