@@ -946,6 +946,14 @@ async function doSync(sb: any, projectKey: string, headers: any) {
             });
           }
         }
+      } else {
+        // No BBB data at all — check if score is moving without it
+        const scoreAdvanced = (inn1Score > (state.last_innings1_score || 0)) || (inn2Score > (state.last_innings2_score || 0));
+        if (scoreAdvanced) {
+          isDegraded = true;
+          degradedMessage = "Ball-by-ball data unavailable. Score is updating but deliveries cannot be parsed.";
+          log("warn", "No BBB data from API", { match_id: matchId, bbb_keys: Object.keys(bbbBody || {}).join(",") });
+        }
       }
       let phase = "innings1";
       const mStatus = (apiStatusStr || "").toLowerCase();
